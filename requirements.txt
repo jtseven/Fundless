@@ -1,5 +1,5 @@
-ccxt
-numpy
-pycoingecko
-pandas
-sklearn
+ccxt==1.49.92
+numpy==1.20.3
+pandas==1.2.4
+pip==21.1.1
+scikit-learn==0.24.2
