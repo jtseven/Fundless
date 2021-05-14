@@ -1,0 +1,5 @@
+ccxt
+numpy
+pycoingecko
+pandas
+sklearn
