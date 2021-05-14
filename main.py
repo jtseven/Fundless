@@ -3,6 +3,14 @@ from pycoingecko import CoinGeckoAPI
 import pandas as pd
 import numpy as np
 
+"""
+
+FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
+To be inline with german tax legislation it is not rebalancing on a monthly basis. Instead it is making weighted buy
+orders and will possibly be able to rebalance after the one year waiting period required for tax free trades.
+
+"""
+
 # This key allows access to the binance test API
 binance_test_api_key = 'EtfVQ3mFRKz8CEUDHSXB6QN7CI8P70axWy41XUM2QGKApPZH9CWYZVAlwINNLt5K'
 binance_test_secret_key = 'm2etMNsCWLGIXoo7hs3mxn6hZyqw6D8qY7MYj3xqb8TWkCeWtKJ0E8eSUz2r5Jnh'
@@ -33,15 +41,14 @@ coingecko_symbol_dict = {
     'miota': 'iota'
 }
 
+# Relevant columns from coingecko
 cols = ['id', 'symbol', 'current_price', 'market_cap']
 
 
+# Compute the weights by market cap, fetching data from coingecko
+# Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
 def fetch_index_weights():
     cg = CoinGeckoAPI()
-
-    # cg_cherry_picked = [coingecko_symbol_dict.get(symbol) if coingecko_symbol_dict.get(symbol) else symbol
-    #                     for symbol in cherry_picked]
-
     markets = pd.DataFrame.from_records(cg.get_coins_markets(vs_currency='USD'))
     markets.replace(coingecko_symbol_dict, inplace=True)
     markets = markets.loc[markets['symbol'].isin(cherry_picked)]
@@ -50,24 +57,26 @@ def fetch_index_weights():
     weights = weights/weights.sum()
     sqrt_weights = np.sqrt(weights)
     sqrt_weights /= sqrt_weights.sum()
-
     return symbols, weights, sqrt_weights
 
 
+# Place a weighted market buy order on Binance for multiple coins
 def weighted_buy_order(symbols: np.ndarray, weights: np.ndarray, usd_size: float):
     binance = ccxt.binance()
     # binance.load_markets()
     # included_symbols = [symbol for symbol in symbols if f'{symbol.upper()}/BUSD' in binance.symbols]
     # print(included_symbols)
+
+    # Use the binance test API, we do not want to deal with real money yet
     binance.set_sandbox_mode(True)
     binance.apiKey = binance_test_api_key
     binance.secret = binance_test_secret_key
 
+    # Load available symbols and market data from binance
     binance.load_markets()
     print(f"Number of available binance symbols: {len(binance.symbols)}")
 
-
-
+    # Start buying
     before = binance.fetch_balance()['free']
     for symbol, weight in zip(symbols, weights):
         ticker = f'{symbol.upper()}/BUSD'
@@ -83,14 +92,15 @@ def weighted_buy_order(symbols: np.ndarray, weights: np.ndarray, usd_size: float
         else:
             print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
 
+    # Report state of portfolio before and after buy orders
     after = binance.fetch_balance()['free']
     print("Balances before order execution:")
     print(before)
     print("Balances after order execution:")
     print(after)
 
-    return None
 
+# WIP Portfolio rebalancing method
 def rebalance_portfolio(symbols: np.ndarray, weights: np.ndarray):
     binance = ccxt.binance()
     binance.set_sandbox_mode(True)
@@ -108,6 +118,6 @@ if __name__ == '__main__':
 
     # rebalance_portfolio(symbols, weights)
 
-    weighted_buy_order(symbols, sqrt_weights, 100)
+    weighted_buy_order(symbols, sqrt_weights, usd_size=100)
 
     print("Done, now HODL!")
