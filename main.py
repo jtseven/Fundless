@@ -3,7 +3,7 @@ from pycoingecko import CoinGeckoAPI
 import pandas as pd
 import numpy as np
 
-
+# This key allows access to the binance test API
 binance_test_api_key = 'EtfVQ3mFRKz8CEUDHSXB6QN7CI8P70axWy41XUM2QGKApPZH9CWYZVAlwINNLt5K'
 binance_test_secret_key = 'm2etMNsCWLGIXoo7hs3mxn6hZyqw6D8qY7MYj3xqb8TWkCeWtKJ0E8eSUz2r5Jnh'
 
