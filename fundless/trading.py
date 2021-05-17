@@ -41,13 +41,6 @@ class TradingBot:
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
 
-    def update_markets(self):
-        try:
-            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(vs_currency='USD'))
-        except Exception as e:
-            print('Error while updating market data from CoinGecko:')
-            print(e)
-        self.markets.replace(coingecko_symbol_dict, inplace=True)
 
     def init_exchange(self, secrets: dict, exchange_name: ExchangeEnum = ExchangeEnum.Binance):
         if exchange_name == ExchangeEnum.Binance:
@@ -63,6 +56,25 @@ class TradingBot:
 
         self.exchange.set_sandbox_mode(self.test_mode)
         self.exchange.load_markets()
+
+    def get_balance(self) -> dict:
+        try:
+            data = self.exchange.fetch_total_balance()
+        except Exception as e:
+            print(f"Error while getting balance from exchange:")
+            print(e)
+            raise e
+
+        return data
+
+    def update_markets(self):
+        try:
+            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(vs_currency='USD'))
+        except Exception as e:
+            print('Error while updating market data from CoinGecko:')
+            print(e)
+            raise e
+        self.markets.replace(coingecko_symbol_dict, inplace=True)
 
     # Compute the weights by market cap, fetching data from coingecko
     # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
