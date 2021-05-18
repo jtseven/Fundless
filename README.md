@@ -3,7 +3,11 @@ A crypto currency trading bot, that is aiming at a buy and hold strategy with ma
 
 Interaction with the bot is done by Telegram for now.
 
+## Get Started
 To get started you need to:
- - create an API key on your favorite exchange and add it to the secrets.yaml file
- - talk to BotFather, to create a Telegram BotFather
- - add your Bot Token and your personal chat-id to secrets.yaml
+- create an API key on your favorite exchange and add it to the secrets.yaml file
+- talk to [https://core.telegram.org/bots#6-botfather](BotFather), to create your own Telegram bot
+- add your bots token to secrets.yaml
+- add your personal telegram chat-id to secrets.yaml
+    1. just search for @chatid_echo_bot on telegram and tap /start. It will echo your chat id
+    2. add that id to the secrets.yaml file
