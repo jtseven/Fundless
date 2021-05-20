@@ -1,0 +1,62 @@
+trading_bot:
+  test_mode: true
+  exchange:
+    options:
+      - binance
+      - kraken
+    selected: binance
+  base_currency:
+    options:
+      - eur
+      - usd
+      - btc
+      - eth
+    selected: usd
+  savings_plan:
+    cost: 100  # denoted in base_currency
+    interval:
+      options:
+        - daily
+        - weekly
+        - biweekly
+        - monthly
+      selected: daily
+  portfolio:
+    mode:
+      options:
+        - cherry_pick
+        - index
+      selected: cherry_pick
+    cherry_pick:
+        symbols:
+          - btc
+          - eth
+          - ada
+          - dot
+          - link
+          - vet
+          - sol
+          - neo
+          - matic
+          - atom
+          - theta
+          - avax
+          - iota
+          - xch
+          - algo
+          - one
+          - qtum
+          - nano
+    index:
+      top_n: 10
+      exclude_symbols: [xrp]
+    weighting:
+      options:
+        - equal
+        - market_cap
+        - sqrt_market_cap
+        - sqrt_sqrt_market_cap
+      selected: sqrt_sqrt_market_cap
+
+telegram_bot:
+

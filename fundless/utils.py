@@ -10,5 +10,5 @@ def parse_secrets(file_path):
         except yaml.YAMLError as exc:
             print("Error while parsing secrets file:")
             print(exc)
-            return None
+            raise exc
     return data

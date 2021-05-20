@@ -1,17 +1,11 @@
 import ccxt
 import numpy as np
-from enum import Enum
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
-from typing import List
+import time
+from interruptingcow import timeout
 
-from utils import parse_secrets
-
-
-class ExchangeEnum(Enum):
-    Binance = 1
-    Kraken = 2
-
+from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, IntervalEnum, WeightingEnum
 
 # translate coingecko symbols to ccxt/binance symbols
 coingecko_symbol_dict = {
@@ -27,49 +21,64 @@ def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
 
 
 class TradingBot:
+    bot_config: TradingBotConfig
+    secrets: SecretsStore
     exchange: ccxt.Exchange
     coingecko: CoinGeckoAPI
-    test_mode: bool = True
-    markets: pd.DataFrame
-    cherry_pick: List[str] = ['btc', 'eth']
+    markets: pd.DataFrame  # CoinGecko Market Data
 
-    def __init__(self, exchange_name: ExchangeEnum, cherry_pick: List[str], secrets_file='secrets.yaml', test_mode=True):
-        secrets = parse_secrets(secrets_file)
-        self.cherry_pick = cherry_pick
-        self.test_mode = test_mode
-        self.init_exchange(secrets=secrets, exchange_name=exchange_name)
+    def __init__(self, bot_config: Config):
+        self.bot_config = bot_config.trading_bot_config
+        self.secrets = bot_config.secrets
+        self.init_exchange()
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
 
 
-    def init_exchange(self, secrets: dict, exchange_name: ExchangeEnum = ExchangeEnum.Binance):
-        if exchange_name == ExchangeEnum.Binance:
+    def init_exchange(self):
+        if self.bot_config.exchange == ExchangeEnum.binance:
             self.exchange = ccxt.binance()
-            if self.test_mode:
-                self.exchange.apiKey = secrets['exchanges']['testnet']['binance']['api_key']
-                self.exchange.secret = secrets['exchanges']['testnet']['binance']['secret']
+            if self.bot_config.test_mode:
+                self.exchange.apiKey = self.secrets.binance_test['api_key']
+                self.exchange.secret = self.secrets.binance_test['secret']
             else:
-                self.exchange.apiKey = secrets['exchanges']['mainnet']['binance']['api_key']
-                self.exchange.secret = secrets['exchanges']['mainnet']['binance']['secret']
+                self.exchange.apiKey = self.secrets.binance['api_key']
+                self.exchange.secret = self.secrets.binance['secret']
+        elif self.bot_config.exchange == ExchangeEnum.kraken:
+            raise NotImplementedError("Kraken is not yet supported!")
         else:
             raise ValueError('Invalid Exchange given!')
 
-        self.exchange.set_sandbox_mode(self.test_mode)
+        self.exchange.set_sandbox_mode(self.bot_config.test_mode)
+        self.exchange.options['createMarketBuyOrderRequiresPrice'] = False
         self.exchange.load_markets()
 
-    def get_balance(self) -> dict:
+    @property
+    def balance(self) -> dict:
         try:
             data = self.exchange.fetch_total_balance()
         except Exception as e:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
+        self.update_markets()
+        symbols = np.fromiter(data.keys(), dtype='U6')  # dtype unicode string 5 characters long
+        amount = np.fromiter(data.values(), dtype=float)
+        value = np.array([float(self.markets.loc[self.markets['symbol'] == key.lower()]['current_price']) for key in symbols])
+        allocation = value/value.sum()*100
+        sorted = value.argsort()
+        symbols = symbols[sorted[::-1]]
+        amount = amount[sorted[::-1]]
+        value = value[sorted[::-1]]
+        allocation = allocation[sorted[::-1]]
 
-        return data
+        return symbols, amount, value, allocation
 
     def update_markets(self):
         try:
-            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(vs_currency='USD'))
+            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
+                vs_currency=self.bot_config.base_currency.value))
+            self.markets['symbol'] = self.markets['symbol'].str.lower()
         except Exception as e:
             print('Error while updating market data from CoinGecko:')
             print(e)
@@ -79,34 +88,85 @@ class TradingBot:
     # Compute the weights by market cap, fetching data from coingecko
     # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
     def fetch_index_weights(self):
-        picked_markets = self.markets.loc[self.markets['symbol'].isin(self.cherry_pick)]
+        self.update_markets()
+        picked_markets = self.markets.loc[self.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
         symbols = picked_markets['symbol'].values
-        weights = picked_markets['market_cap'].values
-        weights = weights / weights.sum()
-        sqrt_weights = np.sqrt(np.sqrt(weights))
-        sqrt_weights /= sqrt_weights.sum()
-        return symbols, weights, sqrt_weights
+        if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
+            print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")
+            for coin in self.bot_config.cherry_pick_symbols:
+                if coin not in symbols:
+                    print(f"\t{coin.upper()}")
+        if self.bot_config.portfolio_weighting == WeightingEnum.equal:
+            weights = np.full(len(symbols), float(1/len(symbols)))
+        else:
+            weights = picked_markets['market_cap'].values
+            if self.bot_config.portfolio_weighting == WeightingEnum.sqrt_market_cap:
+                weights = np.sqrt(weights)
+            elif self.bot_config.portfolio_weighting == WeightingEnum.sqrt_sqrt_market_cap:
+                weights = np.sqrt(np.sqrt(weights))
+            weights = weights / weights.sum()
+        return symbols, weights
 
     # Place a weighted market buy order on Binance for multiple coins
-    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, usd_size: float):
+    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, usd_size=None) -> dict:
+        volume = usd_size or self.bot_config.savings_plan_cost  # order volume denoted in base currency
         print_order_allocation(symbols, weights)
-        # Start buying
-        before = self.exchange.fetch_balance()['free']
+        self.exchange.load_markets()
+
+        # Check for any complications
+        problems = {'symbols': {}, 'occurred': False, 'description': ''}
+        balance = self.exchange.fetch_free_balance()
+        if balance['BUSD'] < self.bot_config.savings_plan_cost:
+            print(f"Warning: Insufficient funds to execute savings plan! Your have {balance['BUSD']} $")
+            problems['occurred'] = True
+            problems['description'] = 'Insufficient funds to execute savings plan'
+            return problems
         for symbol, weight in zip(symbols, weights):
             ticker = f'{symbol.upper()}/BUSD'
             if ticker not in self.exchange.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
-                continue
-            price = self.exchange.fetch_ticker(ticker).get('last')
-            if price <= 0.0:
-                print(f"Warning: Price for {ticker} is {price}, skipping {ticker}...")
-                continue
-            amount = weight * usd_size / price
+                problems['occurred'] = True
+                problems['description'] = f'Symbol {ticker} not available'
+                problems['symbols'][ticker] = 'not available'
+            else:
+                price = self.exchange.fetch_ticker(ticker).get('last')
+                if price <= 0.0:
+                    print(f"Warning: Price for {ticker} is {price}, skipping {ticker}...")
+                    problems['occurred'] = True
+                    problems['description'] = f'Price for {ticker} zero or below'
+                    problems['symbols'][ticker] = 'price <= zero'
+                    continue
+                cost = weight * volume
+                amount = weight * volume / price
+                if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
+                    print(f"The order amount of {ticker} is to low! Skipping...")
+                    problems['occurred'] = True
+                    problems['description'] = f'Order amount for {ticker} too low'
+                    problems['symbols'][ticker] = 'amount too low'
+                if cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
+                    print(f"The order cost of {cost} $ is to low for {ticker}! Skipping...")
+                    problems['occurred'] = True
+                    problems['description'] = f'Order cost for {ticker} too low'
+                    problems['symbols'][ticker] = 'cost too low'
+        if problems['occurred']:
+            return problems
+
+        # Start buying
+        before = self.exchange.fetch_balance()['free']
+        for symbol, weight in zip(symbols, weights):
+            ticker = f'{symbol.upper()}/BUSD'
             try:
-                order = self.exchange.create_market_buy_order(symbol=ticker, amount=amount)
-            except ccxt.InvalidOrder:
+                order = self.exchange.create_market_buy_order(ticker, cost)
+            except ccxt.InvalidOrder as e:
                 print(f"Buy order for {amount} {ticker} is invalid!")
-                print("The order amount might be below the minimum!")
+                print("The order cost might be below the minimum!")
+                print(e)
+                continue
+            time.sleep(1)
+            order = self.exchange.fetch_order(order['id'], symbol=ticker)
+            if order['status'] != 'closed':
+                print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
+                continue
             else:
                 print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
 
@@ -116,3 +176,4 @@ class TradingBot:
         print(before)
         print("Balances after order execution:")
         print(after)
+        return problems
