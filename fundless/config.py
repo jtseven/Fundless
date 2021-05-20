@@ -2,7 +2,8 @@ from pathlib import Path
 import yaml
 from typing import List, TypedDict
 from pydantic.dataclasses import dataclass
-from pydantic.types import confloat, conint
+from pydantic.types import confloat, conint, constr
+from pydantic import validator
 from aenum import MultiValueEnum
 
 
@@ -23,22 +24,23 @@ class BaseCurrencyEnum(MultiValueEnum):
 
 
 class IntervalEnum(MultiValueEnum):
-    daily = 1, 'daily'
-    weekly = 2, 'weekly'
-    biweekly = 3, 'biweekly', 'bi-weekly'
-    monthly = 4, 'monthly'
+    daily = 'daily'
+    weekly = 'weekly'
+    biweekly = 'biweekly', 'bi-weekly'
+    monthly = 'monthly'
 
 
 class WeightingEnum(MultiValueEnum):
     equal = 'equal'
     market_cap = 'marketcap', 'market_cap'
-    sqrt_market_cap = 'sqrt_market_cap', 'sqrt market cap'
+    sqrt_market_cap = 'sqrt_market_cap', 'square root market cap', 'sqrt market cap'
+    cbrt_market_cap = 'cbrt_market_cap', 'cubic root market cap', 'cbrt market cap'
     sqrt_sqrt_market_cap = 'sqrt_sqrt_market_cap', 'sqrt sqrt market cap'
 
 
 class PortfolioModeEnum(MultiValueEnum):
-    cherry_pick = 1, 'cherry_pick'
-    index = 2, 'index'
+    cherry_pick = 'cherry_pick', 'pick', 'cherry pick', 'Cherry Pick', 'cherry_picked'
+    index = 'index', 'Index'
 
 
 class ExchangeToken(TypedDict):
@@ -56,13 +58,26 @@ class TradingBotConfig:
     exchange: ExchangeEnum
     test_mode: bool
     base_currency: BaseCurrencyEnum
-    savings_plan_cost: confloat(gt=0)
+    base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd)$')
+    savings_plan_cost: confloat(gt=0, le=10000)
     savings_plan_interval: IntervalEnum
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
     cherry_pick_symbols: List[str]
-    index_top_n: conint(gt=0)
+    index_top_n: conint(gt=0, le=100)
     index_exclude_symbols: List[str]
+
+    @validator('base_currency')
+    def check_if_currency_supported(cls, v):
+        if v in (BaseCurrencyEnum.btc, BaseCurrencyEnum.eth, BaseCurrencyEnum.eur):
+            raise NotImplementedError("Only USD base currency is supported by now")
+        return v
+
+    @validator('portfolio_mode')
+    def check_if_portfolio_supported(cls, v):
+        if v in (PortfolioModeEnum.index, ):
+            raise NotImplementedError("Only cherry-picked portfolio is supported by now")
+        return v
 
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -81,13 +96,14 @@ class TradingBotConfig:
     @classmethod
     def from_dict(cls, dictionary):
         self = cls(
-            exchange=ExchangeEnum(dictionary['exchange']['selected']),
+            exchange=dictionary['exchange']['selected'],
             test_mode=dictionary['test_mode'],
-            base_currency=BaseCurrencyEnum(dictionary['base_currency']['selected']),
+            base_currency=dictionary['base_currency']['selected'],
+            base_symbol=dictionary['base_symbol']['selected'],
             savings_plan_cost=dictionary['savings_plan']['cost'],
             savings_plan_interval=dictionary['savings_plan']['interval']['selected'],
-            portfolio_mode=PortfolioModeEnum(dictionary['portfolio']['mode']['selected']),
-            portfolio_weighting=WeightingEnum(dictionary['portfolio']['weighting']['selected']),
+            portfolio_mode=dictionary['portfolio']['mode']['selected'],
+            portfolio_weighting=dictionary['portfolio']['weighting']['selected'],
             cherry_pick_symbols=dictionary['portfolio']['cherry_pick']['symbols'],
             index_top_n=dictionary['portfolio']['index']['top_n'],
             index_exclude_symbols=dictionary['portfolio']['index']['exclude_symbols']

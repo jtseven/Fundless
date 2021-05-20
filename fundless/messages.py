@@ -102,17 +102,21 @@ class TelegramBot:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
             symbols, amount, value, allocation = self.trading_bot.balance
-        except ccxt.BaseError:
-            msg = "--- I had a problem getting your balance from the exchange! ---"
+        except ccxt.BaseError as e:
+            msg = "I had a problem getting your balance from the exchange!"
+            context.bot.send_message(chat_id=self.chat_id, text=msg)
+            context.bot.send_message(chat_id=self.chat_id, text='Thas is, what the exchange returned:')
+            context.bot.send_message(chat_id=self.chat_id, text=str(e))
         else:
-            msg = "--- Your current portfolio: ---\n"
+            msg = "```"
+            msg += "--- Your current portfolio: ---\n"
             for symbol, percentage in zip(symbols, allocation):
-                msg += f"{symbol}:\t\t{percentage:5.2f} %\n"
-        context.bot.send_message(chat_id=self.chat_id, text=msg)
+                msg += f"{symbol+':': <6}\t{percentage:6.2f} %\n"
+            msg += "```"
+            context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
     @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError, ))
     def ask_savings_plan_execution(self):
-        pass  # TODO (WIP)
         reply_keyboard = [[
             KeyboardButton(r"/savings_plan"),
             KeyboardButton(r"/cancel")
@@ -122,6 +126,7 @@ class TelegramBot:
         self.updater.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
 
     @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError, ))
+    @authorized_only
     def _start_savings_plan_conversation(self, update: Update, context: CallbackContext):
         # TODO check if bot asked for execution before
         update.message.reply_text(
@@ -130,12 +135,14 @@ class TelegramBot:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
         symbols, weights = self.trading_bot.fetch_index_weights()
-        msg = ("That's what I came up with:\n"
+        msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper()}:\t\t{weight*self.trading_bot.bot_config.savings_plan_cost:8.2f} $"
+            msg += f"\n  {symbol.upper()+':': <6}  {weight*self.trading_bot.bot_config.savings_plan_cost:6.2f} $"
         msg += "\n---------------------------"
-        update.message.reply_text(msg)
+        msg += "```"
+        print(msg)
+        update.message.reply_text(msg, parse_mode='MarkdownV2')
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
         reply_keyboard = [[
@@ -146,6 +153,7 @@ class TelegramBot:
         update.message.reply_text(text="Should I proceed?", reply_markup=markup)
         return PLANNING
 
+    @authorized_only
     def _savings_plan_execution(self, update: Update, context: CallbackContext):
         if update.message.text == 'Yes, sounds great!':
             update.message.reply_text(f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
@@ -158,15 +166,22 @@ class TelegramBot:
                 update.message.reply_text("Ohhh, there was a Problem with the exchange! Sorry :(")
                 update.message.reply_text('This is, what the exchange returned:')
                 update.message.reply_text(str(e))
+                update.message.reply_text('Try to solve it and try again next time')
+                update.message.reply_text('See you :)')
             else:
                 if problems['occurred']:
                     update.message.reply_text('I can not place your orders!')
-                    update.message.reply_text(problems['description'])
+                    context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+                    time.sleep(1)
                     if len(problems['symbols'].keys()) > 0:
                         msg = "Problematic coins:"
                         for symbol in problems['symbols'].keys():
                             msg += f"\n\t- {symbol}, {problems['symbols'][symbol]}"
                         update.message.reply_text(msg)
+                    else:
+                        update.message.reply_text(problems['description'])
+                    context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+                    time.sleep(1)
                     update.message.reply_text('Solve the problems and try again next time!')
                     update.message.reply_text("See you")
                 else:
@@ -186,17 +201,23 @@ class TelegramBot:
         )
         return ConversationHandler.END
 
-    @staticmethod
-    def _hodl_answer(update: Update, _: CallbackContext) -> None:
+    def _hodl_answer(self, update: Update, context: CallbackContext) -> None:
         reply_keyboard = [[
             KeyboardButton(r"/savings_plan"),
             KeyboardButton(r"/balance"),
             KeyboardButton(r"/cancel"),
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+        time.sleep(1)
         update.message.reply_text("HODL!", reply_markup=ReplyKeyboardRemove())
         update.message.reply_text("You can use the following commands:", reply_markup=markup)
 
-    def _unknown(self, update, context):
+    def _unknown(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I didn't understand that.")
-        return ConversationHandler.END
+        reply_keyboard = [[
+            "Yes, sounds great!",
+            "/cancel"
+        ]]
+        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        context.bot.send_message(chat_id=self.chat_id, text='Would you like to proceed or cancel?', reply_markup=markup)

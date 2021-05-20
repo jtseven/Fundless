@@ -1,5 +1,5 @@
 trading_bot:
-  test_mode: true
+  test_mode: false  # use exchanges testnet api
   exchange:
     options:
       - binance
@@ -12,9 +12,16 @@ trading_bot:
       - btc
       - eth
     selected: usd
+  base_symbol:  # symbol used to buy the index
+    options:
+      - busd
+      - usdc
+      - usdt
+      - usd
+    selected: busd
   savings_plan:
-    cost: 100  # denoted in base_currency
-    interval:
+    cost: 500  # denoted in base_currency
+    interval:  # still hardcoded right now
       options:
         - daily
         - weekly
@@ -25,7 +32,7 @@ trading_bot:
     mode:
       options:
         - cherry_pick
-        - index
+        - index  # not yet implemented
       selected: cherry_pick
     cherry_pick:
         symbols:
@@ -39,7 +46,7 @@ trading_bot:
           - neo
           - matic
           - atom
-          - theta
+          # - theta # not available on binance
           - avax
           - iota
           - xch
@@ -54,9 +61,10 @@ trading_bot:
       options:
         - equal
         - market_cap
-        - sqrt_market_cap
-        - sqrt_sqrt_market_cap
-      selected: sqrt_sqrt_market_cap
+        - sqrt_market_cap       # square root of market cap
+        - cbrt_market_cap       # cubic root
+        - sqrt_sqrt_market_cap  # fourth root
+      selected: equal
 
 telegram_bot:
 

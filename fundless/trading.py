@@ -5,7 +5,7 @@ from pycoingecko import CoinGeckoAPI
 import time
 from interruptingcow import timeout
 
-from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, IntervalEnum, WeightingEnum
+from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum
 
 # translate coingecko symbols to ccxt/binance symbols
 coingecko_symbol_dict = {
@@ -104,6 +104,8 @@ class TradingBot:
                 weights = np.sqrt(weights)
             elif self.bot_config.portfolio_weighting == WeightingEnum.sqrt_sqrt_market_cap:
                 weights = np.sqrt(np.sqrt(weights))
+            elif self.bot_config.portfolio_weighting == WeightingEnum.cbrt_market_cap:
+                weights = np.cbrt(weights)
             weights = weights / weights.sum()
         return symbols, weights
 
@@ -115,14 +117,8 @@ class TradingBot:
 
         # Check for any complications
         problems = {'symbols': {}, 'occurred': False, 'description': ''}
-        balance = self.exchange.fetch_free_balance()
-        if balance['BUSD'] < self.bot_config.savings_plan_cost:
-            print(f"Warning: Insufficient funds to execute savings plan! Your have {balance['BUSD']} $")
-            problems['occurred'] = True
-            problems['description'] = 'Insufficient funds to execute savings plan'
-            return problems
         for symbol, weight in zip(symbols, weights):
-            ticker = f'{symbol.upper()}/BUSD'
+            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             if ticker not in self.exchange.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
                 problems['occurred'] = True
@@ -150,11 +146,21 @@ class TradingBot:
                     problems['symbols'][ticker] = 'cost too low'
         if problems['occurred']:
             return problems
+        balance = self.exchange.fetch_free_balance()[self.bot_config.base_symbol.upper()]
+        if balance < self.bot_config.savings_plan_cost:
+            print(
+                f"Warning: Insufficient funds to execute savings plan! Your have {balance:.2f} {self.bot_config.base_symbol.upper()}")
+            problems['occurred'] = True
+            problems['description'] = f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}'
+            return problems
 
         # Start buying
-        before = self.exchange.fetch_balance()['free']
+        before = self.exchange.fetch_free_balance()
         for symbol, weight in zip(symbols, weights):
-            ticker = f'{symbol.upper()}/BUSD'
+            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
+            price = self.exchange.fetch_ticker(ticker).get('last')
+            cost = weight * volume
+            amount = weight * volume / price
             try:
                 order = self.exchange.create_market_buy_order(ticker, cost)
             except ccxt.InvalidOrder as e:
@@ -171,7 +177,7 @@ class TradingBot:
                 print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
 
         # Report state of portfolio before and after buy orders
-        after = self.exchange.fetch_balance()['free']
+        after = self.exchange.fetch_free_balance()
         print("Balances before order execution:")
         print(before)
         print("Balances after order execution:")
