@@ -64,7 +64,7 @@ trading_bot:
         - sqrt_market_cap       # square root of market cap
         - cbrt_market_cap       # cubic root
         - sqrt_sqrt_market_cap  # fourth root
-      selected: equal
+      selected: cbrt_market_cap
 
 telegram_bot:
 

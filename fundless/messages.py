@@ -101,17 +101,22 @@ class TelegramBot:
     def _balance(self, _: Update, context: CallbackContext) -> None:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
-            symbols, amount, value, allocation = self.trading_bot.balance
+            symbols, amounts, values, allocations = self.trading_bot.balance
         except ccxt.BaseError as e:
             msg = "I had a problem getting your balance from the exchange!"
             context.bot.send_message(chat_id=self.chat_id, text=msg)
             context.bot.send_message(chat_id=self.chat_id, text='Thas is, what the exchange returned:')
             context.bot.send_message(chat_id=self.chat_id, text=str(e))
+        except KeyError as e:
+            context.bot.send_message(chat_id=self.chat_id, text='Uh ohhh, I had a problem while computing your balances')
+            context.bot.send_message(chat_id=self.chat_id, text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
         else:
-            msg = "```"
+            msg = "```\n"
             msg += "--- Your current portfolio: ---\n"
-            for symbol, percentage in zip(symbols, allocation):
-                msg += f"{symbol+':': <6}\t{percentage:6.2f} %\n"
+            for symbol, allocation, value in zip(symbols, allocations, values):
+                msg += f" {symbol+':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
+            msg += "-------------------------------\n"
+            msg += f"  Overall Balance: {values.sum():,.2f} $"
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
@@ -140,9 +145,11 @@ class TelegramBot:
         for symbol, weight in zip(symbols, weights):
             msg += f"\n  {symbol.upper()+':': <6}  {weight*self.trading_bot.bot_config.savings_plan_cost:6.2f} $"
         msg += "\n---------------------------"
-        msg += "```"
+        msg += f"\n Sum:  {weights.sum()*self.trading_bot.bot_config.savings_plan_cost} $"
+        msg += "\n```"
         print(msg)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
+        update.message.reply_text(f"You are buying with {self.trading_bot.bot_config.base_symbol.upper()}")
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
         reply_keyboard = [[

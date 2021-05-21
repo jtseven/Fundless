@@ -57,22 +57,26 @@ class TradingBot:
     def balance(self) -> dict:
         try:
             data = self.exchange.fetch_total_balance()
+            markets = self.exchange.fetch_tickers()
         except Exception as e:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
-        self.update_markets()
-        symbols = np.fromiter(data.keys(), dtype='U6')  # dtype unicode string 5 characters long
-        amount = np.fromiter(data.values(), dtype=float)
-        value = np.array([float(self.markets.loc[self.markets['symbol'] == key.lower()]['current_price']) for key in symbols])
-        allocation = value/value.sum()*100
-        sorted = value.argsort()
+        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')  # dtype unicode string 10 characters long
+        amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
+        try:
+            values = np.array([float(markets[f'{key.upper()}/BUSD']['last'])*amount for key, amount in zip(symbols, amounts) if data[key] > 0.0])
+        except KeyError as e:
+            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
+            raise
+        allocations = values/values.sum()*100
+        sorted = values.argsort()
         symbols = symbols[sorted[::-1]]
-        amount = amount[sorted[::-1]]
-        value = value[sorted[::-1]]
-        allocation = allocation[sorted[::-1]]
+        amounts = amounts[sorted[::-1]]
+        values = values[sorted[::-1]]
+        allocations = allocations[sorted[::-1]]
 
-        return symbols, amount, value, allocation
+        return symbols, amounts, values, allocations
 
     def update_markets(self):
         try:
