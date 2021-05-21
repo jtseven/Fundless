@@ -72,6 +72,7 @@ class TelegramBot:
         handles = [
             CommandHandler('start', self._start),
             CommandHandler('balance', self._balance),
+            CommandHandler('index', self._index),
             self.savings_plan_conversation,
             CommandHandler('cancel', self._cancel),
             MessageHandler(Filters.command, self._unknown),
@@ -115,6 +116,32 @@ class TelegramBot:
             msg += "--- Your current portfolio: ---\n"
             for symbol, allocation, value in zip(symbols, allocations, values):
                 msg += f" {symbol+':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
+            msg += "-------------------------------\n"
+            msg += f"  Overall Balance: {values.sum():,.2f} $"
+            msg += "```"
+            context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
+
+    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
+    @authorized_only
+    def _index(self, _: Update, context: CallbackContext) -> None:
+        context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+        try:
+            symbols, amounts, values, allocations = self.trading_bot.index_balance
+        except ccxt.BaseError as e:
+            msg = "I had a problem getting your balance from the exchange!"
+            context.bot.send_message(chat_id=self.chat_id, text=msg)
+            context.bot.send_message(chat_id=self.chat_id, text='Thas is, what the exchange returned:')
+            context.bot.send_message(chat_id=self.chat_id, text=str(e))
+        except KeyError as e:
+            context.bot.send_message(chat_id=self.chat_id,
+                                     text='Uh ohhh, I had a problem while computing your balances')
+            context.bot.send_message(chat_id=self.chat_id,
+                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
+        else:
+            msg = "```\n"
+            msg += "Your current index portfolio:\n"
+            for symbol, allocation, value in zip(symbols, allocations, values):
+                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
             msg += "-------------------------------\n"
             msg += f"  Overall Balance: {values.sum():,.2f} $"
             msg += "```"
@@ -212,6 +239,7 @@ class TelegramBot:
         reply_keyboard = [[
             KeyboardButton(r"/savings_plan"),
             KeyboardButton(r"/balance"),
+            KeyboardButton(r"/index"),
             KeyboardButton(r"/cancel"),
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -228,3 +256,14 @@ class TelegramBot:
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_message(chat_id=self.chat_id, text='Would you like to proceed or cancel?', reply_markup=markup)
+
+    def _unknown_command(self, _: Update, context: CallbackContext):
+        context.bot.send_message(chat_id=self.chat_id, text="Sorry, I do not know that command.")
+        reply_keyboard = [[
+            KeyboardButton(r"/savings_plan"),
+            KeyboardButton(r"/balance"),
+            KeyboardButton(r"/index"),
+            KeyboardButton(r"/cancel"),
+        ]]
+        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        context.bot.send_message(chat_id=self.chat_id, text='You can use these commands:', reply_markup=markup)

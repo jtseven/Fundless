@@ -50,11 +50,10 @@ class TradingBot:
             raise ValueError('Invalid Exchange given!')
 
         self.exchange.set_sandbox_mode(self.bot_config.test_mode)
-        self.exchange.options['createMarketBuyOrderRequiresPrice'] = False
         self.exchange.load_markets()
 
     @property
-    def balance(self) -> dict:
+    def balance(self) -> tuple:
         try:
             data = self.exchange.fetch_total_balance()
             markets = self.exchange.fetch_tickers()
@@ -62,14 +61,43 @@ class TradingBot:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
-        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')  # dtype unicode string 10 characters long
+        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
+        base = self.bot_config.base_symbol.upper()
         try:
-            values = np.array([float(markets[f'{key.upper()}/BUSD']['last'])*amount for key, amount in zip(symbols, amounts) if data[key] > 0.0])
+            values = np.array([float(markets[f'{key.upper()}/{base}']['last'])*amount if key.upper() != base else amount for key, amount in zip(symbols, amounts)])
         except KeyError as e:
             print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
             raise
         allocations = values/values.sum()*100
+        sorted = values.argsort()
+        symbols = symbols[sorted[::-1]]
+        amounts = amounts[sorted[::-1]]
+        values = values[sorted[::-1]]
+        allocations = allocations[sorted[::-1]]
+
+        return symbols, amounts, values, allocations
+
+    @property
+    def index_balance(self) -> dict:
+        try:
+            data = self.exchange.fetch_total_balance()
+            markets = self.exchange.fetch_tickers()
+        except Exception as e:
+            print(f"Error while getting balance from exchange:")
+            print(e)
+            raise e
+        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols], dtype='U10')
+        amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
+        base = self.bot_config.base_symbol.upper()
+        try:
+            values = np.array(
+                [float(markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() != base else amount for
+                 key, amount in zip(symbols, amounts)])
+        except KeyError as e:
+            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
+            raise
+        allocations = values / values.sum() * 100
         sorted = values.argsort()
         symbols = symbols[sorted[::-1]]
         amounts = amounts[sorted[::-1]]
@@ -166,19 +194,19 @@ class TradingBot:
             cost = weight * volume
             amount = weight * volume / price
             try:
-                order = self.exchange.create_market_buy_order(ticker, cost)
+                order = self.exchange.create_market_buy_order(ticker, amount=amount)
             except ccxt.InvalidOrder as e:
                 print(f"Buy order for {amount} {ticker} is invalid!")
                 print("The order cost might be below the minimum!")
                 print(e)
                 continue
             time.sleep(1)
-            order = self.exchange.fetch_order(order['id'], symbol=ticker)
-            if order['status'] != 'closed':
-                print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
-                continue
-            else:
-                print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+            # order = self.exchange.fetch_order(order['id'], symbol=ticker)
+            # if order['status'] != 'closed':
+            #     print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
+            #     continue
+            # else:
+            print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
 
         # Report state of portfolio before and after buy orders
         after = self.exchange.fetch_free_balance()

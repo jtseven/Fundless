@@ -20,7 +20,7 @@ trading_bot:
       - usd
     selected: busd
   savings_plan:
-    cost: 500  # denoted in base_currency
+    cost: 392.72  # denoted in base_currency
     interval:  # still hardcoded right now
       options:
         - daily
