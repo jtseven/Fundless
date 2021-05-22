@@ -13,7 +13,7 @@ from telegram.ext import (
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.chataction import ChatAction
 import logging
-from typing import Callable, Any
+from typing import Callable, Any, List
 from trading import TradingBot
 from config import Config
 import sys
@@ -195,7 +195,10 @@ class TelegramBot:
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 symbols, weights = self.trading_bot.fetch_index_weights()
-                problems = self.trading_bot.weighted_buy_order(symbols, weights)
+                report = self.trading_bot.weighted_buy_order(symbols, weights)
+                problems = report['problems']
+                order_ids = report['order_ids']
+                placed_symbols = report['symbols']
             except ccxt.BaseError as e:
                 update.message.reply_text("Ohhh, there was a Problem with the exchange! Sorry :(")
                 update.message.reply_text('This is, what the exchange returned:')
@@ -221,10 +224,40 @@ class TelegramBot:
                 else:
                     update.message.reply_text("I did it!")
                     update.message.reply_text("Was a pleasure working with you")
-                    update.message.reply_text("See you next time!")
+                    update.message.reply_text("I will check if your orders went threw in a few minutes and get back to you :)")
+                    context.job_queue.run_once(self.check_orders, when=30, context=(order_ids, placed_symbols))
         else:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
         return ConversationHandler.END
+
+    def check_orders(self, context: CallbackContext):
+        job = context.job
+        order_ids, symbols = job.context
+        context.bot.send_message(self.chat_id, text='I am checking your orders now!')
+        context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
+        open_orders, closed_orders = self.trading_bot.check_orders(order_ids, symbols)
+
+        missing = [symbol for symbol in symbols if symbol not in closed_orders + open_orders]
+        if len(missing) > 0:
+            context.bot.send_message(self.chat_id, text='Oh ohh, I did not find all the orders I placed :0')
+            context.bot.send_message(self.chat_id, text='Orders for those coins are missing:')
+            msg = "```\n"
+            for missing_symbol in missing:
+                msg += f"  - {missing_symbol.upper()}\n"
+            msg += "```"
+            context.bot.send_message(self.chat_id, text=msg)
+
+        if len(open_orders) > 0:
+            context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
+            msg = "```\n"
+            for symbol in open_orders:
+                msg += f"  - {symbol.upper()}\n"
+            msg += "```"
+            context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
+        elif len(closed_orders) == len(order_ids):
+            context.bot.send_message(self.chat_id, text='Yeee, all your orders are filled!')
+            context.bot.send_message(self.chat_id, text='See you :)')
+
 
     @staticmethod
     def _cancel(update: Update, _: CallbackContext) -> int:

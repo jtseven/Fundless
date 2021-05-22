@@ -1,5 +1,5 @@
 trading_bot:
-  test_mode: false  # use exchanges testnet api
+  test_mode: yes  # use exchanges testnet api
   exchange:
     options:
       - binance
@@ -20,7 +20,7 @@ trading_bot:
       - usd
     selected: busd
   savings_plan:
-    cost: 392.72  # denoted in base_currency
+    cost: 500  # denoted in base_currency
     interval:  # still hardcoded right now
       options:
         - daily
@@ -38,22 +38,22 @@ trading_bot:
         symbols:
           - btc
           - eth
-          - ada
-          - dot
-          - link
-          - vet
-          - sol
-          - neo
-          - matic
-          - atom
-          # - theta # not available on binance
-          - avax
-          - iota
-          - xch
-          - algo
-          - one
-          - qtum
-          - nano
+#          - ada
+#          - dot
+#          - link
+#          - vet
+#          - sol
+#          - neo
+#          - matic
+#          - atom
+#          # - theta # not available on binance
+#          - avax
+#          - iota
+#          - xch
+#          - algo
+#          - one
+#          - qtum
+#          - nano
     index:
       top_n: 10
       exclude_symbols: [xrp]

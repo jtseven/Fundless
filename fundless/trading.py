@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 import time
-from interruptingcow import timeout
+from typing import List
 
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum
 
@@ -141,12 +141,9 @@ class TradingBot:
             weights = weights / weights.sum()
         return symbols, weights
 
-    # Place a weighted market buy order on Binance for multiple coins
-    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, usd_size=None) -> dict:
-        volume = usd_size or self.bot_config.savings_plan_cost  # order volume denoted in base currency
-        print_order_allocation(symbols, weights)
-        self.exchange.load_markets()
-
+    def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float):
+        # Pull latest market data
+        self.exchange.fetch_markets()
         # Check for any complications
         problems = {'symbols': {}, 'occurred': False, 'description': ''}
         for symbol, weight in zip(symbols, weights):
@@ -164,8 +161,8 @@ class TradingBot:
                     problems['description'] = f'Price for {ticker} zero or below'
                     problems['symbols'][ticker] = 'price <= zero'
                     continue
-                cost = weight * volume
-                amount = weight * volume / price
+                cost = weight * volume_usd
+                amount = weight * volume_usd / price
                 if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
                     print(f"The order amount of {ticker} is to low! Skipping...")
                     problems['occurred'] = True
@@ -176,42 +173,77 @@ class TradingBot:
                     problems['occurred'] = True
                     problems['description'] = f'Order cost for {ticker} too low'
                     problems['symbols'][ticker] = 'cost too low'
-        if problems['occurred']:
-            return problems
         balance = self.exchange.fetch_free_balance()[self.bot_config.base_symbol.upper()]
         if balance < self.bot_config.savings_plan_cost:
             print(
                 f"Warning: Insufficient funds to execute savings plan! Your have {balance:.2f} {self.bot_config.base_symbol.upper()}")
             problems['occurred'] = True
-            problems['description'] = f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}'
-            return problems
+            problems['description'] = \
+                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}'
+        return problems
+
+    # Place a weighted market buy order on Binance for multiple coins
+    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float = None) -> dict:
+        volume = volume_usd or self.bot_config.savings_plan_cost  # order volume denoted in base currency
+        print_order_allocation(symbols, weights)
+        self.exchange.load_markets()
+        report = {'problems': self.check_order_executable(symbols, weights, volume), 'order_ids': []}
+        if report['problems']['occurred']:
+            return report
+
+        placed_volume = 0
+        invalid = []
+        placed_ids = []
+        placed_symbols = []
 
         # Start buying
         before = self.exchange.fetch_free_balance()
         for symbol, weight in zip(symbols, weights):
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
+            order_price = 0.998*price
             cost = weight * volume
             amount = weight * volume / price
             try:
-                order = self.exchange.create_market_buy_order(ticker, amount=amount)
+                order = self.exchange.create_limit_buy_order(ticker, amount, price=order_price)
+                # order = self.exchange.create_market_buy_order(ticker, amount=amount)
+                print('')
             except ccxt.InvalidOrder as e:
                 print(f"Buy order for {amount} {ticker} is invalid!")
-                print("The order cost might be below the minimum!")
                 print(e)
+                invalid.append(symbol)
                 continue
-            time.sleep(1)
+            else:
+                print(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+                placed_symbols.append(ticker)
+                placed_ids.append(order['id'])
+
+            time.sleep(0.2)
             # order = self.exchange.fetch_order(order['id'], symbol=ticker)
             # if order['status'] != 'closed':
             #     print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
             #     continue
             # else:
-            print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
-
+            # print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+        report['order_ids'] = placed_ids
+        report['symbols'] = placed_symbols
         # Report state of portfolio before and after buy orders
         after = self.exchange.fetch_free_balance()
         print("Balances before order execution:")
         print(before)
         print("Balances after order execution:")
         print(after)
-        return problems
+        return report
+
+    def check_orders(self, order_ids: List, symbols: List):
+        closed_orders = []
+        open_orders = []
+        for id, symbol in zip(order_ids, symbols):
+            order = self.exchange.fetch_order(id, symbol)
+            if order['status'] == 'closed':
+                closed_orders.append(symbol)
+            elif order['status'] == 'open':
+                open_orders.append(symbol)
+            else:
+                print('Your order is neither open, nor closed... something went wrong!')
+        return open_orders, closed_orders
