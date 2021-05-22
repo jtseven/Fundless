@@ -26,6 +26,7 @@ class TradingBot:
     exchange: ccxt.Exchange
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
+    usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
     def __init__(self, bot_config: Config):
         self.bot_config = bot_config.trading_bot_config
@@ -65,7 +66,7 @@ class TradingBot:
         amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
         base = self.bot_config.base_symbol.upper()
         try:
-            values = np.array([float(markets[f'{key.upper()}/{base}']['last'])*amount if key.upper() != base else amount for key, amount in zip(symbols, amounts)])
+            values = np.array([float(markets[f'{key.upper()}/{base}']['last'])*amount if key.upper() not in self.usd_symbols else amount for key, amount in zip(symbols, amounts)])
         except KeyError as e:
             print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
             raise
