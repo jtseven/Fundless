@@ -8,20 +8,29 @@ from telegram.ext import (
     MessageHandler,
     ConversationHandler,
     Filters,
-    CallbackContext
+    CallbackContext,
+    TypeHandler
 )
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.chataction import ChatAction
 import logging
 from typing import Callable, Any, List
 from trading import TradingBot
-from config import Config
+from config import Config, OrderTypeEnum
 import sys
 from redo import retriable
+from random import randint
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class StateChangeUpdate(Update):
+    next_state: int
+
+    def __init__(self, update_id: int, next_state: int,  **_kwargs: Any):
+        super().__init__(update_id, **_kwargs)
+        self.next_state = next_state
 
 # Decorator to check if message is from authorized sender
 def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
@@ -66,8 +75,8 @@ class TelegramBot:
             entry_points=[CommandHandler('savings_plan', self._start_savings_plan_conversation)],
             states={
                 PLANNING: [MessageHandler(Filters.regex('^(Yes, sounds great!|Noo!)$'), self._savings_plan_execution)],
-                EXECUTING: [MessageHandler(Filters.text & Filters.command, self._executing_answer)]
-
+                EXECUTING: [TypeHandler(StateChangeUpdate, self._change_conversation_state),
+                            MessageHandler(Filters.text | Filters.command, self._executing_answer)]
             },
             fallbacks=[CommandHandler('cancel', self._cancel), self.UnknownAnswerHandler]
         )
@@ -85,7 +94,7 @@ class TelegramBot:
         for handle in handles:
             self.dispatcher.add_handler(handle)
         # self.dispatcher.add_error_handler(self._error)
-        self.updater.start_polling()
+        self.queue = self.updater.start_polling()
         # self.updater.idle()
 
     def cleanup(self):
@@ -229,7 +238,7 @@ class TelegramBot:
                 update.message.reply_text("I did it!")
                 update.message.reply_text("Was a pleasure working with you")
                 update.message.reply_text("I will check if your orders went threw in a few seconds and get back to you :)")
-                context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1))
+                context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1, update))
                 return EXECUTING
         else:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
@@ -242,7 +251,7 @@ class TelegramBot:
 
     def check_orders(self, context: CallbackContext):
         job = context.job
-        order_ids, symbols, n_retry = job.context
+        order_ids, symbols, n_retry, update = job.context
         context.bot.send_message(self.chat_id, text='I am checking your orders now!')
         context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
         order_report = self.trading_bot.check_orders(order_ids, symbols)
@@ -280,17 +289,34 @@ class TelegramBot:
             if n_retry > 10:
                 context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
                                                             "still open manually..")
-                return ConversationHandler.END
+                state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
+                state_update._effective_user = update.effective_user
+                state_update._effective_chat = update.effective_chat
+                context.update_queue.put(state_update)
             else:
                 wait_time = 60*n_retry*n_retry  # have an exponentialy increasing wait time
                 context.bot.send_message(self.chat_id, text=f"I will wait {wait_time/60:.0f} minutes and get back to you :)")
-                context.job_queue.run_once(self.check_orders, when=wait_time, context=(order_ids, symbols, n_retry+1))
-                return EXECUTING
+                context.job_queue.run_once(self.check_orders, when=wait_time, context=(order_ids, symbols, n_retry+1, update))
+                state_update = StateChangeUpdate(randint(0, 999999999), next_state=EXECUTING)
+                state_update._effective_user = update.effective_user
+                state_update._effective_chat = update.effective_chat
+                context.update_queue.put(state_update)
+
         elif len(closed_orders) == len(order_ids):
             context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
             context.bot.send_message(self.chat_id, text='See you :)')
-            return ConversationHandler.END
+            state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
+            state_update._effective_user = update.effective_user
+            state_update._effective_chat = update.effective_chat
+            context.update_queue.put(state_update)
 
+    def _change_conversation_state(self, update: StateChangeUpdate, __: CallbackContext):
+        if update.next_state == ConversationHandler.END:
+            return ConversationHandler.END
+        elif update.next_state == EXECUTING:
+            return EXECUTING
+        else:
+            raise ValueError('Invalid state passed!')
 
     @staticmethod
     def _cancel(update: Update, _: CallbackContext) -> int:

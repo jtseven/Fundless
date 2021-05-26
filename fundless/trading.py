@@ -211,6 +211,8 @@ class TradingBot:
                     order = self.exchange.create_limit_buy_order(ticker, amount, price=limit_price)
                 elif order_type == OrderTypeEnum.market:
                     order = self.exchange.create_market_buy_order(ticker, amount)
+                else:
+                    raise ValueError(f"Invalid order type: {order_type}")
             except ccxt.InvalidOrder as e:
                 print(f"Buy order for {amount} {ticker} is invalid!")
                 print(e)
