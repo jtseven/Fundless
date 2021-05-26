@@ -5,7 +5,7 @@ from pycoingecko import CoinGeckoAPI
 import time
 from typing import List
 
-from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum
+from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 
 # translate coingecko symbols to ccxt/binance symbols
 coingecko_symbol_dict = {
@@ -184,7 +184,8 @@ class TradingBot:
         return problems
 
     # Place a weighted market buy order on Binance for multiple coins
-    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float = None) -> dict:
+    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float = None,
+                           order_type: OrderTypeEnum = OrderTypeEnum.market) -> dict:
         volume = volume_usd or self.bot_config.savings_plan_cost  # order volume denoted in base currency
         print_order_allocation(symbols, weights)
         self.exchange.load_markets()
@@ -202,24 +203,28 @@ class TradingBot:
         for symbol, weight in zip(symbols, weights):
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
-            order_price = 0.998*price
+            limit_price = 0.998*price
             cost = weight * volume
             amount = weight * volume / price
             try:
-                order = self.exchange.create_limit_buy_order(ticker, amount, price=order_price)
-                # order = self.exchange.create_market_buy_order(ticker, amount=amount)
-                print('')
+                if order_type == OrderTypeEnum.limit:
+                    order = self.exchange.create_limit_buy_order(ticker, amount, price=limit_price)
+                elif order_type == OrderTypeEnum.market:
+                    order = self.exchange.create_market_buy_order(ticker, amount)
             except ccxt.InvalidOrder as e:
                 print(f"Buy order for {amount} {ticker} is invalid!")
                 print(e)
                 invalid.append(symbol)
+                continue
+            except ccxt.BaseError as e:
+                print(f"Error during order for {amount} {ticker}!")
+                print(e)
                 continue
             else:
                 print(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 placed_symbols.append(ticker)
                 placed_ids.append(order['id'])
 
-            time.sleep(0.2)
             # order = self.exchange.fetch_order(order['id'], symbol=ticker)
             # if order['status'] != 'closed':
             #     print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
@@ -228,6 +233,7 @@ class TradingBot:
             # print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
         report['order_ids'] = placed_ids
         report['symbols'] = placed_symbols
+        report['invalid_symbols'] = invalid
         # Report state of portfolio before and after buy orders
         after = self.exchange.fetch_free_balance()
         print("Balances before order execution:")
@@ -236,15 +242,22 @@ class TradingBot:
         print(after)
         return report
 
-    def check_orders(self, order_ids: List, symbols: List):
+    def check_orders(self, order_ids: List, symbols: List) -> dict:
         closed_orders = []
         open_orders = []
+        order_report = {symbol: {} for symbol in symbols}
         for id, symbol in zip(order_ids, symbols):
             order = self.exchange.fetch_order(id, symbol)
             if order['status'] == 'closed':
+                order_report[symbol]['status'] = 'closed'
+                order_report[symbol]['price'] = order['price']
+                order_report[symbol]['cost'] = order['cost']
                 closed_orders.append(symbol)
             elif order['status'] == 'open':
+                order_report['symbol'] = 'open'
                 open_orders.append(symbol)
             else:
                 print('Your order is neither open, nor closed... something went wrong!')
-        return open_orders, closed_orders
+        order_report['closed'] = closed_orders
+        order_report['open'] = open_orders
+        return order_report

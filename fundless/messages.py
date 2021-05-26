@@ -49,6 +49,7 @@ def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
 
 PLANNING, EXECUTING = range(2)
 
+# TODO Conversation states are not working correctly right now
 
 class TelegramBot:
 
@@ -64,16 +65,18 @@ class TelegramBot:
         self.savings_plan_conversation = ConversationHandler(
             entry_points=[CommandHandler('savings_plan', self._start_savings_plan_conversation)],
             states={
-                PLANNING: [MessageHandler(Filters.regex('^(Yes, sounds great!|Noo!)$'), self._savings_plan_execution)]
+                PLANNING: [MessageHandler(Filters.regex('^(Yes, sounds great!|Noo!)$'), self._savings_plan_execution)],
+                EXECUTING: [MessageHandler(Filters.text & Filters.command, self._executing_answer)]
+
             },
             fallbacks=[CommandHandler('cancel', self._cancel), self.UnknownAnswerHandler]
         )
 
         handles = [
+            self.savings_plan_conversation,
             CommandHandler('start', self._start),
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
-            self.savings_plan_conversation,
             CommandHandler('cancel', self._cancel),
             MessageHandler(Filters.command, self._unknown),
             MessageHandler(Filters.text & ~Filters.command, self._hodl_answer),
@@ -81,7 +84,7 @@ class TelegramBot:
 
         for handle in handles:
             self.dispatcher.add_handler(handle)
-        self.dispatcher.add_error_handler(self._error)
+        # self.dispatcher.add_error_handler(self._error)
         self.updater.start_polling()
         # self.updater.idle()
 
@@ -196,47 +199,55 @@ class TelegramBot:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 symbols, weights = self.trading_bot.fetch_index_weights()
                 report = self.trading_bot.weighted_buy_order(symbols, weights)
-                problems = report['problems']
-                order_ids = report['order_ids']
-                placed_symbols = report['symbols']
             except ccxt.BaseError as e:
                 update.message.reply_text("Ohhh, there was a Problem with the exchange! Sorry :(")
                 update.message.reply_text('This is, what the exchange returned:')
                 update.message.reply_text(str(e))
                 update.message.reply_text('Try to solve it and try again next time')
                 update.message.reply_text('See you :)')
-            else:
-                if problems['occurred']:
-                    update.message.reply_text('I can not place your orders!')
-                    context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                    time.sleep(1)
-                    if len(problems['symbols'].keys()) > 0:
-                        msg = "Problematic coins:"
-                        for symbol in problems['symbols'].keys():
-                            msg += f"\n\t- {symbol}, {problems['symbols'][symbol]}"
-                        update.message.reply_text(msg)
-                    else:
-                        update.message.reply_text(problems['description'])
-                    context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                    time.sleep(1)
-                    update.message.reply_text('Solve the problems and try again next time!')
-                    update.message.reply_text("See you")
+                return ConversationHandler.END
+            problems = report['problems']
+            if problems['occurred']:
+                update.message.reply_text('I can not place your orders!')
+                context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+                time.sleep(1)
+                if len(problems['symbols'].keys()) > 0:
+                    msg = "Problematic coins:"
+                    for symbol in problems['symbols'].keys():
+                        msg += f"\n\t- {symbol}, {problems['symbols'][symbol]}"
+                    update.message.reply_text(msg)
                 else:
-                    update.message.reply_text("I did it!")
-                    update.message.reply_text("Was a pleasure working with you")
-                    update.message.reply_text("I will check if your orders went threw in a few minutes and get back to you :)")
-                    context.job_queue.run_once(self.check_orders, when=30, context=(order_ids, placed_symbols))
+                    update.message.reply_text(problems['description'])
+                context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+                time.sleep(1)
+                update.message.reply_text('Solve the problems and try again next time!')
+                update.message.reply_text("See you")
+                return ConversationHandler.END
+            else:
+                order_ids = report['order_ids']
+                placed_symbols = report['symbols']
+                update.message.reply_text("I did it!")
+                update.message.reply_text("Was a pleasure working with you")
+                update.message.reply_text("I will check if your orders went threw in a few seconds and get back to you :)")
+                context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1))
+                return EXECUTING
         else:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
-        return ConversationHandler.END
+            return ConversationHandler.END
+
+    def _executing_answer(self, update: Update, context: CallbackContext):
+        update.message.reply_text('Your order is being executed on the exchange, just relax for a while')
+        update.message.reply_text('I will get back to you shortly!')
+        return EXECUTING
 
     def check_orders(self, context: CallbackContext):
         job = context.job
-        order_ids, symbols = job.context
+        order_ids, symbols, n_retry = job.context
         context.bot.send_message(self.chat_id, text='I am checking your orders now!')
         context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
-        open_orders, closed_orders = self.trading_bot.check_orders(order_ids, symbols)
-
+        order_report = self.trading_bot.check_orders(order_ids, symbols)
+        open_orders = order_report['open']
+        closed_orders = order_report['closed']
         missing = [symbol for symbol in symbols if symbol not in closed_orders + open_orders]
         if len(missing) > 0:
             context.bot.send_message(self.chat_id, text='Oh ohh, I did not find all the orders I placed :0')
@@ -247,6 +258,18 @@ class TelegramBot:
             msg += "```"
             context.bot.send_message(self.chat_id, text=msg)
 
+        if len(closed_orders) > 0:
+            volume = 0.
+            msg = "```\n"
+            msg += "----- Completed Coins -----"
+            for symbol in closed_orders:
+                msg += f"\n  - {symbol.split('/')[0].upper()}"
+                volume += order_report[symbol]['cost']
+            msg += "\n---------------------------"
+            msg += f"\n-- Filled Volume: {volume:<4.0f} $ --"
+            msg += "\n```"
+            context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
+
         if len(open_orders) > 0:
             context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
             msg = "```\n"
@@ -254,9 +277,19 @@ class TelegramBot:
                 msg += f"  - {symbol.upper()}\n"
             msg += "```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
+            if n_retry > 10:
+                context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
+                                                            "still open manually..")
+                return ConversationHandler.END
+            else:
+                wait_time = 60*n_retry*n_retry  # have an exponentialy increasing wait time
+                context.bot.send_message(self.chat_id, text=f"I will wait {wait_time/60:.0f} minutes and get back to you :)")
+                context.job_queue.run_once(self.check_orders, when=wait_time, context=(order_ids, symbols, n_retry+1))
+                return EXECUTING
         elif len(closed_orders) == len(order_ids):
-            context.bot.send_message(self.chat_id, text='Yeee, all your orders are filled!')
+            context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
             context.bot.send_message(self.chat_id, text='See you :)')
+            return ConversationHandler.END
 
 
     @staticmethod

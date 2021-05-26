@@ -30,6 +30,11 @@ class IntervalEnum(MultiValueEnum):
     monthly = 'monthly'
 
 
+class OrderTypeEnum(MultiValueEnum):
+    market = 'market'
+    limit = 'limit'
+
+
 class WeightingEnum(MultiValueEnum):
     equal = 'equal'
     market_cap = 'marketcap', 'market_cap'
