@@ -2,7 +2,6 @@ import ccxt
 import numpy as np
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
-import time
 from typing import List
 
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum

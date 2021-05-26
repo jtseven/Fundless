@@ -14,9 +14,9 @@ from telegram.ext import (
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.chataction import ChatAction
 import logging
-from typing import Callable, Any, List
+from typing import Callable, Any
 from trading import TradingBot
-from config import Config, OrderTypeEnum
+from config import Config
 import sys
 from redo import retriable
 from random import randint
@@ -31,6 +31,7 @@ class StateChangeUpdate(Update):
     def __init__(self, update_id: int, next_state: int,  **_kwargs: Any):
         super().__init__(update_id, **_kwargs)
         self.next_state = next_state
+
 
 # Decorator to check if message is from authorized sender
 def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
@@ -58,7 +59,6 @@ def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
 
 PLANNING, EXECUTING = range(2)
 
-# TODO Conversation states are not working correctly right now
 
 class TelegramBot:
 
