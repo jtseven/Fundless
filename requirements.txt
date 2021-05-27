@@ -1,4 +1,4 @@
-pip==21.1.1
+pip
 ccxt==1.50.51
 numpy==1.20.3
 pandas==1.2.4
