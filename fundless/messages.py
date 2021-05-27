@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class StateChangeUpdate(Update):
     next_state: int
 
-    def __init__(self, update_id: int, next_state: int,  **_kwargs: Any):
+    def __init__(self, update_id: int, next_state: int, **_kwargs: Any):
         super().__init__(update_id, **_kwargs)
         self.next_state = next_state
 
@@ -109,7 +109,7 @@ class TelegramBot:
     def _start(self, update, context):
         context.bot.send_message(chat_id=self.chat_id, text="I'm FundLess, please talk to me!")
 
-    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError, ))
+    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
     @authorized_only
     def _balance(self, _: Update, context: CallbackContext) -> None:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
@@ -121,13 +121,15 @@ class TelegramBot:
             context.bot.send_message(chat_id=self.chat_id, text='Thas is, what the exchange returned:')
             context.bot.send_message(chat_id=self.chat_id, text=str(e))
         except KeyError as e:
-            context.bot.send_message(chat_id=self.chat_id, text='Uh ohhh, I had a problem while computing your balances')
-            context.bot.send_message(chat_id=self.chat_id, text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
+            context.bot.send_message(chat_id=self.chat_id,
+                                     text='Uh ohhh, I had a problem while computing your balances')
+            context.bot.send_message(chat_id=self.chat_id,
+                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
         else:
             msg = "```\n"
             msg += "--- Your current portfolio: ---\n"
             for symbol, allocation, value in zip(symbols, allocations, values):
-                msg += f" {symbol+':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
+                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
             msg += "-------------------------------\n"
             msg += f"  Overall Balance: {values.sum():,.2f} $"
             msg += "```"
@@ -159,7 +161,7 @@ class TelegramBot:
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
-    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError, ))
+    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
     def ask_savings_plan_execution(self):
         reply_keyboard = [[
             KeyboardButton(r"/savings_plan"),
@@ -169,7 +171,7 @@ class TelegramBot:
         msg = f"Should I execute your savings plan?"
         self.updater.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
 
-    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError, ))
+    @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
     @authorized_only
     def _start_savings_plan_conversation(self, update: Update, context: CallbackContext):
         # TODO check if bot asked for execution before
@@ -182,9 +184,9 @@ class TelegramBot:
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper()+':': <6}  {weight*self.trading_bot.bot_config.savings_plan_cost:6.2f} $"
+            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.savings_plan_cost:6.2f} $"
         msg += "\n---------------------------"
-        msg += f"\n Sum:  {weights.sum()*self.trading_bot.bot_config.savings_plan_cost} $"
+        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.savings_plan_cost:.2f} $"
         msg += "\n```"
         print(msg)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
@@ -202,8 +204,10 @@ class TelegramBot:
     @authorized_only
     def _savings_plan_execution(self, update: Update, context: CallbackContext):
         if update.message.text == 'Yes, sounds great!':
-            update.message.reply_text(f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
-            update.message.reply_text(f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} $ ...")
+            update.message.reply_text(
+                f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
+            update.message.reply_text(
+                f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} $ ...")
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 symbols, weights = self.trading_bot.fetch_index_weights()
@@ -237,7 +241,8 @@ class TelegramBot:
                 placed_symbols = report['symbols']
                 update.message.reply_text("I did it!")
                 update.message.reply_text("Was a pleasure working with you")
-                update.message.reply_text("I will check if your orders went threw in a few seconds and get back to you :)")
+                update.message.reply_text(
+                    "I will check if your orders went threw in a few seconds and get back to you :)")
                 context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1, update))
                 return EXECUTING
         else:
@@ -294,9 +299,11 @@ class TelegramBot:
                 state_update._effective_chat = update.effective_chat
                 context.update_queue.put(state_update)
             else:
-                wait_time = 60*n_retry*n_retry  # have an exponentialy increasing wait time
-                context.bot.send_message(self.chat_id, text=f"I will wait {wait_time/60:.0f} minutes and get back to you :)")
-                context.job_queue.run_once(self.check_orders, when=wait_time, context=(order_ids, symbols, n_retry+1, update))
+                wait_time = 60 * n_retry * n_retry  # have an exponentialy increasing wait time
+                context.bot.send_message(self.chat_id,
+                                         text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
+                context.job_queue.run_once(self.check_orders, when=wait_time,
+                                           context=(order_ids, symbols, n_retry + 1, update))
                 state_update = StateChangeUpdate(randint(0, 999999999), next_state=EXECUTING)
                 state_update._effective_user = update.effective_user
                 state_update._effective_chat = update.effective_chat
@@ -328,12 +335,12 @@ class TelegramBot:
         return ConversationHandler.END
 
     def _hodl_answer(self, update: Update, context: CallbackContext) -> None:
-        reply_keyboard = [[
-            KeyboardButton(r"/savings_plan"),
-            KeyboardButton(r"/balance"),
-            KeyboardButton(r"/index"),
-            KeyboardButton(r"/cancel"),
-        ]]
+        reply_keyboard = [
+            [KeyboardButton(r"/savings_plan"),
+             KeyboardButton(r"/index")],
+            [KeyboardButton(r"/balance"),
+             KeyboardButton(r"/cancel")]
+        ]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(1)
@@ -351,11 +358,11 @@ class TelegramBot:
 
     def _unknown_command(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I do not know that command.")
-        reply_keyboard = [[
-            KeyboardButton(r"/savings_plan"),
-            KeyboardButton(r"/balance"),
-            KeyboardButton(r"/index"),
-            KeyboardButton(r"/cancel"),
-        ]]
+        reply_keyboard = [
+            [KeyboardButton(r"/savings_plan"),
+             KeyboardButton(r"/index")],
+            [KeyboardButton(r"/balance"),
+             KeyboardButton(r"/cancel")]
+        ]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_message(chat_id=self.chat_id, text='You can use these commands:', reply_markup=markup)
