@@ -87,7 +87,7 @@ class TelegramBot:
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
             CommandHandler('cancel', self._cancel),
-            MessageHandler(Filters.command, self._unknown),
+            MessageHandler(Filters.command, self._unknown_command),
             MessageHandler(Filters.text & ~Filters.command, self._hodl_answer),
         ]
 
