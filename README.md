@@ -10,9 +10,9 @@ To get started you need to:
 - get your personal telegram chat-id:
     1. just search for `@chatid_echo_bot` on telegram and type `/start`. It will echo your chat id
   
-1. Rename the example files
-    * `config.yaml_example` -> `config.yaml`
-    * `secrets.yaml_example` -> `secrets.yaml`
+1. Copy the example files
+    * `cp config.yaml_example config.yaml`
+    * `cp secrets.yaml_example secrets.yaml`
 2. Add your exchange API keys, your Telegram bot token and your personal telegram chat id to `secrets.yaml`
 3. Edit the `config.yaml` as you desire. The example config is configured to run with the Binance testnet API. You get some free test funds to play around with, when you create a [Binance testnet](https://testnet.binance.vision/) API key.
 4. Run FundLess
