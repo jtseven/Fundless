@@ -153,7 +153,7 @@ class TelegramBot:
             context.bot.send_message(chat_id=self.chat_id,
                                      text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
         else:
-            tracking_error = allocations-index_weights*100
+            tracking_error = allocations - (index_weights*100)
             msg = "```\n"
             msg += "Your current index portfolio:\n"
             msg += f"- Coin  Alloc  Value TrackErr -\n"

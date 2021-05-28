@@ -122,12 +122,20 @@ class TradingBot:
     def fetch_index_weights(self, symbols: np.ndarray = None):
         self.update_markets()
         picked_markets = self.markets.loc[self.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
-        symbols = symbols if symbols is not None else picked_markets['symbol'].values
-        if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
-            print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")
-            for coin in self.bot_config.cherry_pick_symbols:
-                if coin not in symbols:
-                    print(f"\t{coin.upper()}")
+        if symbols is not None:
+            symbols = [symbol.lower() for symbol in symbols]
+            # sort df equal to symbols array
+            sorter_index = dict(zip(symbols, range(len(symbols))))
+            picked_markets['rank'] = picked_markets['symbol'].map(sorter_index)
+            picked_markets.sort_values('rank', ascending=True, inplace=True)
+        else:
+            symbols = picked_markets['symbol'].values
+            if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
+                print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")
+                for coin in self.bot_config.cherry_pick_symbols:
+                    if coin not in symbols:
+                        print(f"\t{coin.upper()}")
+
         if self.bot_config.portfolio_weighting == WeightingEnum.equal:
             weights = np.full(len(symbols), float(1/len(symbols)))
         else:
