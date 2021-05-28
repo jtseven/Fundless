@@ -87,7 +87,7 @@ class TelegramBot:
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
             CommandHandler('cancel', self._cancel),
-            MessageHandler(Filters.command, self._unknown),
+            MessageHandler(Filters.command, self._unknown_command),
             MessageHandler(Filters.text & ~Filters.command, self._hodl_answer),
         ]
 
@@ -141,6 +141,7 @@ class TelegramBot:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
             symbols, amounts, values, allocations = self.trading_bot.index_balance
+            _, index_weights = self.trading_bot.fetch_index_weights(symbols=symbols)
         except ccxt.BaseError as e:
             msg = "I had a problem getting your balance from the exchange!"
             context.bot.send_message(chat_id=self.chat_id, text=msg)
@@ -152,10 +153,12 @@ class TelegramBot:
             context.bot.send_message(chat_id=self.chat_id,
                                      text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
         else:
+            tracking_error = allocations-index_weights*100
             msg = "```\n"
             msg += "Your current index portfolio:\n"
-            for symbol, allocation, value in zip(symbols, allocations, values):
-                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
+            msg += f"- Coin  Alloc  Value TrackErr -\n"
+            for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
+                msg += f"  {symbol + ':': <6} {allocation:4.1f}% {value:3,.0f}$  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
             msg += f"  Overall Balance: {values.sum():,.2f} $"
             msg += "```"
