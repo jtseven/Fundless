@@ -119,10 +119,10 @@ class TradingBot:
 
     # Compute the weights by market cap, fetching data from coingecko
     # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
-    def fetch_index_weights(self):
+    def fetch_index_weights(self, symbols: np.ndarray = None):
         self.update_markets()
         picked_markets = self.markets.loc[self.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
-        symbols = picked_markets['symbol'].values
+        symbols = symbols if symbols is not None else picked_markets['symbol'].values
         if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
             print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")
             for coin in self.bot_config.cherry_pick_symbols:
