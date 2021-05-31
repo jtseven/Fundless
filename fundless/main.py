@@ -32,9 +32,8 @@ if __name__ == '__main__':
     message_bot = TelegramBot(config, trading_bot)
 
     def job():
-        day = date.today().day
         if date.today().day in (5, 20):
-            print(f"Executing savgins plan now ({date.today().strftime('%d.%m.%y')})...")
+            print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
             message_bot.ask_savings_plan_execution()
         else:
             print(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
