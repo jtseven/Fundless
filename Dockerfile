@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM buster-slim
+FROM debian:buster-slim
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends build-essential tzdata
 ENV TZ=Europe/Germany
