@@ -1,10 +1,11 @@
 import schedule
 import time
 from datetime import date
+from typing import List
 
 from trading import TradingBot
 from messages import TelegramBot
-from config import Config
+from config import Config, IntervalEnum
 """
 
 FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
@@ -30,17 +31,29 @@ if __name__ == '__main__':
 
     # telegram bot interacting with the user
     message_bot = TelegramBot(config, trading_bot)
+    interval = config.trading_bot_config.savings_plan_interval
 
     def job():
-        if date.today().day in (5, 20):
-            print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
-            message_bot.ask_savings_plan_execution()
+        if isinstance(interval, List):
+            if date.today().day in interval:
+                print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
+                message_bot.ask_savings_plan_execution()
+            else:
+                print(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
         else:
-            print(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
+            message_bot.ask_savings_plan_execution()
 
-    schedule.every().day.at("16:15").do(job)
-    # schedule.every(15).seconds.do(job)
+    if interval == IntervalEnum.daily:
+        schedule.every().day.at("16:15").do(job)
+    elif interval == IntervalEnum.weekly:
+        schedule.every().week.at('16:15').do(job)
+    elif interval == IntervalEnum.biweekly:
+        schedule.every(2).weeks.at('16:15').do(job)
+    elif isinstance(interval, List):
+        schedule.every().day.at('16:15').do(job)
+    else:
+        raise ValueError(f'Unknown interval for savings plan execution: {interval}')
 
     while True:
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(10)

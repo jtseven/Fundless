@@ -1,13 +1,13 @@
 pip
-ccxt==1.50.51
-numpy==1.20.3
+ccxt
 pandas
+numpy~=1.20.3
 scikit-learn~=0.24
-pycoingecko==2.0.0
+pycoingecko~=2.0.0
 pathlib~=1.0.1
 PyYaml~=5.4.1
 schedule~=1.1.0
 python-telegram-bot
 pydantic~=1.8.2
-aenum==3.1.0
+aenum~=3.1.0
 redo~=2.0.4

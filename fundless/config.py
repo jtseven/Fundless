@@ -1,6 +1,6 @@
 from pathlib import Path
 import yaml
-from typing import List, TypedDict
+from typing import List, TypedDict, Union
 from pydantic.dataclasses import dataclass
 from pydantic.types import confloat, conint, constr
 from pydantic import validator
@@ -27,7 +27,6 @@ class IntervalEnum(MultiValueEnum):
     daily = 'daily'
     weekly = 'weekly'
     biweekly = 'biweekly', 'bi-weekly'
-    monthly = 'monthly'
 
 
 class OrderTypeEnum(MultiValueEnum):
@@ -65,7 +64,7 @@ class TradingBotConfig:
     base_currency: BaseCurrencyEnum
     base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd)$')
     savings_plan_cost: confloat(gt=0, le=10000)
-    savings_plan_interval: IntervalEnum
+    savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
     cherry_pick_symbols: List[str]

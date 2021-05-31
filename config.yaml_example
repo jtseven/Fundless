@@ -21,13 +21,13 @@ trading_bot:
     selected: busd
   savings_plan:
     cost: 500  # denoted in base_currency
-    interval:  # still hardcoded right now
+    interval:
       options:
         - daily
         - weekly
         - biweekly
-        - monthly
-      selected: daily
+        - array of day numbers  # e.g. [5, 20] for execution on 5th and 20th of every month
+      selected: [5, 20]
   portfolio:
     mode:
       options:
