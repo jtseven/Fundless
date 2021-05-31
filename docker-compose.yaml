@@ -2,7 +2,7 @@ version: "3.9"
 services:
   fundless:
     environment:
-      - TZ=Europe/Berlin
+      - TZ=Europe/Germany
     build: .
     restart: unless-stopped
     volumes:
