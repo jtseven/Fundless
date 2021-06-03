@@ -41,6 +41,8 @@ def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
 
         if int(update.message.chat_id) != chat_id:
             logger.info(f'Rejected unauthorized message from: {update.message.chat_id}')
+            update.message.reply_text('Sorry, you are not authorized, to use this bot!')
+            update.message.reply_text('Initiating self destruction...')
             return wrapper
 
         logger.info(
@@ -252,6 +254,7 @@ class TelegramBot:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
             return ConversationHandler.END
 
+    @authorized_only
     def _executing_answer(self, update: Update, context: CallbackContext):
         update.message.reply_text('Your order is being executed on the exchange, just relax for a while')
         update.message.reply_text('I will get back to you shortly!')
@@ -329,6 +332,7 @@ class TelegramBot:
             raise ValueError('Invalid state passed!')
 
     @staticmethod
+    @authorized_only
     def _cancel(update: Update, _: CallbackContext) -> int:
         user = update.message.from_user
         logger.info("User %s canceled the conversation.", user.first_name)
@@ -337,6 +341,7 @@ class TelegramBot:
         )
         return ConversationHandler.END
 
+    @authorized_only
     def _hodl_answer(self, update: Update, context: CallbackContext) -> None:
         reply_keyboard = [
             [KeyboardButton(r"/savings_plan"),
@@ -350,6 +355,7 @@ class TelegramBot:
         update.message.reply_text("HODL!", reply_markup=ReplyKeyboardRemove())
         update.message.reply_text("You can use the following commands:", reply_markup=markup)
 
+    @authorized_only
     def _unknown(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I didn't understand that.")
         reply_keyboard = [[
@@ -359,7 +365,8 @@ class TelegramBot:
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_message(chat_id=self.chat_id, text='Would you like to proceed or cancel?', reply_markup=markup)
 
-    def _unknown_command(self, _: Update, context: CallbackContext):
+    @authorized_only
+    def _unknown_command(self, update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I do not know that command.")
         reply_keyboard = [
             [KeyboardButton(r"/savings_plan"),

@@ -35,13 +35,12 @@ if __name__ == '__main__':
 
     def job():
         if isinstance(interval, List):
-            if date.today().day in interval:
-                print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
-                message_bot.ask_savings_plan_execution()
-            else:
+            if date.today().day not in interval:
                 print(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
-        else:
-            message_bot.ask_savings_plan_execution()
+                return
+
+        print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
+        message_bot.ask_savings_plan_execution()
 
     if interval == IntervalEnum.daily:
         schedule.every().day.at("16:15").do(job)
