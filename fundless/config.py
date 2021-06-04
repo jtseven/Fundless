@@ -1,7 +1,7 @@
 from pathlib import Path
 import yaml
 from typing import List, TypedDict, Union
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
 from pydantic import validator
 from aenum import MultiValueEnum
@@ -11,30 +11,30 @@ from aenum import MultiValueEnum
 #   - value: used in config and code
 #   - values[1]: beautiful name for printing
 #   - values[2:]: alternative names (might be used by user in config and interaction)
-class ExchangeEnum(MultiValueEnum):
+class ExchangeEnum(str, MultiValueEnum):
     binance = 'binance', 'Binance'
     kraken = 'kraken', 'Kraken'
 
 
-class BaseCurrencyEnum(MultiValueEnum):
+class BaseCurrencyEnum(str, MultiValueEnum):
     eur = 'EUR', 'euro', 'Euro', 'eur'
     usd = 'USD', 'usd', 'US Dollar', 'usdollar'
     btc = 'BTC', 'btc', 'Bitcoin', 'bitcoin'
     eth = 'ETH', 'eth', 'Ethereum', 'ethereum', 'ether'
 
 
-class IntervalEnum(MultiValueEnum):
+class IntervalEnum(str, MultiValueEnum):
     daily = 'daily'
     weekly = 'weekly'
     biweekly = 'biweekly', 'bi-weekly'
 
 
-class OrderTypeEnum(MultiValueEnum):
+class OrderTypeEnum(str, MultiValueEnum):
     market = 'market'
     limit = 'limit'
 
 
-class WeightingEnum(MultiValueEnum):
+class WeightingEnum(str, MultiValueEnum):
     equal = 'equal'
     market_cap = 'marketcap', 'market_cap'
     sqrt_market_cap = 'sqrt_market_cap', 'square root market cap', 'sqrt market cap'
@@ -42,7 +42,7 @@ class WeightingEnum(MultiValueEnum):
     sqrt_sqrt_market_cap = 'sqrt_sqrt_market_cap', 'sqrt sqrt market cap'
 
 
-class PortfolioModeEnum(MultiValueEnum):
+class PortfolioModeEnum(str, MultiValueEnum):
     cherry_pick = 'cherry_pick', 'pick', 'cherry pick', 'Cherry Pick', 'cherry_picked'
     index = 'index', 'Index'
 
@@ -57,8 +57,7 @@ class TelegramToken(TypedDict):
     chat_id: str
 
 
-@dataclass
-class TradingBotConfig:
+class TradingBotConfig(BaseModel):
     exchange: ExchangeEnum
     test_mode: bool
     base_currency: BaseCurrencyEnum
@@ -117,8 +116,7 @@ class TradingBotConfig:
         return self
 
 
-@dataclass
-class TelegramBotConfig:
+class TelegramBotConfig(BaseModel):
     # no config needed yet
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -126,8 +124,7 @@ class TelegramBotConfig:
         return self
 
 
-@dataclass
-class SecretsStore:
+class SecretsStore(BaseModel):
     binance_test: ExchangeToken
     kraken_test: ExchangeToken
     binance: ExchangeToken
@@ -174,8 +171,7 @@ class SecretsStore:
         return self
 
 
-@dataclass
-class Config:
+class Config(BaseModel):
     trading_bot_config: TradingBotConfig
     telegram_bot_config: TelegramBotConfig
     secrets: SecretsStore

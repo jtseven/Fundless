@@ -1,5 +1,5 @@
 import time
-
+import json
 import ccxt
 import telegram.error
 from telegram.ext import (
@@ -66,6 +66,13 @@ class TelegramBot:
 
     def __init__(self, config: Config, trading_bot: TradingBot):
         secrets = config.secrets.telegram
+        self.command_keyboard = [
+            [KeyboardButton(r"/savings_plan"),
+             KeyboardButton(r"/config")],
+            [KeyboardButton(r"/balance"),
+             KeyboardButton(r"/index")],
+            [KeyboardButton(r"/cancel")]
+        ]
         self.chat_id = secrets['chat_id']
         self.updater = Updater(token=secrets['token'])
         self.dispatcher = self.updater.dispatcher
@@ -88,6 +95,7 @@ class TelegramBot:
             CommandHandler('start', self._start),
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
+            CommandHandler('config', self._config),
             CommandHandler('cancel', self._cancel),
             MessageHandler(Filters.command, self._unknown_command),
             MessageHandler(Filters.text & ~Filters.command, self._hodl_answer),
@@ -108,7 +116,17 @@ class TelegramBot:
         pass
 
     @authorized_only
-    def _start(self, update, context):
+    def _config(self, update: Update, _: CallbackContext):
+        config_json = self.trading_bot.bot_config.json()
+        parsed = json.loads(config_json)
+        msg = "```\n"
+        msg += json.dumps(parsed, indent=2)
+        msg += "\n```"
+        update.message.reply_text("This is your current config:")
+        update.message.reply_text(msg, parse_mode='MarkdownV2')
+
+    @authorized_only
+    def _start(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="I'm FundLess, please talk to me!")
 
     @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
@@ -155,7 +173,7 @@ class TelegramBot:
             context.bot.send_message(chat_id=self.chat_id,
                                      text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
         else:
-            tracking_error = allocations - (index_weights*100)
+            tracking_error = allocations - (index_weights * 100)
             msg = "```\n"
             msg += "Your current index portfolio:\n"
             msg += f"- Coin  Alloc  Value TrackErr -\n"
@@ -343,13 +361,7 @@ class TelegramBot:
 
     @authorized_only
     def _hodl_answer(self, update: Update, context: CallbackContext) -> None:
-        reply_keyboard = [
-            [KeyboardButton(r"/savings_plan"),
-             KeyboardButton(r"/index")],
-            [KeyboardButton(r"/balance"),
-             KeyboardButton(r"/cancel")]
-        ]
-        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        markup = ReplyKeyboardMarkup(self.command_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(1)
         update.message.reply_text("HODL!", reply_markup=ReplyKeyboardRemove())
@@ -368,11 +380,5 @@ class TelegramBot:
     @authorized_only
     def _unknown_command(self, update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I do not know that command.")
-        reply_keyboard = [
-            [KeyboardButton(r"/savings_plan"),
-             KeyboardButton(r"/index")],
-            [KeyboardButton(r"/balance"),
-             KeyboardButton(r"/cancel")]
-        ]
-        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        markup = ReplyKeyboardMarkup(self.command_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_message(chat_id=self.chat_id, text='You can use these commands:', reply_markup=markup)
