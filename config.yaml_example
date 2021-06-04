@@ -28,6 +28,7 @@ trading_bot:
         - biweekly
         - array of day numbers  # e.g. [5, 20] for execution on 5th and 20th of every month
       selected: [5, 20]
+    execution_time: '12:30'  # HH:MM
   portfolio:
     mode:
       options:

@@ -32,6 +32,7 @@ if __name__ == '__main__':
     # telegram bot interacting with the user
     message_bot = TelegramBot(config, trading_bot)
     interval = config.trading_bot_config.savings_plan_interval
+    execution_time = config.trading_bot_config.savings_plan_execution_time
 
     def job():
         if isinstance(interval, List):
@@ -43,13 +44,13 @@ if __name__ == '__main__':
         message_bot.ask_savings_plan_execution()
 
     if interval == IntervalEnum.daily:
-        schedule.every().day.at("16:15").do(job)
+        schedule.every().day.at(execution_time).do(job)
     elif interval == IntervalEnum.weekly:
-        schedule.every().week.at('16:15').do(job)
+        schedule.every().week.at(execution_time).do(job)
     elif interval == IntervalEnum.biweekly:
-        schedule.every(2).weeks.at('16:15').do(job)
+        schedule.every(2).weeks.at(execution_time).do(job)
     elif isinstance(interval, List):
-        schedule.every().day.at('16:15').do(job)
+        schedule.every().day.at(execution_time).do(job)
     else:
         raise ValueError(f'Unknown interval for savings plan execution: {interval}')
 
