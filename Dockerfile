@@ -3,7 +3,7 @@ FROM python:3.9.5-slim
 
 RUN apt-get update -y && apt-get install -y \
     build-essential tzdata make gcc
-ENV TZ=Europe/Germany
+ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY requirements.txt requirements.txt
