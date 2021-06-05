@@ -38,7 +38,6 @@ def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
     def wrapper(self, *args, **kwargs):
         update = kwargs.get('update') or args[0]
         chat_id = int(self.chat_id)
-
         if int(update.message.chat_id) != chat_id:
             logger.info(f'Rejected unauthorized message from: {update.message.chat_id}')
             update.message.reply_text('Sorry, you are not authorized, to use this bot!')
@@ -110,7 +109,8 @@ class TelegramBot:
     def cleanup(self):
         self.updater.stop()
 
-    def _error(self, update: Update, context: CallbackContext):
+    @staticmethod
+    def _error(update: Update, context: CallbackContext):
         """Log Errors caused by Updates."""
         sys.stderr.write(f"ERROR: '{context.error}' caused by '{update}'")
         pass
@@ -130,7 +130,7 @@ class TelegramBot:
     def _balance(self, _: Update, context: CallbackContext) -> None:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
-            symbols, amounts, values, allocations = self.trading_bot.balance
+            symbols, amounts, values, allocations = self.trading_bot.balance()
         except ccxt.BaseError as e:
             msg = "I had a problem getting your balance from the exchange!"
             context.bot.send_message(chat_id=self.chat_id, text=msg)
@@ -156,7 +156,7 @@ class TelegramBot:
     def _index(self, _: Update, context: CallbackContext) -> None:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
-            symbols, amounts, values, allocations = self.trading_bot.index_balance
+            symbols, amounts, values, allocations = self.trading_bot.balance(index_only=True)
             _, index_weights = self.trading_bot.fetch_index_weights(symbols=symbols)
         except ccxt.BaseError as e:
             msg = "I had a problem getting your balance from the exchange!"
@@ -345,9 +345,8 @@ class TelegramBot:
         else:
             raise ValueError('Invalid state passed!')
 
-    @staticmethod
     @authorized_only
-    def _cancel(update: Update, _: CallbackContext) -> int:
+    def _cancel(self, update: Update, _: CallbackContext) -> int:
         user = update.message.from_user
         logger.info("User %s canceled the conversation.", user.first_name)
         update.message.reply_text(

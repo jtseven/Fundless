@@ -34,7 +34,6 @@ class TradingBot:
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
 
-
     def init_exchange(self):
         if self.bot_config.exchange == ExchangeEnum.binance:
             self.exchange = ccxt.binance()
@@ -52,8 +51,7 @@ class TradingBot:
         self.exchange.set_sandbox_mode(self.bot_config.test_mode)
         self.exchange.load_markets()
 
-    @property
-    def balance(self) -> tuple:
+    def balance(self, index_only=False) -> tuple:
         try:
             data = self.exchange.fetch_total_balance()
             markets = self.exchange.fetch_tickers()
@@ -61,11 +59,18 @@ class TradingBot:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
-        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
+        if index_only:
+            symbols = np.fromiter(
+                [key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols],
+                dtype='U10')
+        else:
+            symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
         base = self.bot_config.base_symbol.upper()
         try:
-            values = np.array([float(markets[f'{key.upper()}/{base}']['last'])*amount if key.upper() not in self.usd_symbols else amount for key, amount in zip(symbols, amounts)])
+            values = np.array([float(
+                markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in self.usd_symbols else amount
+                               for key, amount in zip(symbols, amounts)])
         except KeyError as e:
             print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
             raise
@@ -78,33 +83,9 @@ class TradingBot:
 
         return symbols, amounts, values, allocations
 
-    @property
-    def index_balance(self) -> dict:
-        try:
-            data = self.exchange.fetch_total_balance()
-            markets = self.exchange.fetch_tickers()
-        except Exception as e:
-            print(f"Error while getting balance from exchange:")
-            print(e)
-            raise e
-        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols], dtype='U10')
-        amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
-        base = self.bot_config.base_symbol.upper()
-        try:
-            values = np.array(
-                [float(markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() != base else amount for
-                 key, amount in zip(symbols, amounts)])
-        except KeyError as e:
-            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
-            raise
-        allocations = values / values.sum() * 100
-        sorted = values.argsort()
-        symbols = symbols[sorted[::-1]]
-        amounts = amounts[sorted[::-1]]
-        values = values[sorted[::-1]]
-        allocations = allocations[sorted[::-1]]
+    def tracking_error(self):
 
-        return symbols, amounts, values, allocations
+        pass
 
     def update_markets(self):
         try:
