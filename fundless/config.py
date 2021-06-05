@@ -57,7 +57,19 @@ class TelegramToken(TypedDict):
     chat_id: str
 
 
-class TradingBotConfig(BaseModel):
+class BaseConfig(BaseModel):
+    def print_markdown(self):
+        config_dict = self.dict()
+        for key, value in config_dict.items():
+            if isinstance(value, MultiValueEnum):
+                config_dict[key] = value.value
+        msg = "```\n"
+        msg += yaml.dump(config_dict)
+        msg += "\n```"
+        return msg
+
+
+class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
     test_mode: bool
     base_currency: BaseCurrencyEnum
@@ -116,7 +128,7 @@ class TradingBotConfig(BaseModel):
         return self
 
 
-class TelegramBotConfig(BaseModel):
+class TelegramBotConfig(BaseConfig):
     # no config needed yet
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -124,7 +136,7 @@ class TelegramBotConfig(BaseModel):
         return self
 
 
-class SecretsStore(BaseModel):
+class SecretsStore(BaseConfig):
     binance_test: ExchangeToken
     kraken_test: ExchangeToken
     binance: ExchangeToken

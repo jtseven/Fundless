@@ -117,11 +117,7 @@ class TelegramBot:
 
     @authorized_only
     def _config(self, update: Update, _: CallbackContext):
-        config_json = self.trading_bot.bot_config.json()
-        parsed = json.loads(config_json)
-        msg = "```\n"
-        msg += json.dumps(parsed, indent=2)
-        msg += "\n```"
+        msg = self.trading_bot.bot_config.print_markdown()
         update.message.reply_text("This is your current config:")
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
