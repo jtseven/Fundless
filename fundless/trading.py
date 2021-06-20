@@ -83,9 +83,36 @@ class TradingBot:
 
         return symbols, amounts, values, allocations
 
-    def tracking_error(self):
+    def allocation_error(self, order_volume: float = None) -> dict:
+        allocation_error = {}
 
-        pass
+        symbols, amounts, values, allocations = self.balance(index_only=True)
+        allocations = allocations
+        _, index_weights = self.fetch_index_weights(symbols)
+        allocation_error['symbols'] = symbols
+        allocation_error['relative'] = np.divide(allocations/100, index_weights)
+        allocation_error['percentage_points'] = allocations - (index_weights * 100)
+        allocation_error['absolute'] = values - index_weights * values.sum()
+        allocation_error['index_weights'] = index_weights
+
+        volume = order_volume or self.bot_config.savings_plan_cost
+        allocation_error['rel_to_order_volume'] = \
+            np.divide(allocation_error['absolute'], index_weights * volume)
+
+        return allocation_error
+
+    def rebalancing_weights(self, order_volume: float = None) -> tuple[np.ndarray, np.ndarray]:
+        volume = order_volume or self.bot_config.savings_plan_cost
+        allocation_error = self.allocation_error()
+        index_weights = allocation_error['index_weights']
+        absolute_error = allocation_error['absolute']
+        volumes = volume * index_weights - absolute_error
+        volumes = volumes.clip(min=0)
+        rebalancing_volume = volumes.sum()
+        if rebalancing_volume < volume:
+            volumes = volumes + (volume-rebalancing_volume) * index_weights
+        weights = volumes / volumes.sum()
+        return allocation_error['symbols'], weights
 
     def update_markets(self):
         try:

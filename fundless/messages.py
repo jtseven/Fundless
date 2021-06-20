@@ -58,7 +58,7 @@ def authorized_only(command_handler: Callable[..., None]) -> Callable[..., Any]:
     return wrapper
 
 
-PLANNING, EXECUTING = range(2)
+REBALANCING_DECISION, PLANNING, EXECUTING, CHECKING = range(4)
 
 
 class TelegramBot:
@@ -76,14 +76,19 @@ class TelegramBot:
         self.updater = Updater(token=secrets['token'])
         self.dispatcher = self.updater.dispatcher
         self.trading_bot = trading_bot
+        self.rebalance = False
+        self.order_weights = None
+        self.order_symbols = None
 
         self.UnknownAnswerHandler = MessageHandler(Filters.text & ~Filters.command, self._unknown)
 
         self.savings_plan_conversation = ConversationHandler(
-            entry_points=[CommandHandler('savings_plan', self._start_savings_plan_conversation)],
+            entry_points=[CommandHandler('savings_plan', self._rebalancing_question)],
             states={
-                PLANNING: [MessageHandler(Filters.regex('^(Yes, sounds great!|Noo!)$'), self._savings_plan_execution)],
-                EXECUTING: [TypeHandler(StateChangeUpdate, self._change_conversation_state),
+                REBALANCING_DECISION: [MessageHandler(Filters.regex('^(Yes|No)$'), self._rebalancing_decision)],
+                PLANNING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._order_planning)],
+                EXECUTING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._savings_plan_execution)],
+                CHECKING: [TypeHandler(StateChangeUpdate, self._change_conversation_state),
                             MessageHandler(Filters.text | Filters.command, self._executing_answer)]
             },
             fallbacks=[CommandHandler('cancel', self._cancel), self.UnknownAnswerHandler]
@@ -192,14 +197,21 @@ class TelegramBot:
 
     @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
     @authorized_only
-    def _start_savings_plan_conversation(self, update: Update, context: CallbackContext):
+    def _order_planning(self, update: Update, context: CallbackContext):
         # TODO check if bot asked for execution before
+        if update.message.text == 'No':
+            update.message.reply_text("Okay, canceling this savings plan!")
+            return ConversationHandler.END
+
         update.message.reply_text(
             "Alright! I am computing the optimal buy order..."
         )
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
-        symbols, weights = self.trading_bot.fetch_index_weights()
+        if self.rebalance:
+            symbols, weights = self.trading_bot.rebalancing_weights()
+        else:
+            symbols, weights = self.trading_bot.fetch_index_weights()
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
@@ -213,24 +225,72 @@ class TelegramBot:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
         reply_keyboard = [[
-            "Yes, sounds great!",
-            "Noo!"
+            "Yes",
+            "No"
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         update.message.reply_text(text="Should I proceed?", reply_markup=markup)
+
+        self.order_weights = weights
+        self.order_symbols = symbols
+        return EXECUTING
+
+    @authorized_only
+    def _rebalancing_question(self, update: Update, context: CallbackContext):
+        update.message.reply_text("Great!")
+        update.message.reply_text("I will first check, if rebalancing of your portfolio is recommended...")
+
+        allocation_error = self.trading_bot.allocation_error()
+        rel_to_volume = allocation_error['rel_to_order_volume']
+        if abs(rel_to_volume.max()) >= 0.10:
+            symbol = allocation_error['symbols'][rel_to_volume.argmax()]
+            err = abs(rel_to_volume.max())
+            update.message.reply_text(f"The absolute allocation error of {symbol} is {err:.1%} of your order volume!")
+            reply_keyboard = [[
+                "Yes",
+                "No"
+            ]]
+            markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+            update.message.reply_text("Would you like me to rebalance your portfolio with this savings plan execution?",
+                                      reply_markup=markup)
+            return REBALANCING_DECISION
+        else:
+            update.message.reply_text("Ahh perfect, your portfolio looks well balanced!")
+            self.rebalance = False
+            reply_keyboard = [[
+                "Yes",
+                "No"
+            ]]
+            markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+            update.message.reply_text("Should I proceed computing your buy order?", reply_markup=markup)
+            return PLANNING
+
+    @authorized_only
+    def _rebalancing_decision(self, update: Update, context: CallbackContext):
+        if update.message.text == 'Yes':
+            update.message.reply_text("Alright, I will rebalance your portfolio with this order...")
+            self.rebalance = True
+        elif update.message.text == 'No':
+            update.message.reply_text("Okay, no rebalancing this time...")
+            self.rebalance = False
+        reply_keyboard = [[
+            "Yes",
+            "No"
+        ]]
+        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        update.message.reply_text("Should I proceed?", reply_markup=markup)
         return PLANNING
 
     @authorized_only
     def _savings_plan_execution(self, update: Update, context: CallbackContext):
-        if update.message.text == 'Yes, sounds great!':
+        if update.message.text == 'Yes':
             update.message.reply_text(
                 f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
             update.message.reply_text(
                 f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} $ ...")
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                symbols, weights = self.trading_bot.fetch_index_weights()
-                report = self.trading_bot.weighted_buy_order(symbols, weights)
+                report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
             except ccxt.BaseError as e:
                 update.message.reply_text("Ohhh, there was a Problem with the exchange! Sorry :(")
                 update.message.reply_text('This is, what the exchange returned:')
@@ -263,7 +323,7 @@ class TelegramBot:
                 update.message.reply_text(
                     "I will check if your orders went threw in a few seconds and get back to you :)")
                 context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1, update))
-                return EXECUTING
+                return CHECKING
         else:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
             return ConversationHandler.END
@@ -272,7 +332,7 @@ class TelegramBot:
     def _executing_answer(self, update: Update, context: CallbackContext):
         update.message.reply_text('Your order is being executed on the exchange, just relax for a while')
         update.message.reply_text('I will get back to you shortly!')
-        return EXECUTING
+        return CHECKING
 
     def check_orders(self, context: CallbackContext):
         job = context.job
@@ -324,7 +384,7 @@ class TelegramBot:
                                          text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
                 context.job_queue.run_once(self.check_orders, when=wait_time,
                                            context=(order_ids, symbols, n_retry + 1, update))
-                state_update = StateChangeUpdate(randint(0, 999999999), next_state=EXECUTING)
+                state_update = StateChangeUpdate(randint(0, 999999999), next_state=CHECKING)
                 state_update._effective_user = update.effective_user
                 state_update._effective_chat = update.effective_chat
                 context.update_queue.put(state_update)
@@ -340,8 +400,8 @@ class TelegramBot:
     def _change_conversation_state(self, update: StateChangeUpdate, __: CallbackContext):
         if update.next_state == ConversationHandler.END:
             return ConversationHandler.END
-        elif update.next_state == EXECUTING:
-            return EXECUTING
+        elif update.next_state == CHECKING:
+            return CHECKING
         else:
             raise ValueError('Invalid state passed!')
 
@@ -366,7 +426,7 @@ class TelegramBot:
     def _unknown(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I didn't understand that.")
         reply_keyboard = [[
-            "Yes, sounds great!",
+            "Yes",
             "/cancel"
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)

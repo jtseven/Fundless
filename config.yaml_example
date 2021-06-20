@@ -57,7 +57,7 @@ trading_bot:
 #          - nano
     index:
       top_n: 10
-      exclude_symbols: [xrp]
+      exclude_symbols: [xrp]    # probably a good idea to exclude stable coins
     weighting:
       options:
         - equal
