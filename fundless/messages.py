@@ -177,7 +177,7 @@ class TelegramBot:
             tracking_error = allocations - (index_weights * 100)
             msg = "```\n"
             msg += "Your current index portfolio:\n"
-            msg += f"- Coin  Alloc  Value TrackErr -\n"
+            msg += f"- Coin  Alloc  Value AllocErr -\n"
             for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
                 msg += f"  {symbol + ':': <6} {allocation:4.1f}% {value:3,.0f}$  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
