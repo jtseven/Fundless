@@ -117,7 +117,7 @@ class TradingBot:
     def update_markets(self):
         try:
             self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
-                vs_currency=self.bot_config.base_currency.value))
+                vs_currency=self.bot_config.base_currency.value, per_page=150))
             self.markets['symbol'] = self.markets['symbol'].str.lower()
         except Exception as e:
             print('Error while updating market data from CoinGecko:')
