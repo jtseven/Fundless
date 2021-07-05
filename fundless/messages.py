@@ -421,12 +421,14 @@ class TelegramBot:
         time.sleep(1)
         update.message.reply_text("HODL!", reply_markup=ReplyKeyboardRemove())
         update.message.reply_text("You can use the following commands:", reply_markup=markup)
+        update.message.reply_text("\\savings_plan\n\\config\n\\balance\n\\index\n\\cancel", reply_markup=markup)
 
     @authorized_only
     def _unknown(self, _: Update, context: CallbackContext):
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I didn't understand that.")
         reply_keyboard = [[
             "Yes",
+            "No",
             "/cancel"
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
