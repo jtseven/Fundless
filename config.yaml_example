@@ -36,7 +36,7 @@ trading_bot:
         - index  # not yet implemented
       selected: cherry_pick
     cherry_pick:
-        symbols:
+        symbols:  # as defined by coingecko
           - btc
           - eth
 #          - ada
@@ -50,7 +50,7 @@ trading_bot:
 #          # - theta # not available on binance
 #          - avax
 #          - iota
-#          - xch
+#          # - xch
 #          - algo
 #          - one
 #          - qtum

@@ -60,12 +60,13 @@ class TradingBot:
             print(e)
             raise e
         if index_only:
-            symbols = np.fromiter(
-                [key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols],
-                dtype='U10')
+            # symbols = np.fromiter(
+            #     [key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols],
+            #     dtype='U10')
+            symbols = np.fromiter([symbol.upper() for symbol in self.bot_config.cherry_pick_symbols], dtype='U10')
         else:
             symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
-        amounts = np.fromiter([data[symbol] for symbol in symbols], dtype=float)
+        amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
         base = self.bot_config.base_symbol.upper()
         try:
             values = np.array([float(
