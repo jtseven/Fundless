@@ -115,6 +115,25 @@ class TradingBot:
         weights = volumes / volumes.sum()
         return allocation_error['symbols'], weights
 
+    def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, order_volume: float = None):
+        volume = order_volume or self.bot_config.savings_plan_cost
+        volume_fail = self.check_order_limits(symbols, weights, volume, fail_fast=True)
+        if len(volume_fail) > 0:
+            sorter = weights.argsort()
+            sorted_weights = weights[sorter[1:]]
+            sorted_symbols = symbols[sorter[1:]]
+            for i, _ in enumerate(sorted_symbols):
+                check_symbols = sorted_symbols[i:].copy()
+                check_weights = sorted_weights[i:].copy()
+                check_weights = check_weights/check_weights.sum()
+                check = self.check_order_limits(check_symbols, check_weights, volume, fail_fast=True)
+                if len(check) == 0:
+                    return check_symbols, check_weights
+            raise ValueError('Order is not executable, overall volume too low!')
+
+
+
+
     def update_markets(self):
         try:
             self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
@@ -163,42 +182,55 @@ class TradingBot:
         # Pull latest market data
         self.exchange.fetch_markets()
         # Check for any complications
-        problems = {'symbols': {}, 'occurred': False, 'description': ''}
+        problems = {'symbols': {}, 'fail': False, 'occurred': False, 'description': '', 'skip_coins': []}
         for symbol, weight in zip(symbols, weights):
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             if ticker not in self.exchange.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
                 problems['occurred'] = True
+                problems['fail'] = True
                 problems['description'] = f'Symbol {ticker} not available'
-                problems['symbols'][ticker] = 'not available'
-            else:
-                price = self.exchange.fetch_ticker(ticker).get('last')
-                if price <= 0.0:
-                    print(f"Warning: Price for {ticker} is {price}, skipping {ticker}...")
-                    problems['occurred'] = True
-                    problems['description'] = f'Price for {ticker} zero or below'
-                    problems['symbols'][ticker] = 'price <= zero'
-                    continue
-                cost = weight * volume_usd
-                amount = weight * volume_usd / price
-                if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
-                    print(f"The order amount of {ticker} is to low! Skipping...")
-                    problems['occurred'] = True
-                    problems['description'] = f'Order amount for {ticker} too low'
-                    problems['symbols'][ticker] = 'amount too low'
-                if cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
-                    print(f"The order cost of {cost} $ is to low for {ticker}! Skipping...")
-                    problems['occurred'] = True
-                    problems['description'] = f'Order cost for {ticker} too low'
-                    problems['symbols'][ticker] = 'cost too low'
+                problems['symbols'][symbol] = 'not available'
+        if problems['occurred']:
+            return problems
+
+        volume_fail = self.check_order_limits(symbols, weights, volume_usd)
+        if len(volume_fail) > 0:
+            for symbol in volume_fail:
+                print(f"The order amount of {symbol.upper()} is to low! Skipping...")
+                problems['occurred'] = True
+                problems['description'] = f'Order amount for {symbol.upper()} too low'
+                problems['symbols'][symbol] = 'amount too low'
+                problems['skip_coins'].append(symbol)
+
         balance = self.exchange.fetch_free_balance()[self.bot_config.base_symbol.upper()]
         if balance < self.bot_config.savings_plan_cost:
             print(
                 f"Warning: Insufficient funds to execute savings plan! Your have {balance:.2f} {self.bot_config.base_symbol.upper()}")
             problems['occurred'] = True
+            problems['fail'] = True
             problems['description'] = \
                 f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}'
         return problems
+
+    def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float, fail_fast=False):
+        volume_fail = []
+        for symbol, weight in zip(symbols, weights):
+            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
+            price = self.exchange.fetch_ticker(ticker).get('last')
+            cost = weight * volume_usd
+            amount = weight * volume_usd / price
+
+            if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
+                volume_fail.append(symbol)
+                if fail_fast:
+                    return volume_fail
+            elif cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
+                volume_fail.append(symbol)
+                if fail_fast:
+                    return volume_fail
+
+        return volume_fail
 
     # Place a weighted market buy order on Binance for multiple coins
     def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float = None,
@@ -207,7 +239,7 @@ class TradingBot:
         print_order_allocation(symbols, weights)
         self.exchange.load_markets()
         report = {'problems': self.check_order_executable(symbols, weights, volume), 'order_ids': []}
-        if report['problems']['occurred']:
+        if report['problems']['fail']:
             return report
 
         placed_volume = 0

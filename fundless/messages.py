@@ -210,8 +210,12 @@ class TelegramBot:
         time.sleep(2)
         if self.rebalance:
             symbols, weights = self.trading_bot.rebalancing_weights()
+            # filter coin order volumes that are below the minimum threshold for the exchange
+            symbols, weights = self.trading_bot.volume_corrected_weights(symbols, weights)
         else:
             symbols, weights = self.trading_bot.fetch_index_weights()
+            # filter coin order volumes that are below the minimum threshold for the exchange
+            symbols, weights = self.trading_bot.volume_corrected_weights(symbols, weights)
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
@@ -299,7 +303,7 @@ class TelegramBot:
                 update.message.reply_text('See you :)')
                 return ConversationHandler.END
             problems = report['problems']
-            if problems['occurred']:
+            if problems['fail']:
                 update.message.reply_text('I can not place your orders!')
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 time.sleep(1)
