@@ -150,6 +150,8 @@ class TelegramBot:
             msg = "```\n"
             msg += "--- Your current portfolio: ---\n"
             for symbol, allocation, value in zip(symbols, allocations, values):
+                if value < 1.0:
+                    continue
                 msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
             msg += "-------------------------------\n"
             msg += f"  Overall Balance: {values.sum():,.2f} $"
