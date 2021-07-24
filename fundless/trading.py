@@ -98,7 +98,7 @@ class TradingBot:
 
         volume = order_volume or self.bot_config.savings_plan_cost
         allocation_error['rel_to_order_volume'] = \
-            np.divide(allocation_error['absolute'], index_weights * volume)
+            np.divide(np.abs(allocation_error['absolute']), volume)
 
         return allocation_error
 
