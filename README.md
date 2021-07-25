@@ -3,7 +3,7 @@ A crypto currency trading bot, that is aiming at a buy and hold strategy with ma
 
 Interaction with the bot is done by Telegram for now:
 
-![Telegram Bot](doc/screenshot_telegram.jpeg "Telegram Bot Interface")
+<img src="doc/screenshot_telegram.jpeg" width="300" />
 
 ## Get Started
 To get started you need to:
