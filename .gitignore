@@ -1,6 +1,8 @@
 ### Secrets File
 secrets.yaml
 config.yaml
+trades.csv
+trades_backup.csv
 
 ### Python template
 # Byte-compiled / optimized / DLL files
