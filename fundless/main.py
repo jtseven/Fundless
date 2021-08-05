@@ -5,6 +5,7 @@ from typing import List
 
 from trading import TradingBot
 from messages import TelegramBot
+from analytics import PortfolioAnalytics
 from config import Config, IntervalEnum
 """
 
@@ -16,6 +17,8 @@ orders and will possibly be able to rebalance after the one year waiting period 
 
 secrets_yaml = 'secrets.yaml'
 config_yaml = 'config.yaml'
+trades_csv = 'fundless/data/trades.csv'
+trades_csv_test = 'fundless/data/test_trades.csv'
 
 if __name__ == '__main__':
     print("Hi, I will just buy and HODL!")
@@ -23,11 +26,14 @@ if __name__ == '__main__':
     # parse all settings from yaml files
     config = Config.from_yaml_files(config_yaml=config_yaml, secrets_yaml=secrets_yaml)
 
-    # the bot interacting with exchanges
-    trading_bot = TradingBot(config)
+    # the analytics module for portfolio performance analysis
+    if config.trading_bot_config.test_mode:
+        analytics = PortfolioAnalytics(trades_csv_test)
+    else:
+        analytics = PortfolioAnalytics(trades_csv)
 
-    # symbols, weights = trading_bot.fetch_index_weights()
-    # trading_bot.weighted_buy_order(symbols, sqrt_weights)
+    # the bot interacting with exchanges
+    trading_bot = TradingBot(config, analytics)
 
     # telegram bot interacting with the user
     message_bot = TelegramBot(config, trading_bot)

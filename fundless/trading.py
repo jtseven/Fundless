@@ -3,8 +3,10 @@ import numpy as np
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from typing import List
+from datetime import datetime
 
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
+from analytics import PortfolioAnalytics
 
 # translate coingecko symbols to ccxt/binance symbols
 coingecko_symbol_dict = {
@@ -21,15 +23,17 @@ def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
 
 class TradingBot:
     bot_config: TradingBotConfig
+    analytics: PortfolioAnalytics
     secrets: SecretsStore
     exchange: ccxt.Exchange
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
     usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
-    def __init__(self, bot_config: Config):
+    def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
         self.bot_config = bot_config.trading_bot_config
         self.secrets = bot_config.secrets
+        self.analytics = analytics
         self.init_exchange()
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
@@ -130,9 +134,7 @@ class TradingBot:
                 if len(check) == 0:
                     return check_symbols, check_weights
             raise ValueError('Order is not executable, overall volume too low!')
-
-
-
+        return symbols, weights
 
     def update_markets(self):
         try:
@@ -304,6 +306,14 @@ class TradingBot:
                 order_report[symbol]['price'] = order['price']
                 order_report[symbol]['cost'] = order['cost']
                 closed_orders.append(symbol)
+                self.analytics.add_trade(date=datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
+                                         buy_symbol=order['symbol'].split('/')[0],
+                                         sell_symbol=order['symbol'].split('/')[1],
+                                         price=order['price'],
+                                         amount=order['amount'],
+                                         cost=order['cost'],
+                                         fee=order['fee'] or 0.0,
+                                         fee_symbol='')
             elif order['status'] == 'open':
                 order_report['symbol'] = 'open'
                 open_orders.append(symbol)
