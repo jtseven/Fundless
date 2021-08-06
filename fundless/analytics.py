@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr
 
@@ -13,6 +14,7 @@ date_time_regex = '(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})'
 class PortfolioAnalytics:
     trades_df: pd.DataFrame
     trades_file: Path
+    # coingecko: CoinGeckoAPI
 
     def __init__(self, file_path):
         self.trades_file = Path(file_path)
@@ -39,3 +41,10 @@ class PortfolioAnalytics:
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
         self.trades_df['date'] = pd.to_datetime(self.trades_df['date'], infer_datetime_format=True)
         self.update_file()
+
+    def performance(self, current_portfolio_value: float) -> float:
+        amount_invested = self.trades_df['cost'].sum()
+        return current_portfolio_value / amount_invested - 1
+
+    def invested(self) -> float:
+        return self.trades_df['cost'].sum()

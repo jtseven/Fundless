@@ -70,7 +70,8 @@ class TelegramBot:
              KeyboardButton(r"/config")],
             [KeyboardButton(r"/balance"),
              KeyboardButton(r"/index")],
-            [KeyboardButton(r"/cancel")]
+            [KeyboardButton(r"/performance"),
+             KeyboardButton(r"/cancel")]
         ]
         self.chat_id = secrets['chat_id']
         self.updater = Updater(token=secrets['token'])
@@ -99,6 +100,7 @@ class TelegramBot:
             CommandHandler('start', self._start),
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
+            CommandHandler('performance', self._performance),
             CommandHandler('config', self._config),
             CommandHandler('cancel', self._cancel),
             MessageHandler(Filters.command, self._unknown_command),
@@ -124,6 +126,22 @@ class TelegramBot:
     def _config(self, update: Update, _: CallbackContext):
         msg = self.trading_bot.bot_config.print_markdown()
         update.message.reply_text("This is your current config:")
+        update.message.reply_text(msg, parse_mode='MarkdownV2')
+
+    @authorized_only
+    def _performance(self, update: Update, context: CallbackContext):
+        invested = self.trading_bot.analytics.invested()
+        balance = self.trading_bot.balance(index_only=True)[2].sum()
+        performance = self.trading_bot.analytics.performance(balance)
+
+        msg = "```\n"
+        msg += "----- Performance Report: -----\n"
+        msg += f"\tInvested amount:\t{invested:7.2f}$\n"
+        msg += f"\tPortfolio value:\t{balance:7.2f}$\n"
+        msg += f"\tPerformance:\t\t\t\t{performance:.2%}\n"
+        msg += "-------------------------------"
+        msg += "```"
+
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
     @authorized_only
