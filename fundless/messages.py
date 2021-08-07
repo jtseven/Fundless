@@ -231,11 +231,18 @@ class TelegramBot:
         if self.rebalance:
             symbols, weights = self.trading_bot.rebalancing_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols, weights = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
         else:
             symbols, weights = self.trading_bot.fetch_index_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols, weights = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
+        if len(symbols_filtered) < len(symbols):
+            update.message.reply_text("The order volume is too low, to buy the following coins:")
+            update.message.reply_text(f"{symbols_filtered}")
+            update.message.reply_text(
+                "But don't worry, I will fix this by rebalancing your portfolio with the next savings plan execution!")
+        symbols = symbols_filtered
+        weights = weights_filtered
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
