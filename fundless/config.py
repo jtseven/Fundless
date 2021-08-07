@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 import yaml
-from typing import List, Union
+from typing import List, Union, Dict
 from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
 from pydantic import validator
@@ -41,6 +41,7 @@ class OrderTypeEnum(str, MultiValueEnum):
 
 class WeightingEnum(str, MultiValueEnum):
     equal = 'equal'
+    custom = 'custom'
     market_cap = 'marketcap', 'market_cap'
     sqrt_market_cap = 'sqrt_market_cap', 'square root market cap', 'sqrt market cap'
     cbrt_market_cap = 'cbrt_market_cap', 'cubic root market cap', 'cbrt market cap'
@@ -85,6 +86,7 @@ class TradingBotConfig(BaseConfig):
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
     cherry_pick_symbols: List[str]
+    custom_weights: Dict[str, float]
     index_top_n: conint(gt=0, le=100)
     index_exclude_symbols: List[str]
 
@@ -127,6 +129,7 @@ class TradingBotConfig(BaseConfig):
             portfolio_mode=dictionary['portfolio']['mode']['selected'],
             portfolio_weighting=dictionary['portfolio']['weighting']['selected'],
             cherry_pick_symbols=dictionary['portfolio']['cherry_pick']['symbols'],
+            custom_weights=dictionary['portfolio']['weighting']['custom'],
             index_top_n=dictionary['portfolio']['index']['top_n'],
             index_exclude_symbols=dictionary['portfolio']['index']['exclude_symbols']
         )

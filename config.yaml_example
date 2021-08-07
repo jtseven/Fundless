@@ -36,9 +36,9 @@ trading_bot:
         - index  # not yet implemented
       selected: cherry_pick
     cherry_pick:
-        symbols:  # as defined by coingecko
-          - btc
-          - eth
+      symbols:  # as defined by coingecko
+        - btc
+        - eth
 #          - ada
 #          - dot
 #          - link
@@ -61,11 +61,13 @@ trading_bot:
     weighting:
       options:
         - equal
+        - custom
         - market_cap
         - sqrt_market_cap       # square root of market cap
         - cbrt_market_cap       # cubic root
         - sqrt_sqrt_market_cap  # fourth root
       selected: cbrt_market_cap
-
-telegram_bot:
+      custom:
+        btc: 0.1
+        eth: 0.9
 
