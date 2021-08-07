@@ -238,7 +238,7 @@ class TelegramBot:
             symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
         if len(symbols_filtered) < len(symbols):
             update.message.reply_text("The order volume is too low, to buy the following coins:")
-            update.message.reply_text(f"{symbols_filtered}")
+            update.message.reply_text(f"{[symbol for symbol in symbols if symbol not in symbols_filtered]}")
             update.message.reply_text(
                 "But don't worry, I will fix this by rebalancing your portfolio with the next savings plan execution!")
         symbols = symbols_filtered
