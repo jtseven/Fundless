@@ -2,7 +2,7 @@ import ccxt
 import numpy as np
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
-from typing import List
+from typing import List, Tuple
 from datetime import datetime
 
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
@@ -55,7 +55,7 @@ class TradingBot:
         self.exchange.set_sandbox_mode(self.bot_config.test_mode)
         self.exchange.load_markets()
 
-    def balance(self, index_only=False) -> tuple:
+    def balance(self, index_only=False) -> Tuple:
         try:
             data = self.exchange.fetch_total_balance()
             markets = self.exchange.fetch_tickers()
@@ -106,7 +106,7 @@ class TradingBot:
 
         return allocation_error
 
-    def rebalancing_weights(self, order_volume: float = None) -> tuple[np.ndarray, np.ndarray]:
+    def rebalancing_weights(self, order_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
         volume = order_volume or self.bot_config.savings_plan_cost
         allocation_error = self.allocation_error()
         index_weights = allocation_error['index_weights']
