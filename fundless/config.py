@@ -78,7 +78,7 @@ class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
     test_mode: bool
     base_currency: BaseCurrencyEnum
-    base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd)$')
+    base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd|eur)$')
     savings_plan_cost: confloat(gt=0, le=10000)
     savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
     savings_plan_execution_time: constr(regex='^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
@@ -90,8 +90,8 @@ class TradingBotConfig(BaseConfig):
 
     @validator('base_currency')
     def check_if_currency_supported(cls, v):
-        if v in (BaseCurrencyEnum.btc, BaseCurrencyEnum.eth, BaseCurrencyEnum.eur):
-            raise NotImplementedError("Only USD base currency is supported by now")
+        if v in (BaseCurrencyEnum.btc, BaseCurrencyEnum.eth):
+            raise NotImplementedError("Only USD and EUR base currencies are supported by now")
         return v
 
     @validator('portfolio_mode')

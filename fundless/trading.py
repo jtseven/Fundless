@@ -48,7 +48,13 @@ class TradingBot:
                 self.exchange.apiKey = self.secrets.binance['api_key']
                 self.exchange.secret = self.secrets.binance['secret']
         elif self.bot_config.exchange == ExchangeEnum.kraken:
-            raise NotImplementedError("Kraken is not yet supported!")
+            self.exchange = ccxt.kraken()
+            if self.bot_config.test_mode:
+                self.exchange.apiKey = self.secrets.kraken_test['api_key']
+                self.exchange.secret = self.secrets.kraken_test['secret']
+            else:
+                self.exchange.apiKey = self.secrets.kraken['api_key']
+                self.exchange.secret = self.secrets.kraken['secret']
         else:
             raise ValueError('Invalid Exchange given!')
 
@@ -204,8 +210,11 @@ class TradingBot:
                 problems['description'] = f'Order amount for {symbol.upper()} too low'
                 problems['symbols'][symbol] = 'amount too low'
                 problems['skip_coins'].append(symbol)
-
-        balance = self.exchange.fetch_free_balance()[self.bot_config.base_symbol.upper()]
+        balance = self.exchange.fetch_balance()
+        if balance['free'][self.bot_config.base_symbol.upper()] is not None:
+            balance = balance['free'][self.bot_config.base_symbol.upper()]
+        else:
+            balance = balance['total'][self.bot_config.base_symbol.upper()]
         if balance < self.bot_config.savings_plan_cost:
             print(
                 f"Warning: Insufficient funds to execute savings plan! Your have {balance:.2f} {self.bot_config.base_symbol.upper()}")
@@ -250,7 +259,7 @@ class TradingBot:
         placed_symbols = []
 
         # Start buying
-        before = self.exchange.fetch_free_balance()
+        before = self.exchange.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
@@ -288,7 +297,7 @@ class TradingBot:
         report['symbols'] = placed_symbols
         report['invalid_symbols'] = invalid
         # Report state of portfolio before and after buy orders
-        after = self.exchange.fetch_free_balance()
+        after = self.exchange.fetch_total_balance()
         print("Balances before order execution:")
         print(before)
         print("Balances after order execution:")
