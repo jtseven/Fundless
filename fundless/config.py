@@ -1,11 +1,16 @@
 from pathlib import Path
+import sys
 import yaml
-from typing import List, TypedDict, Union
+from typing import List, Union
 from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
 from pydantic import validator
 from aenum import MultiValueEnum
 
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 # Convention for multi value enums:
 #   - value: used in config and code
