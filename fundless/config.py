@@ -22,8 +22,8 @@ class ExchangeEnum(str, MultiValueEnum):
 
 
 class BaseCurrencyEnum(str, MultiValueEnum):
-    eur = 'EUR', 'euro', 'Euro', 'eur'
-    usd = 'USD', 'usd', 'US Dollar', 'usdollar'
+    eur = 'EUR', '€', 'euro', 'Euro', 'eur'
+    usd = 'USD', '$', 'usd', 'US Dollar', 'usdollar'
     btc = 'BTC', 'btc', 'Bitcoin', 'bitcoin'
     eth = 'ETH', 'eth', 'Ethereum', 'ethereum', 'ether'
 
