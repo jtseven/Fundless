@@ -26,8 +26,8 @@ class TradingBot:
     analytics: PortfolioAnalytics
     secrets: SecretsStore
     exchange: ccxt.Exchange
-    coingecko: CoinGeckoAPI
-    markets: pd.DataFrame  # CoinGecko Market Data
+    # coingecko: CoinGeckoAPI
+    # markets: pd.DataFrame  # CoinGecko Market Data
     usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
     def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
@@ -35,8 +35,8 @@ class TradingBot:
         self.secrets = bot_config.secrets
         self.analytics = analytics
         self.init_exchange()
-        self.coingecko = CoinGeckoAPI()
-        self.update_markets()
+        # self.coingecko = CoinGeckoAPI()
+        # self.update_markets()
 
     def init_exchange(self):
         if self.bot_config.exchange == ExchangeEnum.binance:
@@ -142,30 +142,30 @@ class TradingBot:
             raise ValueError('Order is not executable, overall volume too low!')
         return symbols, weights
 
-    def update_markets(self):
-        try:
-            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
-                vs_currency=self.bot_config.base_currency.value, per_page=150))
-            self.markets['symbol'] = self.markets['symbol'].str.lower()
-        except Exception as e:
-            print('Error while updating market data from CoinGecko:')
-            print(e)
-            raise e
-        self.markets.replace(coingecko_symbol_dict, inplace=True)
+    # def update_markets(self):
+    #     try:
+    #         self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
+    #             vs_currency=self.bot_config.base_currency.value, per_page=150))
+    #         self.markets['symbol'] = self.markets['symbol'].str.lower()
+    #     except Exception as e:
+    #         print('Error while updating market data from CoinGecko:')
+    #         print(e)
+    #         raise e
+    #     self.markets.replace(coingecko_symbol_dict, inplace=True)
 
     # Compute the weights by market cap, fetching data from coingecko
     # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
     def fetch_index_weights(self, symbols: np.ndarray = None):
-        self.update_markets()
+        self.analytics.update_markets()
         if symbols is not None:
             symbols = [symbol.lower() for symbol in symbols]
-            picked_markets = self.markets.loc[self.markets['symbol'].isin(symbols)]
+            picked_markets = self.analytics.markets.loc[self.analytics.markets['symbol'].isin(symbols)]
             # sort df equal to symbols array
             sorter_index = dict(zip(symbols, range(len(symbols))))
             picked_markets['rank'] = picked_markets['symbol'].map(sorter_index)
             picked_markets.sort_values('rank', ascending=True, inplace=True)
         else:
-            picked_markets = self.markets.loc[self.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
+            picked_markets = self.analytics.markets.loc[self.analytics.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
             symbols = picked_markets['symbol'].values
             if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
                 print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")

@@ -28,9 +28,9 @@ if __name__ == '__main__':
 
     # the analytics module for portfolio performance analysis
     if config.trading_bot_config.test_mode:
-        analytics = PortfolioAnalytics(trades_csv_test)
+        analytics = PortfolioAnalytics(trades_csv_test, config)
     else:
-        analytics = PortfolioAnalytics(trades_csv)
+        analytics = PortfolioAnalytics(trades_csv, config)
 
     # the bot interacting with exchanges
     trading_bot = TradingBot(config, analytics)

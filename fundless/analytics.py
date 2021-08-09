@@ -3,6 +3,9 @@ from pathlib import Path
 from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr
+import plotly.express as px
+
+from config import Config
 
 csv_dtypes = {'buy_symbol': 'object', 'sell_symbol': 'object', 'price': 'float64',
               'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'object'}
@@ -10,19 +13,28 @@ columns = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee'
 
 date_time_regex = '(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})'
 
+# translate coingecko symbols to ccxt/binance symbols
+coingecko_symbol_dict = {
+    'miota': 'iota'
+}
+
 
 class PortfolioAnalytics:
     trades_df: pd.DataFrame
     trades_file: Path
-    # coingecko: CoinGeckoAPI
+    coingecko: CoinGeckoAPI
+    markets: pd.DataFrame  # CoinGecko Market Data
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, config: Config):
+        self.config = config.trading_bot_config
         self.trades_file = Path(file_path)
         if self.trades_file.exists():
             self.update_dataframe()
         else:
             self.trades_df = pd.DataFrame(columns=columns)
             self.trades_df.to_csv(self.trades_file, index=False)
+        self.coingecko = CoinGeckoAPI()
+        self.update_markets()
 
     def update_dataframe(self):
         self.trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
@@ -30,6 +42,17 @@ class PortfolioAnalytics:
     def update_file(self):
         self.trades_df.sort_values('date', inplace=True)
         self.trades_df.to_csv(self.trades_file, index=False)
+
+    def update_markets(self):
+        try:
+            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
+                vs_currency=self.config.base_currency.value, per_page=150))
+            self.markets['symbol'] = self.markets['symbol'].str.lower()
+        except Exception as e:
+            print('Error while updating market data from CoinGecko:')
+            print(e)
+            raise e
+        self.markets.replace(coingecko_symbol_dict, inplace=True)
 
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
