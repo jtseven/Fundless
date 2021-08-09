@@ -175,6 +175,12 @@ class TradingBot:
 
         if self.bot_config.portfolio_weighting == WeightingEnum.equal:
             weights = np.full(len(symbols), float(1/len(symbols)))
+        elif self.bot_config.portfolio_weighting == WeightingEnum.custom:
+            weights = np.zeros(len(symbols))
+            for k, symbol in enumerate(symbols):
+                if symbol in self.bot_config.custom_weights:
+                    weights[k] = self.bot_config.custom_weights[symbol]
+            weights = weights / weights.sum()
         else:
             weights = picked_markets['market_cap'].values
             if self.bot_config.portfolio_weighting == WeightingEnum.sqrt_market_cap:
