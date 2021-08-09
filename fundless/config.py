@@ -4,7 +4,7 @@ import yaml
 from typing import List, Union, Dict
 from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
-from pydantic import validator
+from pydantic import validator, root_validator
 from aenum import MultiValueEnum
 
 if sys.version_info >= (3, 8):
@@ -101,6 +101,17 @@ class TradingBotConfig(BaseConfig):
         if v in (PortfolioModeEnum.index, ):
             raise NotImplementedError("Only cherry-picked portfolio is supported by now")
         return v
+
+    @root_validator
+    def check_custom_weights(cls, values):
+        if values.get('portfolio_weighting') != WeightingEnum.custom:
+            return values
+        custom_weights = values.get('custom_weights')
+        if values.get('portfolio_mode') == PortfolioModeEnum.cherry_pick:
+            for symbol, weight in custom_weights.items():
+                if symbol not in values.get('cherry_pick_symbols'):
+                    raise ValueError(f"{symbol} defined in custom weights, but not in cherry picked symbols")
+        return values
 
     @classmethod
     def from_config_yaml(cls, file_path):
