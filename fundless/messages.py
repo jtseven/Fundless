@@ -80,6 +80,7 @@ class TelegramBot:
         self.rebalance = False
         self.order_weights = None
         self.order_symbols = None
+        self.currency_string = config.trading_bot_config.base_currency.values[1]
 
         self.UnknownAnswerHandler = MessageHandler(Filters.text & ~Filters.command, self._unknown)
 
@@ -136,8 +137,8 @@ class TelegramBot:
 
         msg = "```\n"
         msg += "----- Performance Report: -----\n"
-        msg += f"\tInvested amount:\t{invested:7.2f}$\n"
-        msg += f"\tPortfolio value:\t{balance:7.2f}$\n"
+        msg += f"\tInvested amount:\t{invested:7.2f} {self.currency_string}\n"
+        msg += f"\tPortfolio value:\t{balance:7.2f} {self.currency_string}\n"
         msg += f"\tPerformance:\t\t\t\t{performance:.2%}\n"
         msg += "-------------------------------"
         msg += "```"
@@ -170,9 +171,9 @@ class TelegramBot:
             for symbol, allocation, value in zip(symbols, allocations, values):
                 if value < 1.0:
                     continue
-                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f}$\n"
+                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f} {self.currency_string}\n"
             msg += "-------------------------------\n"
-            msg += f"  Overall Balance: {values.sum():,.2f} $"
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.currency_string}"
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
@@ -199,9 +200,9 @@ class TelegramBot:
             msg += "Your current index portfolio:\n"
             msg += f"- Coin  Alloc  Value AllocErr -\n"
             for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
-                msg += f"  {symbol + ':': <6} {allocation:4.1f}% {value:3,.0f}$  {error:4.1f}pp\n"
+                msg += f"  {symbol + ':': <6} {allocation:4.1f}% {value:3,.0f} {self.currency_string}  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
-            msg += f"  Overall Balance: {values.sum():,.2f} $"
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.currency_string}"
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
@@ -246,9 +247,9 @@ class TelegramBot:
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.savings_plan_cost:6.2f} $"
+            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.savings_plan_cost:6.2f} {self.currency_string}"
         msg += "\n---------------------------"
-        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.savings_plan_cost:.2f} $"
+        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.savings_plan_cost:.2f} {self.currency_string}"
         msg += "\n```"
         print(msg)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
@@ -318,7 +319,7 @@ class TelegramBot:
             update.message.reply_text(
                 f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
             update.message.reply_text(
-                f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} $ ...")
+                f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} {self.currency_string} ...")
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
@@ -391,7 +392,7 @@ class TelegramBot:
                 msg += f"\n  - {symbol.split('/')[0].upper()}"
                 volume += order_report[symbol]['cost']
             msg += "\n---------------------------"
-            msg += f"\n-- Filled Volume: {volume:<4.0f} $ --"
+            msg += f"\n-- Filled Volume: {volume:<4.0f} {self.currency_string} --"
             msg += "\n```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
 
