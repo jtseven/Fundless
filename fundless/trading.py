@@ -8,11 +8,6 @@ from datetime import datetime
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 
-# translate coingecko symbols to ccxt/binance symbols
-coingecko_symbol_dict = {
-    'miota': 'iota'
-}
-
 
 def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
     print(f" ------ Order Allocation: ------ ")
@@ -26,8 +21,6 @@ class TradingBot:
     analytics: PortfolioAnalytics
     secrets: SecretsStore
     exchange: ccxt.Exchange
-    # coingecko: CoinGeckoAPI
-    # markets: pd.DataFrame  # CoinGecko Market Data
     usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
     def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
@@ -35,8 +28,6 @@ class TradingBot:
         self.secrets = bot_config.secrets
         self.analytics = analytics
         self.init_exchange()
-        # self.coingecko = CoinGeckoAPI()
-        # self.update_markets()
 
     def init_exchange(self):
         if self.bot_config.exchange == ExchangeEnum.binance:
@@ -70,9 +61,6 @@ class TradingBot:
             print(e)
             raise e
         if index_only:
-            # symbols = np.fromiter(
-            #     [key for key in data.keys() if data[key] > 0.0 and key.lower() in self.bot_config.cherry_pick_symbols],
-            #     dtype='U10')
             symbols = np.fromiter([symbol.upper() for symbol in self.bot_config.cherry_pick_symbols], dtype='U10')
         else:
             symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
@@ -141,17 +129,6 @@ class TradingBot:
                     return check_symbols, check_weights
             raise ValueError('Order is not executable, overall volume too low!')
         return symbols, weights
-
-    # def update_markets(self):
-    #     try:
-    #         self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
-    #             vs_currency=self.bot_config.base_currency.value, per_page=150))
-    #         self.markets['symbol'] = self.markets['symbol'].str.lower()
-    #     except Exception as e:
-    #         print('Error while updating market data from CoinGecko:')
-    #         print(e)
-    #         raise e
-    #     self.markets.replace(coingecko_symbol_dict, inplace=True)
 
     # Compute the weights by market cap, fetching data from coingecko
     # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
@@ -293,12 +270,6 @@ class TradingBot:
                 placed_symbols.append(ticker)
                 placed_ids.append(order['id'])
 
-            # order = self.exchange.fetch_order(order['id'], symbol=ticker)
-            # if order['status'] != 'closed':
-            #     print(f"Warning: Order for {ticker} has status {order['status']}... skipping!")
-            #     continue
-            # else:
-            # print(f"Bought {order['amount']:5f} {ticker} at {order['price']:.2f} $")
         report['order_ids'] = placed_ids
         report['symbols'] = placed_symbols
         report['invalid_symbols'] = invalid

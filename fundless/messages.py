@@ -112,9 +112,7 @@ class TelegramBot:
 
         for handle in handles:
             self.dispatcher.add_handler(handle)
-        # self.dispatcher.add_error_handler(self._error)
         self.queue = self.updater.start_polling()
-        # self.updater.idle()
 
     def cleanup(self):
         self.updater.stop()
