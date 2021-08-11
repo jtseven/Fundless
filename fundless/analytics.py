@@ -71,3 +71,21 @@ class PortfolioAnalytics:
 
     def invested(self) -> float:
         return self.trades_df['cost'].sum()
+
+    def allocation_pie(self):
+
+        df = self.trades_df[['buy_symbol', 'amount']].copy().groupby('buy_symbol').sum()
+        df.index = df.index.str.lower()
+        allocation_df = self.markets[['symbol', 'current_price']].join(df, on='symbol', how='inner')
+        allocation_df['value'] = allocation_df['current_price'] * allocation_df['amount']
+        allocation_df['allocation'] = allocation_df['value'] / allocation_df['value'].sum()
+        allocation_df['symbol'] = allocation_df['symbol'].str.upper()
+        allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
+
+        fig = px.pie(allocation_df, values='allocation', names='symbol', title='Coin Allocation')
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
+                          uniformtext_minsize=18, uniformtext_mode='hide')
+        return fig.to_image(format='png', width=800, height=800)
+
+        # df = self.trades_df.loc[df[''] < 2.e6, 'country'] = 'Other countries'

@@ -71,7 +71,8 @@ class TelegramBot:
             [KeyboardButton(r"/balance"),
              KeyboardButton(r"/index")],
             [KeyboardButton(r"/performance"),
-             KeyboardButton(r"/cancel")]
+             KeyboardButton(r"/allocation")],
+            [KeyboardButton(r"/cancel")]
         ]
         self.chat_id = secrets['chat_id']
         self.updater = Updater(token=secrets['token'])
@@ -102,6 +103,7 @@ class TelegramBot:
             CommandHandler('balance', self._balance),
             CommandHandler('index', self._index),
             CommandHandler('performance', self._performance),
+            CommandHandler('allocation', self._allocation),
             CommandHandler('config', self._config),
             CommandHandler('cancel', self._cancel),
             MessageHandler(Filters.command, self._unknown_command),
@@ -130,7 +132,7 @@ class TelegramBot:
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
     @authorized_only
-    def _performance(self, update: Update, context: CallbackContext):
+    def _performance(self, update: Update, _: CallbackContext):
         invested = self.trading_bot.analytics.invested()
         balance = self.trading_bot.balance(index_only=True)[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
@@ -144,6 +146,12 @@ class TelegramBot:
         msg += "```"
 
         update.message.reply_text(msg, parse_mode='MarkdownV2')
+
+    @authorized_only
+    def _allocation(self, update: Update, context: CallbackContext):
+        allocation_pie_chart = self.trading_bot.analytics.allocation_pie()
+        context.bot.send_photo(chat_id=self.chat_id, photo=allocation_pie_chart)
+
 
     @authorized_only
     def _start(self, _: Update, context: CallbackContext):
@@ -453,7 +461,8 @@ class TelegramBot:
         time.sleep(1)
         update.message.reply_text("HODL!", reply_markup=ReplyKeyboardRemove())
         update.message.reply_text("You can use the following commands:", reply_markup=markup)
-        update.message.reply_text("/savings_plan\n/config\n/balance\n/index\n/cancel", reply_markup=markup)
+        update.message.reply_text("/savings_plan\n/config\n/balance\n/index\n/performance\n/allocation\n/cancel",
+                                  reply_markup=markup)
 
     @authorized_only
     def _unknown(self, _: Update, context: CallbackContext):
