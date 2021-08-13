@@ -13,3 +13,4 @@ aenum~=3.1.0
 redo~=2.0.4
 plotly
 psutil
+kaleido
