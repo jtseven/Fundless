@@ -132,7 +132,7 @@ class TelegramBot:
     @authorized_only
     def _performance(self, update: Update, _: CallbackContext):
         invested = self.trading_bot.analytics.invested()
-        balance = self.trading_bot.balance(index_only=True)[2].sum()
+        balance = self.trading_bot.analytics.index_balance()[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
 
         msg = "```\n"
@@ -188,13 +188,8 @@ class TelegramBot:
     def _index(self, _: Update, context: CallbackContext) -> None:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
-            symbols, amounts, values, allocations = self.trading_bot.balance(index_only=True)
+            symbols, amounts, values, allocations = self.trading_bot.analytics.index_balance()
             _, index_weights = self.trading_bot.fetch_index_weights(symbols=symbols)
-        except ccxt.BaseError as e:
-            msg = "I had a problem getting your balance from the exchange!"
-            context.bot.send_message(chat_id=self.chat_id, text=msg)
-            context.bot.send_message(chat_id=self.chat_id, text='Thas is, what the exchange returned:')
-            context.bot.send_message(chat_id=self.chat_id, text=str(e))
         except KeyError as e:
             context.bot.send_message(chat_id=self.chat_id,
                                      text='Uh ohhh, I had a problem while computing your balances')

@@ -52,7 +52,7 @@ class TradingBot:
         self.exchange.set_sandbox_mode(self.bot_config.test_mode)
         self.exchange.load_markets()
 
-    def balance(self, index_only=False) -> Tuple:
+    def balance(self) -> Tuple:
         try:
             data = self.exchange.fetch_total_balance()
             markets = self.exchange.fetch_tickers()
@@ -60,10 +60,7 @@ class TradingBot:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
-        if index_only:
-            symbols = np.fromiter([symbol.upper() for symbol in self.bot_config.cherry_pick_symbols], dtype='U10')
-        else:
-            symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
+        symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
         base = self.bot_config.base_symbol.upper()
         try:
@@ -85,7 +82,7 @@ class TradingBot:
     def allocation_error(self, order_volume: float = None) -> dict:
         allocation_error = {}
 
-        symbols, amounts, values, allocations = self.balance(index_only=True)
+        symbols, amounts, values, allocations = self.analytics.index_balance()
         allocations = allocations
         _, index_weights = self.fetch_index_weights(symbols)
         allocation_error['symbols'] = symbols
