@@ -72,7 +72,8 @@ class PortfolioAnalytics:
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
                   cost: float, fee: float, fee_symbol: str):
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
-                      'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee], 'fee_symbol': [fee_symbol.upper()]}
+                      'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
+                      'fee_symbol': [fee_symbol.upper()]}
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
         self.trades_df['date'] = pd.to_datetime(self.trades_df['date'], infer_datetime_format=True)
@@ -81,7 +82,7 @@ class PortfolioAnalytics:
     def index_balance(self) -> Tuple:
         self.update_markets()
         self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
-        allocations = self.index_df['allocation'].values*100
+        allocations = self.index_df['allocation'].values * 100
         symbols = self.index_df['symbol'].values
         values = self.index_df['value'].values
         amounts = self.index_df['amount'].values
@@ -99,10 +100,14 @@ class PortfolioAnalytics:
         allocation_df = self.index_df.copy()
         allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
 
-        fig = px.pie(allocation_df, values='allocation', names='symbol', title='Coin Allocation')
+        fig = px.pie(allocation_df, values='allocation', names='symbol', title='Coin Allocation',
+                     color_discrete_sequence=px.colors.sequential.Viridis, hole=0.6)
         fig.update_traces(textposition='inside', textinfo='percent+label')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
-                          uniformtext_minsize=18, uniformtext_mode='hide')
+                          uniformtext_minsize=18, uniformtext_mode='hide',
+                          annotations=[
+                              dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
+                                   x=0.5, y=0.5, font_size=28, showarrow=False)])
         return fig.to_image(format='png', width=800, height=800)
 
         # df = self.trades_df.loc[df[''] < 2.e6, 'country'] = 'Other countries'
