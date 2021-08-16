@@ -5,6 +5,7 @@ from pydantic import validate_arguments
 from pydantic.types import constr
 import plotly.express as px
 from typing import Tuple
+import numpy as np
 
 from config import Config
 
@@ -25,6 +26,7 @@ class PortfolioAnalytics:
     trades_df: pd.DataFrame
     trades_file: Path
     index_df: pd.DataFrame
+    history_df: pd.DataFrame
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
 
@@ -47,6 +49,7 @@ class PortfolioAnalytics:
         self.trades_df.to_csv(self.trades_file, index=False)
 
     def update_markets(self):
+        # update market data from coingecko
         try:
             self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
                 vs_currency=self.config.base_currency.value, per_page=150))
@@ -57,6 +60,7 @@ class PortfolioAnalytics:
             raise e
         self.markets.replace(coingecko_symbol_dict, inplace=True)
 
+        # update index portfolio value
         other = pd.DataFrame(index=self.config.cherry_pick_symbols)
         self.index_df = self.trades_df[['buy_symbol', 'amount']].copy().groupby('buy_symbol').sum()
         self.index_df.index = self.index_df.index.str.lower()
@@ -112,3 +116,46 @@ class PortfolioAnalytics:
         return fig.to_image(format='png', width=800, height=800)
 
         # df = self.trades_df.loc[df[''] < 2.e6, 'country'] = 'Other countries'
+
+    def update_historical_prices(self):
+        for coin in self.index_df['symbol'].str.lower():
+            id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
+            data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
+                                                                    from_timestamp=1619877352, to_timestamp=1629122192)
+            data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
+            data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms')
+            data_df.set_index('timestamp', inplace=True)
+            if 'history_df' not in locals():
+                history_df = data_df
+            else:
+                history_df = history_df.join(data_df, how='outer')
+        self.history_df = history_df
+
+    def compute_value_history(self):
+        self.update_historical_prices()
+        invested = self.trades_df[['date', 'buy_symbol', 'cost']].groupby(
+            ['date', 'buy_symbol'], as_index=False, axis=0).sum()
+        value = self.trades_df[['date', 'buy_symbol', 'amount']].groupby(
+            ['date', 'buy_symbol'], as_index=False, axis=0).sum()
+        invested = invested.pivot(index='date', columns='buy_symbol', values='cost')
+        invested = invested.cumsum().fillna(method='pad').fillna(0)
+        invested = invested.reindex(self.history_df.index, method='pad').fillna(0)
+        invested.columns = invested.columns.str.lower()
+
+        value = value.pivot(index='date', columns='buy_symbol', values='amount')
+        value = value.cumsum().fillna(method='pad').fillna(0)
+        value = value.reindex(self.history_df.index, method='pad').fillna(0)
+        value.columns = value.columns.str.lower()
+        value = value * self.history_df
+
+        return value, invested
+
+    def performance_chart(self):
+        value, invested = self.compute_value_history()
+        performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
+        performance_df['invested'] = invested.sum(axis=1)
+        performance_df['net_worth'] = value.sum(axis=1)
+
+        fig = px.line(performance_df, x=performance_df.index, y=['invested', 'net_worth'], line_shape='spline')
+        return fig.to_image(format='png', width=1600, height=800)
+

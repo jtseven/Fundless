@@ -130,10 +130,12 @@ class TelegramBot:
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
     @authorized_only
-    def _performance(self, update: Update, _: CallbackContext):
+    def _performance(self, update: Update, context: CallbackContext):
         invested = self.trading_bot.analytics.invested()
         balance = self.trading_bot.analytics.index_balance()[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
+
+        chart = self.trading_bot.analytics.performance_chart()
 
         msg = "```\n"
         msg += "----- Performance Report: -----\n"
@@ -143,6 +145,7 @@ class TelegramBot:
         msg += "-------------------------------"
         msg += "```"
 
+        context.bot.send_photo(chat_id=self.chat_id, photo=chart)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
     @authorized_only
