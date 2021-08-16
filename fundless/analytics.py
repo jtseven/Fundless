@@ -107,7 +107,8 @@ class PortfolioAnalytics:
                           uniformtext_minsize=18, uniformtext_mode='hide',
                           annotations=[
                               dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
-                                   x=0.5, y=0.5, font_size=28, showarrow=False)])
+                                   x=0.5, y=0.5, font_size=28, showarrow=False)],
+                          title_font=dict(size=32))
         return fig.to_image(format='png', width=800, height=800)
 
         # df = self.trades_df.loc[df[''] < 2.e6, 'country'] = 'Other countries'
