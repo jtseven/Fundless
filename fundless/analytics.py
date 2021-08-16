@@ -6,6 +6,7 @@ from pydantic.types import constr
 import plotly.express as px
 from typing import Tuple
 import numpy as np
+from time import time
 
 from config import Config
 
@@ -120,8 +121,12 @@ class PortfolioAnalytics:
     def update_historical_prices(self):
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
+            start_date = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
+            end_date = (self.trades_df['date'].max()+pd.DateOffset(2)).timestamp()
+            if end_date > time():
+                end_date = time()
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
-                                                                    from_timestamp=1619877352, to_timestamp=1629122192)
+                                                                    from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
             data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms')
             data_df.set_index('timestamp', inplace=True)
@@ -129,7 +134,8 @@ class PortfolioAnalytics:
                 history_df = data_df
             else:
                 history_df = history_df.join(data_df, how='outer')
-        self.history_df = history_df
+
+        self.history_df = history_df.fillna(method='pad').reindex(pd.date_range(pd.to_datetime(start_date, unit='s'), pd.to_datetime(end_date, unit='s'), 100), method='nearest')
 
     def compute_value_history(self):
         self.update_historical_prices()
@@ -156,6 +162,13 @@ class PortfolioAnalytics:
         performance_df['invested'] = invested.sum(axis=1)
         performance_df['net_worth'] = value.sum(axis=1)
 
-        fig = px.line(performance_df, x=performance_df.index, y=['invested', 'net_worth'], line_shape='spline')
+        fig = px.line(performance_df, x=performance_df.index, y=['invested', 'net_worth'], line_shape='spline',
+                      title='Portfolio Performance', color_discrete_sequence=['gray', 'red'])
+        fig.update_xaxes(showgrid=False, title_text='')
+        fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
+                         title_text='', gridcolor='lightgray', gridwidth=0.15)
+        fig.update_traces(selector=dict(name='invested'), line_shape='hv')
+        fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
+                          uniformtext_minsize=18, uniformtext_mode='hide', title_font=dict(size=32),
+                          plot_bgcolor='white')
         return fig.to_image(format='png', width=1600, height=800)
-

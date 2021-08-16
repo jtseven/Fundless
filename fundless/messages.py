@@ -131,17 +131,24 @@ class TelegramBot:
 
     @authorized_only
     def _performance(self, update: Update, context: CallbackContext):
+        context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+
         invested = self.trading_bot.analytics.invested()
         balance = self.trading_bot.analytics.index_balance()[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
 
         chart = self.trading_bot.analytics.performance_chart()
 
+        if balance-invested > 0:
+            pl = 'Profit'
+        else:
+            pl = 'Loss'
         msg = "```\n"
         msg += "----- Performance Report: -----\n"
         msg += f"\tInvested amount:\t{invested:7.2f} {self.currency_string}\n"
         msg += f"\tPortfolio value:\t{balance:7.2f} {self.currency_string}\n"
-        msg += f"\tPerformance:\t\t\t\t{performance:.2%}\n"
+        msg += f"\tPerformance:\t\t\t\t\t{performance:.2%}\n"
+        msg += f"\t{pl}:\t\t\t\t\t\t\t\t\t\t{balance-invested:.2f} {self.currency_string}\n"
         msg += "-------------------------------"
         msg += "```"
 
