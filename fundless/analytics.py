@@ -122,9 +122,7 @@ class PortfolioAnalytics:
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
             start_date = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
-            end_date = (self.trades_df['date'].max()+pd.DateOffset(2)).timestamp()
-            if end_date > time():
-                end_date = time()
+            end_date = time() - 60*10
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
                                                                     from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
