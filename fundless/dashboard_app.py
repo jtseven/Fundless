@@ -31,4 +31,4 @@ class Dashboard:
         ])
 
     def run_dashboard(self):
-        self.app.run_server(debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
+        self.app.run_server(host='0.0.0.0', port=80, debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported

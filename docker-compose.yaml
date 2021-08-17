@@ -7,3 +7,6 @@ services:
     restart: unless-stopped
     volumes:
       - .:/code
+    ports:
+      - "80:80"
+      - "8050:8050"
