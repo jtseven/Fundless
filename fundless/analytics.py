@@ -100,7 +100,7 @@ class PortfolioAnalytics:
     def invested(self) -> float:
         return self.trades_df['cost'].sum()
 
-    def allocation_pie(self):
+    def allocation_pie(self, as_image=False):
         self.update_markets()
         allocation_df = self.index_df.copy()
         allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
@@ -109,14 +109,15 @@ class PortfolioAnalytics:
                      color_discrete_sequence=px.colors.sequential.Viridis, hole=0.6)
         fig.update_traces(textposition='inside', textinfo='percent+label')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
-                          uniformtext_minsize=18, uniformtext_mode='hide',
+                          uniformtext_minsize=12, uniformtext_mode='hide',
                           annotations=[
                               dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
-                                   x=0.5, y=0.5, font_size=28, showarrow=False)],
+                                   x=0.5, y=0.5, font_size=26, showarrow=False)],
                           title_font=dict(size=32))
-        return fig.to_image(format='png', width=800, height=800)
-
-        # df = self.trades_df.loc[df[''] < 2.e6, 'country'] = 'Other countries'
+        if as_image:
+            return fig.to_image(format='png', width=600, height=600)
+        else:
+            return fig
 
     def update_historical_prices(self):
         for coin in self.index_df['symbol'].str.lower():
@@ -154,7 +155,7 @@ class PortfolioAnalytics:
 
         return value, invested
 
-    def performance_chart(self):
+    def performance_chart(self, as_image=False):
         value, invested = self.compute_value_history()
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
@@ -167,6 +168,9 @@ class PortfolioAnalytics:
                          title_text='', gridcolor='lightgray', gridwidth=0.15)
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
-                          uniformtext_minsize=18, uniformtext_mode='hide', title_font=dict(size=32),
+                          uniformtext_minsize=14, uniformtext_mode='hide', title_font=dict(size=32),
                           plot_bgcolor='white')
-        return fig.to_image(format='png', width=1600, height=800)
+        if as_image:
+            return fig.to_image(format='png', width=1200, height=600)
+        else:
+            return fig

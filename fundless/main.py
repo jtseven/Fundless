@@ -2,11 +2,14 @@ import schedule
 import time
 from datetime import date
 from typing import List
+import logging
+import threading
 
 from trading import TradingBot
 from messages import TelegramBot
 from analytics import PortfolioAnalytics
 from config import Config, IntervalEnum
+from dashboard_app import Dashboard
 """
 
 FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
@@ -20,8 +23,12 @@ config_yaml = 'config.yaml'
 trades_csv = 'fundless/data/trades.csv'
 trades_csv_test = 'fundless/data/test_trades.csv'
 
+logging.basicConfig(format='\033[92m %(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 if __name__ == '__main__':
-    print("Hi, I will just buy and HODL!")
+    logger.info("Hi, I will just buy and HODL!")
 
     # parse all settings from yaml files
     config = Config.from_yaml_files(config_yaml=config_yaml, secrets_yaml=secrets_yaml)
@@ -37,18 +44,24 @@ if __name__ == '__main__':
 
     # telegram bot interacting with the user
     message_bot = TelegramBot(config, trading_bot)
+
+    # dashboard as web application
+    dashboard = Dashboard(config, analytics)
+    webapp = threading.Thread(target=dashboard.run_dashboard)
+    webapp.start()
+
+    # automated saving plan execution
     interval = config.trading_bot_config.savings_plan_interval
     execution_time = config.trading_bot_config.savings_plan_execution_time
 
     def job():
         if isinstance(interval, List):
             if date.today().day not in interval:
-                print(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
+                logger.info(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
                 return
 
-        print(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
+        logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
         message_bot.ask_savings_plan_execution()
-
     if interval == IntervalEnum.daily:
         schedule.every().day.at(execution_time).do(job)
     elif interval == IntervalEnum.weekly:
@@ -59,7 +72,6 @@ if __name__ == '__main__':
         schedule.every().day.at(execution_time).do(job)
     else:
         raise ValueError(f'Unknown interval for savings plan execution: {interval}')
-
     while True:
         schedule.run_pending()
         time.sleep(10)

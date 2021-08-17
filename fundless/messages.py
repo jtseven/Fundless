@@ -21,7 +21,6 @@ import sys
 from redo import retriable
 from random import randint
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -112,6 +111,7 @@ class TelegramBot:
 
         for handle in handles:
             self.dispatcher.add_handler(handle)
+        self.dispatcher.add_error_handler(self._error)
         self.queue = self.updater.start_polling()
 
     def cleanup(self):
@@ -137,7 +137,7 @@ class TelegramBot:
         balance = self.trading_bot.analytics.index_balance()[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
 
-        chart = self.trading_bot.analytics.performance_chart()
+        chart = self.trading_bot.analytics.performance_chart(as_image=True)
 
         if balance-invested > 0:
             pl = 'Profit'
@@ -157,7 +157,7 @@ class TelegramBot:
 
     @authorized_only
     def _allocation(self, update: Update, context: CallbackContext):
-        allocation_pie_chart = self.trading_bot.analytics.allocation_pie()
+        allocation_pie_chart = self.trading_bot.analytics.allocation_pie(as_image=True)
         context.bot.send_photo(chat_id=self.chat_id, photo=allocation_pie_chart)
 
 
