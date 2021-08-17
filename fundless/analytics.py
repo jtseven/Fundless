@@ -22,6 +22,10 @@ coingecko_symbol_dict = {
     'miota': 'iota'
 }
 
+title_size = 28
+text_size = 20
+min_font_size = 10
+
 
 class PortfolioAnalytics:
     trades_df: pd.DataFrame
@@ -107,13 +111,13 @@ class PortfolioAnalytics:
 
         fig = px.pie(allocation_df, values='allocation', names='symbol', title='Coin Allocation',
                      color_discrete_sequence=px.colors.sequential.Viridis, hole=0.6)
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_traces(textposition='inside', textinfo='label', hoverinfo="label+percent")
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
-                          uniformtext_minsize=12, uniformtext_mode='hide',
+                          uniformtext_minsize=min_font_size, uniformtext_mode='hide',
                           annotations=[
                               dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
-                                   x=0.5, y=0.5, font_size=26, showarrow=False)],
-                          title_font=dict(size=32))
+                                   x=0.5, y=0.5, font_size=text_size, showarrow=False)],
+                          title_font=dict(size=title_size))
         if as_image:
             return fig.to_image(format='png', width=600, height=600)
         else:
@@ -162,13 +166,13 @@ class PortfolioAnalytics:
         performance_df['net_worth'] = value.sum(axis=1)
 
         fig = px.line(performance_df, x=performance_df.index, y=['invested', 'net_worth'], line_shape='spline',
-                      title='Portfolio Performance', color_discrete_sequence=['gray', 'red'])
+                      title='Portfolio Performance', color_discrete_sequence=['gray', px.colors.sequential.Viridis[0]])
         fig.update_xaxes(showgrid=False, title_text='')
         fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
                          title_text='', gridcolor='lightgray', gridwidth=0.15)
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
-                          uniformtext_minsize=14, uniformtext_mode='hide', title_font=dict(size=32),
+                          uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white')
         if as_image:
             return fig.to_image(format='png', width=1200, height=600)
