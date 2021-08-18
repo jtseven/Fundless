@@ -26,7 +26,7 @@ class Dashboard:
         server = flask.Flask(__name__)
         external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='FundLess Login', update_title='Loading...', suppress_callback_exceptions=True)
+                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=True)
         self.config = config
         self.analytics = analytics
 
@@ -106,6 +106,10 @@ class Dashboard:
         dashboard_page = html.Div(children=[
             html.H1('FundLess Dashboard', style=dict(textAlign='center')),
             html.Div([
+                # update allocation chart every 20 seconds
+                dcc.Interval(id='allocation-interval', interval=20*1000, n_intervals=0),
+                # update performance chart every 5 minutes
+                dcc.Interval(id='performance-interval', interval=5*60*1000, n_intervals=0),
                 html.Div([
                     dcc.Graph(
                         id='allocation_chart',
@@ -125,6 +129,15 @@ class Dashboard:
             ],
                 className='row')
         ])
+
+        @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
+        def update_allocation_chart(n):
+            print('updating')
+            return self.analytics.allocation_pie()
+
+        @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'))
+        def update_performance_chart(n):
+            return self.analytics.performance_chart()
 
         # Check login status to show correct login/logout button
         @self.app.callback(Output('user-status-div', 'children'), Output('login-status', 'data'), [Input('url', 'pathname')])
