@@ -48,6 +48,7 @@ class PortfolioAnalytics:
 
     def update_trades_df(self):
         self.trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
+        self.trades_df['date'] = self.trades_df['date'].dt.tz_localize('Europe/Berlin')
 
     def update_file(self):
         self.trades_df.sort_values('date', inplace=True)
@@ -124,21 +125,26 @@ class PortfolioAnalytics:
             return fig
 
     def update_historical_prices(self):
+        len_data = 0
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-            start_date = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
-            end_date = time() - 60*10
+            # start_date = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
+            start_date = time() - 60*60*12
+            end_date = time() #  - 60*10
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
                                                                     from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
-            data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms')
+            data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms', utc=True)
             data_df.set_index('timestamp', inplace=True)
+            len_data = len(data_df) if len(data_df) > len_data else len_data
             if 'history_df' not in locals():
                 history_df = data_df
             else:
                 history_df = history_df.join(data_df, how='outer')
 
-        self.history_df = history_df.fillna(method='pad').reindex(pd.date_range(pd.to_datetime(start_date, unit='s'), pd.to_datetime(end_date, unit='s'), 100), method='nearest')
+        n = 200 if len_data > 200 else len_data
+        self.history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
+        self.history_df.index = self.history_df.index.tz_convert('Europe/Berlin')
 
     def compute_value_history(self):
         self.update_historical_prices()
