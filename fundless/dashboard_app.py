@@ -67,10 +67,10 @@ def create_login_layout():
 
 # Failed Login
 def create_failed_layout():
-    return html.Div([html.Div([html.H2('Log in Failed. Please try again.'),
+    return html.Div([html.Div([html.H4('Log in Failed. Please try again.'),
                                html.Br(),
                                html.Div([create_login_layout()]),
-                               ])  # end div
+                               ], style=dict(textAlign='center'))  # end div
                      ])  # end div
 
 

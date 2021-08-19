@@ -124,13 +124,12 @@ class PortfolioAnalytics:
         else:
             return fig
 
-    def update_historical_prices(self):
+    def update_historical_prices(self, from_timestamp=None):
         len_data = 0
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-            # start_date = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
-            start_date = time() - 60*60*12
-            end_date = time() #  - 60*10
+            start_date = from_timestamp if from_timestamp else (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
+            end_date = time()
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
                                                                     from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
@@ -146,8 +145,8 @@ class PortfolioAnalytics:
         self.history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
         self.history_df.index = self.history_df.index.tz_convert('Europe/Berlin')
 
-    def compute_value_history(self):
-        self.update_historical_prices()
+    def compute_value_history(self, from_timestamp=None):
+        self.update_historical_prices(from_timestamp=from_timestamp)
         invested = self.trades_df[['date', 'buy_symbol', 'cost']].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
         value = self.trades_df[['date', 'buy_symbol', 'amount']].groupby(
@@ -165,14 +164,21 @@ class PortfolioAnalytics:
 
         return value, invested
 
-    def performance_chart(self, as_image=False):
-        value, invested = self.compute_value_history()
+    def performance_chart(self, as_image=False, from_timestamp=1628602305):
+        value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
         performance_df['net_worth'] = value.sum(axis=1)
 
-        fig = px.line(performance_df, x=performance_df.index, y=['invested', 'net_worth'], line_shape='spline',
-                      title='Portfolio Performance', color_discrete_sequence=['gray', px.colors.sequential.Viridis[0]])
+        if performance_df['invested'].min() == performance_df['invested'].max():
+            y = ['net_worth']
+            color = [px.colors.sequential.Viridis[0]]
+        else:
+            y = ['invested', 'net_worth']
+            color = ['gray', px.colors.sequential.Viridis[0]]
+
+        fig = px.line(performance_df, x=performance_df.index, y=y, line_shape='spline',
+                      title='Portfolio Performance', color_discrete_sequence=color)
         fig.update_xaxes(showgrid=False, title_text='')
         fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
                          title_text='', gridcolor='lightgray', gridwidth=0.15)
