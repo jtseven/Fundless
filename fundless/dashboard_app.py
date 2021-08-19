@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import plotly.graph_objs
 from dash.dependencies import Output, Input, State
 import secrets
 import flask
@@ -21,7 +22,7 @@ class User(UserMixin):
 #                                                  Layouts                                                     #
 ################################################################################################################
 
-def create_dashboard(analytics):
+def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_chart: plotly.graph_objs.Figure):
     # Main Dashboard
     return html.Div(children=[
         html.H1('FundLess Dashboard', style=dict(textAlign='center')),
@@ -33,7 +34,7 @@ def create_dashboard(analytics):
             html.Div([
                 dcc.Graph(
                     id='allocation_chart',
-                    figure=analytics.allocation_pie(),
+                    figure=allocation_chart,
                     config={
                         'displayModeBar': False
                     }
@@ -41,7 +42,7 @@ def create_dashboard(analytics):
             html.Div([
                 dcc.Graph(
                     id='performance_chart',
-                    figure=analytics.performance_chart(),
+                    figure=performance_chart,
                     config={
                         'displayModeBar': False
                     }
@@ -61,9 +62,7 @@ def create_login_layout():
                                type='password', id='pwd-box', n_submit=0),
                      html.Button(children='Login', n_clicks=0,
                                  type='submit', id='login-button'),
-                     html.Div(children='', id='output-state'),
-                     html.Br(),
-                     dcc.Link('Home', href='/')], style=dict(textAlign='center'))
+                     html.Div(children='', id='output-state')], style=dict(textAlign='center'))
 
 
 # Failed Login
@@ -71,16 +70,14 @@ def create_failed_layout():
     return html.Div([html.Div([html.H2('Log in Failed. Please try again.'),
                                html.Br(),
                                html.Div([create_login_layout()]),
-                               dcc.Link('Home', href='/')
                                ])  # end div
                      ])  # end div
 
 
+# Logout screen
 def create_logout_layout():
-    return html.Div([html.Div(html.H2('You have been logged out - Please login')),
-                     html.Br(),
-                     dcc.Link('Home', href='/')
-                     ], style=dict(textAlign='center'))  # end div
+    return html.Div([html.Div(html.H3('You have been logged out')),
+                     html.Div(html.H3('- Good Bye -'))], style=dict(textAlign='center'))  # end div
 
 
 ################################################################################################################
@@ -98,6 +95,10 @@ class Dashboard:
                              title='FundLess', update_title='FundLess...', suppress_callback_exceptions=True)
         self.config = config
         self.analytics = analytics
+
+        # Preload data heavy figures
+        self.allocation_chart = self.analytics.allocation_pie()
+        self.performance_chart = self.analytics.performance_chart()
 
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
@@ -144,12 +145,14 @@ class Dashboard:
         # Allocation chart update
         @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
         def update_allocation_chart(n):
-            return self.analytics.allocation_pie()
+            self.allocation_chart = analytics.allocation_pie()
+            return self.allocation_chart
 
         # Performance chart update
         @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'))
         def update_performance_chart(n):
-            return self.analytics.performance_chart()
+            self.performance_chart = analytics.performance_chart()
+            return self.performance_chart
 
         # Check login status to show correct login/logout button
         @self.app.callback(Output('user-status-div', 'children'), Output('login-status', 'data'),
@@ -158,9 +161,12 @@ class Dashboard:
             """ callback to display login/logout link in the header """
             if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated \
                     and url != '/logout':  # If the URL is /logout, then the user is about to be logged out anyways
-                return dcc.Link('logout', href='/logout'), current_user.get_id()
+                return dcc.Link(html.Button('logout'), href='/logout'), current_user.get_id()
+            elif url == '/login':
+                # do not show login button, if already on login screen
+                return None, 'loggedout'
             else:
-                return dcc.Link('login', href='/login'), 'loggedout'
+                return dcc.Link(html.Button('login'), href='/login'), 'loggedout'
 
         # Page forward callback
         @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
@@ -170,10 +176,14 @@ class Dashboard:
             view = None
             url = dash.no_update
             if pathname == '/login':
-                view = create_login_layout()
+                if current_user.is_authenticated:
+                    view = 'Already logged in, forwarding...'
+                    url = '/success'
+                else:
+                    view = create_login_layout()
             elif pathname == '/success':
                 if current_user.is_authenticated:
-                    view = create_dashboard(self.analytics)
+                    view = create_dashboard(self.allocation_chart, self.performance_chart)
                 else:
                     view = create_failed_layout()
             elif pathname == '/logout':
@@ -183,14 +193,12 @@ class Dashboard:
                 else:
                     view = create_login_layout()
                     url = '/login'
-
-            else:
+            else:  # You could also return a 404 "URL not found" page here
                 if current_user.is_authenticated:
-                    view = create_dashboard(analytics)
+                    view = create_dashboard(self.allocation_chart, self.performance_chart)
                 else:
                     view = 'Redirecting to login...'
                     url = '/login'
-            # You could also return a 404 "URL not found" page here
             return view, url
 
     def run_dashboard(self):
