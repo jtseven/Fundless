@@ -6,6 +6,7 @@ from dash.dependencies import Output, Input, State
 import secrets
 import flask
 from flask_login import login_user, LoginManager, UserMixin, logout_user, current_user
+import datetime
 
 from config import Config
 from analytics import PortfolioAnalytics
@@ -40,6 +41,18 @@ def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_cha
                     }
                 )], className='four columns'),
             html.Div([
+                dcc.Dropdown(
+                    id='chart_time_range',
+                    options=[
+                        {'label': '1 Day', 'value': 'day'},
+                        {'label': '1 Week', 'value': 'week'},
+                        {'label': '1 Month', 'value': 'month'},
+                        {'label': '6 Month', 'value': '6month'},
+                        {'label': '1 Year', 'value': 'year'},
+                        {'label': 'Since Buy', 'value': 'buy'}
+                    ],
+                    value='buy'
+                ),
                 dcc.Graph(
                     id='performance_chart',
                     figure=performance_chart,
@@ -92,7 +105,7 @@ class Dashboard:
         server = flask.Flask(__name__)
         external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=True)
+                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False)
         self.config = config
         self.analytics = analytics
 
@@ -149,9 +162,23 @@ class Dashboard:
             return self.allocation_chart
 
         # Performance chart update
-        @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'))
-        def update_performance_chart(n):
-            self.performance_chart = analytics.performance_chart()
+        @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'),
+                           Input('chart_time_range', 'value'))
+        def update_performance_chart(_, value):
+            now = datetime.datetime.now()
+            if value == 'day':
+                timestamp = (now - datetime.timedelta(days=1)).timestamp()
+            elif value == 'week':
+                timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
+            elif value == 'month':
+                timestamp = (now - datetime.timedelta(days=30)).timestamp()
+            elif value == '6month':
+                timestamp = (now - datetime.timedelta(days=182)).timestamp()
+            elif value == 'year':
+                timestamp = (now - datetime.timedelta(days=365)).timestamp()
+            else:
+                timestamp = None
+            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp)
             return self.performance_chart
 
         # Check login status to show correct login/logout button

@@ -128,7 +128,11 @@ class PortfolioAnalytics:
         len_data = 0
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-            start_date = from_timestamp if from_timestamp else (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
+            min_time = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
+            if from_timestamp:
+                start_date = from_timestamp if from_timestamp > min_time else min_time
+            else:
+                start_date = min_time
             end_date = time()
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
                                                                     from_timestamp=start_date, to_timestamp=end_date)
@@ -164,7 +168,7 @@ class PortfolioAnalytics:
 
         return value, invested
 
-    def performance_chart(self, as_image=False, from_timestamp=1628602305):
+    def performance_chart(self, as_image=False, from_timestamp=None):
         value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
