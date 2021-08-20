@@ -127,6 +127,8 @@ class Dashboard:
             dcc.Store(id='login-status', storage_type='session'),
             html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
+            dcc.Interval('file_update_interval', 60*1000, n_intervals=0),
+            html.Div(id='dummy', style={'display': 'none'})
         ])
 
         @login_manager.user_loader
@@ -154,6 +156,12 @@ class Dashboard:
                     return '/login', 'Incorrect username or password'
             else:
                 return '/login', ''
+
+        # Update csv files
+        @self.app.callback(Output('dummy', 'children'), Input('file_update_interval', 'n_intervals'))
+        def update_files(n):
+            self.analytics.update_trades_df()
+            return ''
 
         # Allocation chart update
         @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
