@@ -34,8 +34,8 @@ def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_cha
         dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
         dbc.Container(
             [
-                dbc.Row([
-                    dbc.Col(
+                # dbc.Row([
+                    # dbc.Col(
                         dcc.Graph(
                             id='allocation_chart',
                             figure=allocation_chart,
@@ -43,9 +43,9 @@ def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_cha
                                 'displayModeBar': False
                             }
                         ),
-                        width=4,
-                    ),
-                    dbc.Col([
+                    #     width=4,
+                    # ),
+                    # dbc.Col([
                         dbc.Select(
                             id='chart_time_range',
                             options=[
@@ -65,12 +65,13 @@ def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_cha
                             config={
                                 'displayModeBar': False
                             }
-                        )],
-                        width=8
-                    )
-                ],
-                    align='center',
-                    justify='center')
+                        )
+                # ],
+                    #     width=8
+                    # )
+                # ],
+                #     align='center',
+                #     justify='center')
             ])
     ])
 
