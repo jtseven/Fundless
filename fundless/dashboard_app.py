@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 import plotly.graph_objs
 from dash.dependencies import Output, Input, State
 import secrets
@@ -27,55 +28,101 @@ def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_cha
     # Main Dashboard
     return html.Div(children=[
         html.H1('FundLess Dashboard', style=dict(textAlign='center')),
-        html.Div([
-            # update allocation chart every 20 seconds
-            dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
-            # update performance chart every 5 minutes
-            dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
-            html.Div([
-                dcc.Graph(
-                    id='allocation_chart',
-                    figure=allocation_chart,
-                    config={
-                        'displayModeBar': False
-                    }
-                )], className='four columns'),
-            html.Div([
-                dcc.Dropdown(
-                    id='chart_time_range',
-                    options=[
-                        {'label': '1 Day', 'value': 'day'},
-                        {'label': '1 Week', 'value': 'week'},
-                        {'label': '1 Month', 'value': 'month'},
-                        {'label': '6 Month', 'value': '6month'},
-                        {'label': '1 Year', 'value': 'year'},
-                        {'label': 'Since Buy', 'value': 'buy'}
-                    ],
-                    value='buy'
-                ),
-                dcc.Graph(
-                    id='performance_chart',
-                    figure=performance_chart,
-                    config={
-                        'displayModeBar': False
-                    }
-                )], className='eight columns')
-        ],
-            className='row')
+        # update allocation chart every 20 seconds
+        dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
+        # update performance chart every 5 minutes
+        dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
+        dbc.Container(
+            [
+                dbc.Row([
+                    dbc.Col(
+                        dcc.Graph(
+                            id='allocation_chart',
+                            figure=allocation_chart,
+                            config={
+                                'displayModeBar': False
+                            }
+                        ),
+                        width=4,
+                    ),
+                    dbc.Col([
+                        dbc.Select(
+                            id='chart_time_range',
+                            options=[
+                                {'label': '1 Day', 'value': 'day'},
+                                {'label': '1 Week', 'value': 'week'},
+                                {'label': '1 Month', 'value': 'month'},
+                                {'label': '6 Month', 'value': '6month'},
+                                {'label': '1 Year', 'value': 'year'},
+                                {'label': 'Since Buy', 'value': 'buy'}
+                            ],
+                            value='buy',
+                            placeholder='Select time range'
+                        ),
+                        dcc.Graph(
+                            id='performance_chart',
+                            figure=performance_chart,
+                            config={
+                                'displayModeBar': False
+                            }
+                        )],
+                        width=8
+                    )
+                ],
+                    align='center',
+                    justify='center')
+            ])
     ])
 
 
 # Login screen
 def create_login_layout():
-    return html.Div([dcc.Location(id='url_login', refresh=True),
-                     html.H2('''Please log in to continue:''', id='h1'),
-                     dcc.Input(placeholder='Enter your username',
-                               type='text', id='uname-box', n_submit=0),
-                     dcc.Input(placeholder='Enter your password',
-                               type='password', id='pwd-box', n_submit=0),
-                     html.Button(children='Login', n_clicks=0,
-                                 type='submit', id='login-button'),
-                     html.Div(children='', id='output-state')], style=dict(textAlign='center'))
+    username_input = dbc.FormGroup(
+        [
+            dbc.Label("Username", html_for='username_input'),
+            dbc.Input(type='text', id='username_input', placeholder='Enter username'),
+        ]
+    )
+    password_input = dbc.FormGroup(
+        [
+            dbc.Label('Password', html_for='password_input'),
+            dbc.Input(
+                type='password',
+                id='password_input',
+                placeholder='Enter password'
+            ),
+            dbc.FormText(
+                'Forgot your password? Too bad...', color='secondary'
+            )
+        ]
+    )
+
+    return html.Div(
+        [dcc.Location(id='url_login', refresh=True),
+         dbc.Container(dbc.Row(dbc.Col(dbc.Card(
+             [
+                 html.Div([
+                     html.H4('FundLess', className='card-title'),
+                     html.H6('Please login', className='card-subtitle')
+                 ], style={'textAlign': 'center'}),
+                 dbc.Form([
+                     username_input,
+                     password_input,
+                     dbc.Button('Login', color='primary', id='login_button', block=True)
+                 ], id='login_form'),
+                 html.Div(children='', id='output-state')
+             ],
+             body=True,
+             # style={'padding-top': '15%'}
+             # style={'width': '6rem'}
+         ), align='center', width='auto', style={'height': '100%', 'padding-top': '15%'}),
+             justify='center'),
+             # style={'height': '100vh', 'width': '100vh'}
+         )
+         ],
+        # style={'align-items': 'center', 'justify-content': 'center', 'display': 'flex', 'padding-top': '5%',
+        #        'width': '20rem'}
+    )
 
 
 # Failed Login
@@ -93,6 +140,9 @@ def create_logout_layout():
                      html.Div(html.H3('- Good Bye -'))], style=dict(textAlign='center'))  # end div
 
 
+# Sidebar
+
+
 ################################################################################################################
 #                                            Dashboard Class                                                   #
 ################################################################################################################
@@ -103,9 +153,13 @@ class Dashboard:
 
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
-        external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+        external_stylesheets = [dbc.themes.LITERA]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False)
+                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
+                             meta_tags=[
+                                 {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                             ]
+                             )
         self.config = config
         self.analytics = analytics
 
@@ -127,7 +181,7 @@ class Dashboard:
             dcc.Store(id='login-status', storage_type='session'),
             html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
-            dcc.Interval('file_update_interval', 60*1000, n_intervals=0),
+            dcc.Interval('file_update_interval', 60 * 1000, n_intervals=0),
             html.Div(id='dummy', style={'display': 'none'})
         ])
 
@@ -143,17 +197,18 @@ class Dashboard:
         # Login callback
         @self.app.callback(
             [Output('url_login', 'pathname'), Output('output-state', 'children')],
-            [Input('login-button', 'n_clicks'), Input('pwd-box', 'n_submit'), Input('uname-box', 'n_submit')],
-            [State('uname-box', 'value'), State('pwd-box', 'value')]
+            [Input('login_form', 'n_submit')],
+            [State('username_input', 'value'), State('password_input', 'value')]
         )
-        def login_button_click(n_clicks, pwd_submits, uname_submits, username, password):
-            if n_clicks > 0 or pwd_submits > 0 or uname_submits > 0:
-                if username == 'test' and password == 'test':
-                    user = User(username)
-                    login_user(user)
-                    return '/success', ''
-                else:
-                    return '/login', 'Incorrect username or password'
+        def login_button_click(n, username, password):
+            if n:
+                if n > 0:
+                    if username == 'test' and password == 'test':
+                        user = User(username)
+                        login_user(user)
+                        return '/success', ''
+                    else:
+                        return '/login', 'Incorrect username or password'
             else:
                 return '/login', ''
 
@@ -196,12 +251,12 @@ class Dashboard:
             """ callback to display login/logout link in the header """
             if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated \
                     and url != '/logout':  # If the URL is /logout, then the user is about to be logged out anyways
-                return dcc.Link(html.Button('logout'), href='/logout'), current_user.get_id()
+                return dbc.Button('logout', href='/logout', color='primary'), current_user.get_id()
             elif url == '/login':
                 # do not show login button, if already on login screen
                 return None, 'loggedout'
             else:
-                return dcc.Link(html.Button('login'), href='/login'), 'loggedout'
+                return dbc.Button('login', href='/login', color='primary'), 'loggedout'
 
         # Page forward callback
         @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
