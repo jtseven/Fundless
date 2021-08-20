@@ -126,14 +126,14 @@ class PortfolioAnalytics:
 
     def update_historical_prices(self, from_timestamp=None):
         len_data = 0
+        min_time = (self.trades_df['date'].min() - pd.DateOffset(2)).timestamp()
+        if from_timestamp:
+            start_date = from_timestamp if from_timestamp > min_time else min_time
+        else:
+            start_date = min_time
+        end_date = time()
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-            min_time = (self.trades_df['date'].min()-pd.DateOffset(2)).timestamp()
-            if from_timestamp:
-                start_date = from_timestamp if from_timestamp > min_time else min_time
-            else:
-                start_date = min_time
-            end_date = time()
             data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
                                                                     from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
