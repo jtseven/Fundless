@@ -272,10 +272,6 @@ class TradingBot:
         report['invalid_symbols'] = invalid
         # Report state of portfolio before and after buy orders
         after = self.exchange.fetch_total_balance()
-        print("Balances before order execution:")
-        print(before)
-        print("Balances after order execution:")
-        print(after)
         return report
 
     def check_orders(self, order_ids: List, symbols: List) -> dict:

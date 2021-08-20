@@ -407,7 +407,14 @@ class TelegramBot:
             msg += "\n```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
 
-        if len(open_orders) > 0:
+        if len(closed_orders) == len(order_ids):
+            context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
+            context.bot.send_message(self.chat_id, text='See you :)')
+            state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
+            state_update._effective_user = update.effective_user
+            state_update._effective_chat = update.effective_chat
+            context.update_queue.put(state_update)
+        else:
             context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
             msg = "```\n"
             for symbol in open_orders:
@@ -415,6 +422,7 @@ class TelegramBot:
             msg += "```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
             if n_retry > 10:
+                logger.warning("Not all orders where filled, check manually and add filled orders to trades.csv!")
                 context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
                                                             "still open manually..")
                 state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
@@ -422,7 +430,8 @@ class TelegramBot:
                 state_update._effective_chat = update.effective_chat
                 context.update_queue.put(state_update)
             else:
-                wait_time = 60 * n_retry * n_retry  # have an exponentialy increasing wait time
+                wait_time = 60 * n_retry * n_retry  # have an exponentially increasing wait time
+                logger.warning(f"Orders will be checked again in {wait_time} seconds!")
                 context.bot.send_message(self.chat_id,
                                          text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
                 context.job_queue.run_once(self.check_orders, when=wait_time,
@@ -431,14 +440,6 @@ class TelegramBot:
                 state_update._effective_user = update.effective_user
                 state_update._effective_chat = update.effective_chat
                 context.update_queue.put(state_update)
-
-        elif len(closed_orders) == len(order_ids):
-            context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
-            context.bot.send_message(self.chat_id, text='See you :)')
-            state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
-            state_update._effective_user = update.effective_user
-            state_update._effective_chat = update.effective_chat
-            context.update_queue.put(state_update)
 
     def _change_conversation_state(self, update: StateChangeUpdate, __: CallbackContext):
         if update.next_state == ConversationHandler.END:
