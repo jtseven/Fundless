@@ -105,12 +105,12 @@ class PortfolioAnalytics:
     def invested(self) -> float:
         return self.trades_df['cost'].sum()
 
-    def allocation_pie(self, as_image=False):
+    def allocation_pie(self, as_image=False, title=True):
         self.update_markets()
         allocation_df = self.index_df.copy()
-        allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
+        # allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
 
-        fig = px.pie(allocation_df, values='allocation', names='symbol', title='Coin Allocation',
+        fig = px.pie(allocation_df, values='allocation', names='symbol',
                      color_discrete_sequence=px.colors.sequential.Viridis, hole=0.6)
         fig.update_traces(textposition='inside', textinfo='label', hoverinfo="label+percent")
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
@@ -118,7 +118,10 @@ class PortfolioAnalytics:
                           annotations=[
                               dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
                                    x=0.5, y=0.5, font_size=text_size, showarrow=False)],
-                          title_font=dict(size=title_size))
+                          title_font=dict(size=title_size),
+                          margin=dict(l=20, r=20, t=20, b=20))
+        if title:
+            fig.update_layout(title='Coin Allocation')
         if as_image:
             return fig.to_image(format='png', width=600, height=600)
         else:
@@ -168,7 +171,7 @@ class PortfolioAnalytics:
 
         return value, invested
 
-    def performance_chart(self, as_image=False, from_timestamp=None):
+    def performance_chart(self, as_image=False, from_timestamp=None, title=True):
         value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
@@ -181,15 +184,16 @@ class PortfolioAnalytics:
             y = ['invested', 'net_worth']
             color = ['gray', px.colors.sequential.Viridis[0]]
 
-        fig = px.line(performance_df, x=performance_df.index, y=y, line_shape='spline',
-                      title='Portfolio Performance', color_discrete_sequence=color)
+        fig = px.line(performance_df, x=performance_df.index, y=y, line_shape='spline', color_discrete_sequence=color)
         fig.update_xaxes(showgrid=False, title_text='')
         fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
                          title_text='', gridcolor='lightgray', gridwidth=0.15)
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
-                          plot_bgcolor='white')
+                          plot_bgcolor='white', margin=dict(l=20, r=20, t=20, b=20))
+        if title:
+            fig.update_layout(title='Portfolio Performance')
         if as_image:
             return fig.to_image(format='png', width=1200, height=600)
         else:

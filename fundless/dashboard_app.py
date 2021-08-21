@@ -24,64 +24,13 @@ class User(UserMixin):
 #                                                  Layouts                                                     #
 ################################################################################################################
 
-def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_chart: plotly.graph_objs.Figure):
-    # Main Dashboard
-    return html.Div(children=[
-        # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
-        # update allocation chart every 20 seconds
-        dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
-        # update performance chart every 5 minutes
-        dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
-        dbc.Container(
-            [
-                # dbc.Row([
-                    # dbc.Col(
-                        dcc.Graph(
-                            id='allocation_chart',
-                            figure=allocation_chart,
-                            config={
-                                'displayModeBar': False
-                            }
-                        ),
-                    #     width=4,
-                    # ),
-                    # dbc.Col([
-                        dbc.Select(
-                            id='chart_time_range',
-                            options=[
-                                {'label': '1 Day', 'value': 'day'},
-                                {'label': '1 Week', 'value': 'week'},
-                                {'label': '1 Month', 'value': 'month'},
-                                {'label': '6 Month', 'value': '6month'},
-                                {'label': '1 Year', 'value': 'year'},
-                                {'label': 'Since Buy', 'value': 'buy'}
-                            ],
-                            value='buy',
-                            placeholder='Select time range'
-                        ),
-                        dcc.Graph(
-                            id='performance_chart',
-                            figure=performance_chart,
-                            config={
-                                'displayModeBar': False
-                            }
-                        )
-                # ],
-                    #     width=8
-                    # )
-                # ],
-                #     align='center',
-                #     justify='center')
-            ])
-    ])
-
 
 # Login screen
 def create_login_layout():
     username_input = dbc.FormGroup(
         [
             dbc.Label("Username", html_for='username_input'),
-            dbc.Input(type='text', id='username_input', placeholder='Enter username'),
+            dbc.Input(type='text', id='username_input', placeholder='Enter username', autoFocus=True),
         ]
     )
     password_input = dbc.FormGroup(
@@ -109,13 +58,16 @@ def create_login_layout():
                  dbc.Form([
                      username_input,
                      password_input,
-                     dbc.Button('Login', color='primary', id='login_button', block=True)
+                     dbc.Button('Login', color='primary', id='login_button', block=True),
+                     dbc.Alert('Incorrect username or password', id='output-state', is_open=False, color='danger',
+                               style={'margin': '1rem'})
                  ], id='login_form'),
-                 html.Div(children='', id='output-state')
              ],
              body=True,
              # style={'padding-top': '15%'}
-             # style={'width': '6rem'}
+             style={'width': '22rem',
+                    # 'height': '26rem'
+                    }
          ), align='center', width='auto', style={'height': '100%', 'padding-top': '15%'}),
              justify='center'),
              # style={'height': '100vh', 'width': '100vh'}
@@ -149,43 +101,25 @@ def create_logout_layout():
 
 # Sidebar
 def create_page_with_sidebar(content):
-    PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
-
-    # navbar = dbc.Navbar(
-    #     [
-    #         html.A(
-    #             # Use row and col to control vertical alignment of logo / brand
-    #             dbc.Row(
-    #                 [
-    #                     dbc.Col([html.Img(src=PLOTLY_LOGO, height="30px"), dbc.NavbarBrand("FundLess", className="ml-2")]),
-    #                     # dbc.Col(dbc.NavbarBrand("FundLess", className="ml-2")),
-    #                     dbc.Col(dbc.Button(id='user-status-div', color='primary'), width={"size": 'auto', "order": "last"})
-    #                 ],
-    #                 align="center",
-    #                 justify='between',
-    #                 no_gutters=True,
-    #             ),
-    #             href="/dashboard",
-    #         )
-    #     ],
-    #     color="dark",
-    #     dark=True,
-    # )
-
     navbar = dbc.NavbarSimple(
         children=[
-            # dbc.NavItem(dbc.NavLink("Page 1", href="#")),
+            dbc.Select(
+                id='chart_time_range',
+                options=[
+                    {'label': '1 Day', 'value': 'day'},
+                    {'label': '1 Week', 'value': 'week'},
+                    {'label': '1 Month', 'value': 'month'},
+                    {'label': '6 Month', 'value': '6month'},
+                    {'label': '1 Year', 'value': 'year'},
+                    {'label': 'Since Buy', 'value': 'buy'}
+                ],
+                value='buy',
+                placeholder='Select time range',
+                bs_size='sm',
+
+            ),
             dbc.Button(id='user-status-div', color='primary'),
-            # dbc.DropdownMenu(
-            #     children=[
-            #         dbc.DropdownMenuItem("More pages", header=True),
-            #         dbc.DropdownMenuItem("Page 2", href="#"),
-            #         dbc.DropdownMenuItem("Page 3", href="#"),
-            #     ],
-            #     nav=True,
-            #     in_navbar=True,
-            #     label="More",
-            # ),
+
         ],
         brand="FundLess",
         brand_href="/dashboard",
@@ -233,16 +167,14 @@ def create_page_with_sidebar(content):
         style=SIDEBAR_STYLE,
     )
 
-    page = html.Div([html.Div(navbar, style={"margin-left": "16rem"}), html.Div(children=content, style=CONTENT_STYLE)])
-    return html.Div([sidebar, page])
-        # dbc.Container([
-        #     dbc.Row(navbar),
-        #     dbc.Row([
-        #         sidebar,
-        #         page
-        #     ])
-        # ]))
-
+    page = html.Div([html.Div(navbar,
+                              # style={"margin-left": "16rem"}
+                              ),
+                     html.Div(children=content,
+                              # style=CONTENT_STYLE
+                              )
+                     ])
+    return html.Div([page])
 
 ################################################################################################################
 #                                            Dashboard Class                                                   #
@@ -265,8 +197,8 @@ class Dashboard:
         self.analytics = analytics
 
         # Preload data heavy figures
-        self.allocation_chart = self.analytics.allocation_pie()
-        self.performance_chart = self.analytics.performance_chart()
+        self.allocation_chart = self.analytics.allocation_pie(title=False)
+        self.performance_chart = self.analytics.performance_chart(title=False)
 
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
@@ -274,6 +206,8 @@ class Dashboard:
         login_manager = LoginManager()
         login_manager.init_app(server)
         login_manager.login_view = '/login'
+
+
 
         # Main Layout
         self.app.layout = html.Div([
@@ -308,7 +242,7 @@ class Dashboard:
 
         # Login callback
         @self.app.callback(
-            [Output('url_login', 'pathname'), Output('output-state', 'children')],
+            [Output('url_login', 'pathname'), Output('output-state', 'is_open')],
             [Input('login_form', 'n_submit')],
             [State('username_input', 'value'), State('password_input', 'value')]
         )
@@ -318,11 +252,11 @@ class Dashboard:
                     if username == 'test' and password == 'test':
                         user = User(username)
                         login_user(user)
-                        return '/dashboard', ''
+                        return '/dashboard', False
                     else:
-                        return '/login', 'Incorrect username or password'
+                        return '/login', True
             else:
-                return '/login', ''
+                return '/login', False
 
         # Update csv files
         @self.app.callback(Output('dummy', 'children'), Input('file_update_interval', 'n_intervals'))
@@ -333,7 +267,7 @@ class Dashboard:
         # Allocation chart update
         @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
         def update_allocation_chart(n):
-            self.allocation_chart = analytics.allocation_pie()
+            self.allocation_chart = analytics.allocation_pie(title=False)
             return self.allocation_chart
 
         # Performance chart update
@@ -353,7 +287,7 @@ class Dashboard:
                 timestamp = (now - datetime.timedelta(days=365)).timestamp()
             else:
                 timestamp = None
-            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp)
+            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp, title=False)
             return self.performance_chart
 
         # Check login status to show correct login/logout button
@@ -385,7 +319,7 @@ class Dashboard:
                     view = create_login_layout()
             elif pathname == '/dashboard':
                 if current_user.is_authenticated:
-                    view = create_page_with_sidebar(create_dashboard(self.allocation_chart, self.performance_chart))
+                    view = create_page_with_sidebar(self.create_dashboard())
                 else:
                     view = create_failed_layout()
             elif pathname == '/logout':
@@ -397,7 +331,7 @@ class Dashboard:
                     url = '/login'
             else:  # You could also return a 404 "URL not found" page here
                 if current_user.is_authenticated:
-                    view = create_page_with_sidebar(create_dashboard(self.allocation_chart, self.performance_chart))
+                    view = create_page_with_sidebar(self.create_dashboard())
                 else:
                     view = 'Redirecting to login...'
                     url = '/login'
@@ -406,3 +340,132 @@ class Dashboard:
     def run_dashboard(self):
         self.app.run_server(host='0.0.0.0', port=80,
                             debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
+
+    ################################################################################################################
+    #                                                  Layouts                                                     #
+    ################################################################################################################
+
+    # Main Dashboard
+    def create_dashboard(self):
+
+        symbols, amounts, values, allocations = self.analytics.index_balance()
+        net_worth = values.sum()
+        performance = self.analytics.performance(net_worth)
+        invested = self.analytics.invested()
+        currency_symbol = self.config.trading_bot_config.base_currency.values[1]
+
+        if performance > 0:
+            color = 'green'
+            prefix = '+'
+        else:
+            color = 'red'
+            prefix = '-'
+
+        # Info Cards
+        card_row_1 = dbc.Row(
+            [
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader("Portfolio Worth"),
+                        dbc.CardBody(
+                            [
+                                html.H5(f'{net_worth:.2f} {currency_symbol}'),
+                                html.H6(f'{prefix}{performance:.2%}', style={'color': color})
+                            ]
+                        )
+                    ],
+                        # color=color,
+                        outline=True
+                    )
+                ),
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader("Invested"),
+                        dbc.CardBody(
+                            [
+                                html.H5(f'{invested:.2f} {currency_symbol}'),
+                                html.H6(f'{prefix}{net_worth - invested:.2f} {currency_symbol}', style={'color': color})
+                            ]
+                        )
+                    ],
+                        # color=color,
+                        outline=True
+                    )
+                )
+            ],
+            className='mb-6',
+            style={'margin': '1rem 0rem'}
+        )
+        card_row_2 = dbc.Row(
+            [
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader("Top Gainers"),
+                        dbc.CardBody(
+                            [html.P('Test')]
+                        )
+                    ])
+                ),
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader("News"),
+                        dbc.CardBody(
+                            [html.P('Test')]
+                        )
+                    ])
+                )
+            ],
+            className='mb-6',
+            style={'margin': '1rem 0rem'}
+        )
+
+        info_cards = [card_row_1, card_row_2]
+
+        return html.Div(children=[
+            # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
+            # update allocation chart every 20 seconds
+            dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
+            # update performance chart every 5 minutes
+            dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
+            dbc.Container([
+                dbc.Row([
+                    dbc.Col([
+                        dcc.Graph(
+                            id='allocation_chart',
+                            figure=self.allocation_chart,
+                            config={
+                                'displayModeBar': False
+                            }
+                        ),
+
+                    ],
+                        lg=4,
+                        # style={'background-color': 'blue'}
+                    ),
+                    dbc.Col(
+                        info_cards,
+                        lg=8,
+                        # style={'background-color': 'blue'}
+                    )
+                ], justify='center', no_gutters=False, align='center'),
+
+                dbc.Row(
+                    [
+                        dbc.Col([
+
+                            dcc.Graph(
+                                id='performance_chart',
+                                figure=self.performance_chart,
+                                config={
+                                    'displayModeBar': False
+                                }
+                            )
+                        ],
+                            lg=8,
+                            # style={'background-color': 'blue'}
+                        )
+                    ],
+                    justify='center', no_gutters=False
+                )],
+                fluid=True),
+        ])
