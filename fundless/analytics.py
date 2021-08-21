@@ -35,6 +35,9 @@ class PortfolioAnalytics:
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
 
+    last_market_update: float = 0  # seconds since epoch
+    last_history_update: float = 0  # seconds since epoch
+
     def __init__(self, file_path, config: Config):
         self.config = config.trading_bot_config
         self.trades_file = Path(file_path)
@@ -54,7 +57,13 @@ class PortfolioAnalytics:
         self.trades_df.sort_values('date', inplace=True)
         self.trades_df.to_csv(self.trades_file, index=False)
 
-    def update_markets(self):
+    def update_markets(self, force=False):
+        if not force:
+            # do not update, if last update less than 10 seconds ago
+            if self.last_market_update > time()-10:
+                print('stopped markets update')
+                return
+
         # update market data from coingecko
         try:
             self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
@@ -65,6 +74,7 @@ class PortfolioAnalytics:
             print(e)
             raise e
         self.markets.replace(coingecko_symbol_dict, inplace=True)
+        self.last_market_update = time()
 
         # update index portfolio value
         other = pd.DataFrame(index=self.config.cherry_pick_symbols)
@@ -127,7 +137,13 @@ class PortfolioAnalytics:
         else:
             return fig
 
-    def update_historical_prices(self, from_timestamp=None):
+    def update_historical_prices(self, from_timestamp=None, force=False):
+        if not force:
+            # do not update, if last update less than 10 seconds ago
+            if self.last_history_update > time()-10:
+                print('stopped history update')
+                return
+
         len_data = 0
         min_time = (self.trades_df['date'].min() - pd.DateOffset(2)).timestamp()
         if from_timestamp:
@@ -151,6 +167,7 @@ class PortfolioAnalytics:
         n = 200 if len_data > 200 else len_data
         self.history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
         self.history_df.index = self.history_df.index.tz_convert('Europe/Berlin')
+        self.last_history_update = time()
 
     def compute_value_history(self, from_timestamp=None):
         self.update_historical_prices(from_timestamp=from_timestamp)
