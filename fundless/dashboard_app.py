@@ -27,7 +27,7 @@ class User(UserMixin):
 def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_chart: plotly.graph_objs.Figure):
     # Main Dashboard
     return html.Div(children=[
-        html.H1('FundLess Dashboard', style=dict(textAlign='center')),
+        # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
         # update allocation chart every 20 seconds
         dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
         # update performance chart every 5 minutes
@@ -137,11 +137,111 @@ def create_failed_layout():
 
 # Logout screen
 def create_logout_layout():
-    return html.Div([html.Div(html.H3('You have been logged out')),
-                     html.Div(html.H3('- Good Bye -'))], style=dict(textAlign='center'))  # end div
+    return html.Div(dbc.Row([
+        dbc.Card(
+            [html.Div(html.H4('You have been logged out')),
+             html.Div(html.H6('- Good Bye -')),
+             dbc.Button('Login', href='/login', color='primary')],
+            style={'padding': '2rem 2rem'}
+        )
+    ], justify='center', style={'padding-top': '15%'}), style=dict(textAlign='center'))  # end div
 
 
 # Sidebar
+def create_page_with_sidebar(content):
+    PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
+
+    # navbar = dbc.Navbar(
+    #     [
+    #         html.A(
+    #             # Use row and col to control vertical alignment of logo / brand
+    #             dbc.Row(
+    #                 [
+    #                     dbc.Col([html.Img(src=PLOTLY_LOGO, height="30px"), dbc.NavbarBrand("FundLess", className="ml-2")]),
+    #                     # dbc.Col(dbc.NavbarBrand("FundLess", className="ml-2")),
+    #                     dbc.Col(dbc.Button(id='user-status-div', color='primary'), width={"size": 'auto', "order": "last"})
+    #                 ],
+    #                 align="center",
+    #                 justify='between',
+    #                 no_gutters=True,
+    #             ),
+    #             href="/dashboard",
+    #         )
+    #     ],
+    #     color="dark",
+    #     dark=True,
+    # )
+
+    navbar = dbc.NavbarSimple(
+        children=[
+            # dbc.NavItem(dbc.NavLink("Page 1", href="#")),
+            dbc.Button(id='user-status-div', color='primary'),
+            # dbc.DropdownMenu(
+            #     children=[
+            #         dbc.DropdownMenuItem("More pages", header=True),
+            #         dbc.DropdownMenuItem("Page 2", href="#"),
+            #         dbc.DropdownMenuItem("Page 3", href="#"),
+            #     ],
+            #     nav=True,
+            #     in_navbar=True,
+            #     label="More",
+            # ),
+        ],
+        brand="FundLess",
+        brand_href="/dashboard",
+        color="primary",
+        dark=True,
+    )
+
+
+
+    # the style arguments for the sidebar. We use position:fixed and a fixed width
+    SIDEBAR_STYLE = {
+        "position": "fixed",
+        "top": 0,
+        "left": 0,
+        "bottom": 0,
+        "width": "16rem",
+        "padding": "2rem 1rem",
+        "background-color": "#f8f9fa",
+    }
+
+    # the styles for the main content position it to the right of the sidebar and
+    # add some padding.
+    CONTENT_STYLE = {
+        "margin-left": "18rem",
+        "margin-right": "2rem",
+        "padding": "2rem 1rem",
+    }
+
+    sidebar = html.Div(
+        [
+            html.H2("FundLess", className="display-4"),
+            html.Hr(),
+            html.P(
+                "Crypto Portfolio", className="lead"
+            ),
+            dbc.Nav(
+                [
+                    dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
+                    dbc.NavLink("Savings Plan", href="/page-2", active="exact"),
+                ],
+                vertical=True,
+                pills=True,
+            ),
+        ],
+        style=SIDEBAR_STYLE,
+    )
+
+    page = html.Div([html.Div(navbar, style={"margin-left": "16rem"}), html.Div(children=content, style=CONTENT_STYLE)])
+    return html.Div([sidebar, page])
+        # dbc.Container([
+        #     dbc.Row(navbar),
+        #     dbc.Row([
+        #         sidebar,
+        #         page
+        #     ])
+        # ]))
 
 
 ################################################################################################################
@@ -180,7 +280,7 @@ class Dashboard:
             dcc.Location(id='url', refresh=False),
             dcc.Location(id='redirect', refresh=True),
             dcc.Store(id='login-status', storage_type='session'),
-            html.Div(id='user-status-div', style=dict(textAlign='right')),
+            # html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
             dcc.Interval('file_update_interval', 60 * 1000, n_intervals=0),
             html.Div(id='dummy', style={'display': 'none'})
@@ -195,6 +295,17 @@ class Dashboard:
             """
             return User(username)
 
+        # add callback for toggling the collapse of navbar on small screens
+        @self.app.callback(
+            Output("navbar-collapse", "is_open"),
+            [Input("navbar-toggler", "n_clicks")],
+            [State("navbar-collapse", "is_open")],
+        )
+        def toggle_navbar_collapse(n, is_open):
+            if n:
+                return not is_open
+            return is_open
+
         # Login callback
         @self.app.callback(
             [Output('url_login', 'pathname'), Output('output-state', 'children')],
@@ -207,7 +318,7 @@ class Dashboard:
                     if username == 'test' and password == 'test':
                         user = User(username)
                         login_user(user)
-                        return '/success', ''
+                        return '/dashboard', ''
                     else:
                         return '/login', 'Incorrect username or password'
             else:
@@ -246,18 +357,18 @@ class Dashboard:
             return self.performance_chart
 
         # Check login status to show correct login/logout button
-        @self.app.callback(Output('user-status-div', 'children'), Output('login-status', 'data'),
+        @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'), Output('login-status', 'data'),
                            [Input('url', 'pathname')])
         def login_status(url):
             """ callback to display login/logout link in the header """
             if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated \
                     and url != '/logout':  # If the URL is /logout, then the user is about to be logged out anyways
-                return dbc.Button('logout', href='/logout', color='primary'), current_user.get_id()
+                return 'Logout', '/logout', current_user.get_id()
             elif url == '/login':
                 # do not show login button, if already on login screen
-                return None, 'loggedout'
+                return None, None, 'loggedout'
             else:
-                return dbc.Button('login', href='/login', color='primary'), 'loggedout'
+                return 'Login', '/login', 'loggedout'
 
         # Page forward callback
         @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
@@ -269,12 +380,12 @@ class Dashboard:
             if pathname == '/login':
                 if current_user.is_authenticated:
                     view = 'Already logged in, forwarding...'
-                    url = '/success'
+                    url = '/dashboard'
                 else:
                     view = create_login_layout()
-            elif pathname == '/success':
+            elif pathname == '/dashboard':
                 if current_user.is_authenticated:
-                    view = create_dashboard(self.allocation_chart, self.performance_chart)
+                    view = create_page_with_sidebar(create_dashboard(self.allocation_chart, self.performance_chart))
                 else:
                     view = create_failed_layout()
             elif pathname == '/logout':
@@ -286,7 +397,7 @@ class Dashboard:
                     url = '/login'
             else:  # You could also return a 404 "URL not found" page here
                 if current_user.is_authenticated:
-                    view = create_dashboard(self.allocation_chart, self.performance_chart)
+                    view = create_page_with_sidebar(create_dashboard(self.allocation_chart, self.performance_chart))
                 else:
                     view = 'Redirecting to login...'
                     url = '/login'
