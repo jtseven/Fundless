@@ -48,7 +48,7 @@ class PortfolioAnalytics:
 
     def update_trades_df(self):
         self.trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
-        self.trades_df['date'] = self.trades_df['date'].dt.tz_localize('Europe/Berlin')
+        self.trades_df['date'] = self.trades_df['date'].dt.tz_localize('UTC')
 
     def update_file(self):
         self.trades_df.sort_values('date', inplace=True)

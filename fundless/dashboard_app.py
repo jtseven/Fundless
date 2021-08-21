@@ -376,7 +376,8 @@ class Dashboard:
                     ],
                         # color=color,
                         outline=True
-                    )
+                    ),
+                    sm=12, md=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
@@ -390,11 +391,11 @@ class Dashboard:
                     ],
                         # color=color,
                         outline=True
-                    )
-                )
+                    ),
+                    sm=12, md=6, style={'margin': '1rem 0rem'}
+                ),
             ],
             className='mb-6',
-            style={'margin': '1rem 0rem'}
         )
         card_row_2 = dbc.Row(
             [
@@ -404,7 +405,8 @@ class Dashboard:
                         dbc.CardBody(
                             [html.P('Test')]
                         )
-                    ])
+                    ]),
+                    sm=12, md=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
@@ -412,14 +414,55 @@ class Dashboard:
                         dbc.CardBody(
                             [html.P('Test')]
                         )
-                    ])
+                    ]),
+                    sm=12, md=6, style={'margin': '1rem 0rem'}
                 )
             ],
             className='mb-6',
-            style={'margin': '1rem 0rem'}
         )
 
         info_cards = [card_row_1, card_row_2]
+
+        # info_cards = dbc.CardGroup(
+        #     [
+        #         dbc.Card([
+        #             dbc.CardHeader("Portfolio Worth"),
+        #             dbc.CardBody(
+        #                 [
+        #                     html.H5(f'{net_worth:.2f} {currency_symbol}'),
+        #                     html.H6(f'{prefix}{performance:.2%}', style={'color': color})
+        #                 ]
+        #             )
+        #         ],
+        #             color=color,
+        #             outline=True
+        #         ),
+        #         dbc.Card([
+        #             dbc.CardHeader("Invested"),
+        #             dbc.CardBody(
+        #                 [
+        #                     html.H5(f'{invested:.2f} {currency_symbol}'),
+        #                     html.H6(f'{prefix}{net_worth - invested:.2f} {currency_symbol}', style={'color': color})
+        #                 ]
+        #             )
+        #         ],
+        #             color=color,
+        #             outline=True
+        #         ),
+        #         dbc.Card([
+        #             dbc.CardHeader("Top Gainers"),
+        #             dbc.CardBody(
+        #                 [html.P('Test')]
+        #             )
+        #         ]),
+        #         dbc.Card([
+        #             dbc.CardHeader("News"),
+        #             dbc.CardBody(
+        #                 [html.P('Test')]
+        #             )
+        #         ])
+        #     ]
+        # )
 
         return html.Div(children=[
             # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
@@ -452,7 +495,6 @@ class Dashboard:
                 dbc.Row(
                     [
                         dbc.Col([
-
                             dcc.Graph(
                                 id='performance_chart',
                                 figure=self.performance_chart,
@@ -461,7 +503,7 @@ class Dashboard:
                                 }
                             )
                         ],
-                            lg=8,
+                            xs=12,
                             # style={'background-color': 'blue'}
                         )
                     ],
