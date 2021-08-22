@@ -37,6 +37,7 @@ class PortfolioAnalytics:
 
     last_market_update: float = 0  # seconds since epoch
     last_history_update: float = 0  # seconds since epoch
+    last_history_update_from: float = 0 # starting epoch in history data
 
     def __init__(self, file_path, config: Config):
         self.config = config.trading_bot_config
@@ -61,7 +62,6 @@ class PortfolioAnalytics:
         if not force:
             # do not update, if last update less than 10 seconds ago
             if self.last_market_update > time()-10:
-                print('stopped markets update')
                 return
 
         # update market data from coingecko
@@ -142,8 +142,11 @@ class PortfolioAnalytics:
         if not force:
             # do not update, if last update less than 10 seconds ago
             if self.last_history_update > time()-60:
-                print('stopped history update')
-                return
+                if from_timestamp:
+                    if from_timestamp == self.last_history_update_from:
+                        return
+                else:
+                    return
 
         len_data = 0
         min_time = (self.trades_df['date'].min() - pd.DateOffset(2)).timestamp()
@@ -169,6 +172,7 @@ class PortfolioAnalytics:
         self.history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
         self.history_df.index = self.history_df.index.tz_convert('Europe/Berlin')
         self.last_history_update = time()
+        self.last_history_update_from = min_time
 
     def compute_value_history(self, from_timestamp=None):
         self.update_historical_prices(from_timestamp=from_timestamp)
@@ -209,7 +213,7 @@ class PortfolioAnalytics:
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
-                          plot_bgcolor='white', margin=dict(l=20, r=20, t=20, b=20))
+                          plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
         if title:
             fig.update_layout(title='Portfolio value')
         if as_image:
@@ -227,12 +231,12 @@ class PortfolioAnalytics:
         fig = px.line(performance_df, x=performance_df.index, y='performance',
                       # line_shape='spline',
                       color_discrete_sequence=['green'])
-        fig.update_xaxes(showgrid=False, title_text='')
-        fig.update_yaxes(side='right', showgrid=True, ticksuffix=' %',
-                         title_text='', gridcolor='lightgray', gridwidth=0.15)
+        fig.update_xaxes(showgrid=False, title_text='', zeroline=True)
+        fig.update_yaxes(side='right', showgrid=False, ticksuffix=' %', zeroline=True, zerolinecolor='lightgray',
+                         title_text='', zerolinewidth=0.2)
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
-                          plot_bgcolor='white', margin=dict(l=20, r=20, t=20, b=20))
+                          plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
         # fig.data = []
         # fig.add_scatter(x=performance_df.index, y=performance_df.performance.where(performance_df.performance >= 0),
         #                 fill='tozeroy',

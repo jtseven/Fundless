@@ -102,24 +102,27 @@ def create_logout_layout():
 # Sidebar
 def create_page_with_sidebar(content):
     navbar = dbc.NavbarSimple(
-        children=[
-            dbc.Select(
-                id='chart_time_range',
-                options=[
-                    {'label': '1 Day', 'value': 'day'},
-                    {'label': '1 Week', 'value': 'week'},
-                    {'label': '1 Month', 'value': 'month'},
-                    {'label': '6 Month', 'value': '6month'},
-                    {'label': '1 Year', 'value': 'year'},
-                    {'label': 'Since Buy', 'value': 'buy'}
-                ],
-                value='buy',
-                placeholder='Select time range',
-                bs_size='sm',
+        children=[dbc.Row(
+            [
+                dbc.Col(dbc.Select(
+                    id='chart_time_range',
+                    options=[
+                        {'label': '1 Day', 'value': 'day'},
+                        {'label': '1 Week', 'value': 'week'},
+                        {'label': '1 Month', 'value': 'month'},
+                        {'label': '6 Month', 'value': '6month'},
+                        {'label': '1 Year', 'value': 'year'},
+                        {'label': 'Since Buy', 'value': 'buy'}
+                    ],
+                    value='buy',
+                    placeholder='Select time range',
+                    bs_size='sm',
 
-            ),
-            dbc.Button(id='user-status-div', color='primary'),
-
+                )),
+                dbc.Col(dbc.Button(id='user-status-div', color='primary'))
+            ],
+            align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
+        )
         ],
         brand="FundLess",
         brand_href="/dashboard",
@@ -175,6 +178,7 @@ def create_page_with_sidebar(content):
                               )
                      ])
     return html.Div([page])
+
 
 ################################################################################################################
 #                                            Dashboard Class                                                   #
@@ -357,7 +361,7 @@ class Dashboard:
         invested = self.analytics.invested()
         currency_symbol = self.config.trading_bot_config.base_currency.values[1]
         top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
-        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=False).tail(3)
+        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
         top_symbols = top_gainers['symbol'].values
         top_performances = top_gainers['performance'].values
         worst_symbols = worst_gainers['symbol'].values
@@ -393,7 +397,7 @@ class Dashboard:
                         # color=color,
                         outline=True
                     ),
-                    sm=12, md=6, style={'margin': '1rem 0rem'}
+                    xs=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
@@ -410,7 +414,7 @@ class Dashboard:
                         # color=color,
                         outline=True
                     ),
-                    sm=12, md=6, style={'margin': '1rem 0rem'}
+                    xs=6, style={'margin': '1rem 0rem'}
                 ),
             ],
             className='mb-6',
@@ -427,8 +431,8 @@ class Dashboard:
                                                               pill=True)])
                                  for sym, perf in zip(top_symbols, top_performances)]
                         )
-                    ]),
-                    sm=12, md=6, style={'margin': '1rem 0rem'}
+                    ], color='success', outline=True),
+                    xs=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
@@ -440,8 +444,8 @@ class Dashboard:
                                                               pill=True)])
                                  for sym, perf in zip(worst_symbols, worst_performances)]
                         )
-                    ]),
-                    sm=12, md=6, style={'margin': '1rem 0rem'}
+                    ], color='danger', outline=True),
+                    xs=6, style={'margin': '1rem 0rem'}
                 )
             ],
             className='mb-6',
@@ -467,12 +471,12 @@ class Dashboard:
                         ),
 
                     ],
-                        lg=4,
+                        lg=4, md=6
                         # style={'background-color': 'blue'}
                     ),
                     dbc.Col(
                         info_cards,
-                        lg=8,
+                        lg=8, md=6
                         # style={'background-color': 'blue'}
                     )
                 ], justify='center', no_gutters=False, align='center'),
@@ -489,7 +493,7 @@ class Dashboard:
                                             config={
                                                 'displayModeBar': False
                                             }
-                                        ), body=True
+                                        ), body=True, style={'margin': '1rem 1rem'}
                                     ), label='History'
                                 ),
                                     dbc.Tab(
@@ -500,7 +504,7 @@ class Dashboard:
                                                 config={
                                                     'displayModeBar': False
                                                 }
-                                            ), body=True
+                                            ), body=True, style={'margin': '1rem 1rem'}
                                         ), label='Performance'
                                     )
                                 ]
@@ -512,5 +516,5 @@ class Dashboard:
                     ],
                     justify='center', no_gutters=False
                 )],
-                fluid=False),
+                fluid=True),
         ])
