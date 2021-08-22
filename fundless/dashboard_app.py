@@ -198,6 +198,7 @@ class Dashboard:
 
         # Preload data heavy figures
         self.allocation_chart = self.analytics.allocation_pie(title=False)
+        self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
 
         # config flask login
@@ -271,9 +272,9 @@ class Dashboard:
             return self.allocation_chart
 
         # Performance chart update
-        @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'),
-                           Input('chart_time_range', 'value'))
-        def update_performance_chart(_, value):
+        @self.app.callback(Output('history_chart', 'figure'), Output('performance_chart', 'figure'),
+                           Input('performance-interval', 'n_intervals'), Input('chart_time_range', 'value'))
+        def update_history_chart(_, value):
             now = datetime.datetime.now()
             if value == 'day':
                 timestamp = (now - datetime.timedelta(days=1)).timestamp()
@@ -287,8 +288,10 @@ class Dashboard:
                 timestamp = (now - datetime.timedelta(days=365)).timestamp()
             else:
                 timestamp = None
+            self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
             self.performance_chart = analytics.performance_chart(from_timestamp=timestamp, title=False)
-            return self.performance_chart
+
+            return self.history_chart, self.performance_chart
 
         # Check login status to show correct login/logout button
         @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'), Output('login-status', 'data'),
@@ -353,24 +356,37 @@ class Dashboard:
         performance = self.analytics.performance(net_worth)
         invested = self.analytics.invested()
         currency_symbol = self.config.trading_bot_config.base_currency.values[1]
+        top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
+        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=False).tail(3)
+        top_symbols = top_gainers['symbol'].values
+        top_performances = top_gainers['performance'].values
+        worst_symbols = worst_gainers['symbol'].values
+        worst_performances = worst_gainers['performance'].values
 
         if performance > 0:
             color = 'green'
-            prefix = '+'
+            prefix = '+ '
         else:
             color = 'red'
-            prefix = '-'
+            prefix = ''
+
+        def get_color(val: float):
+            if val >= 0:
+                return 'success'
+            else:
+                return 'danger'
 
         # Info Cards
         card_row_1 = dbc.Row(
             [
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Portfolio Worth"),
+                        # dbc.CardHeader("Portfolio Worth"),
                         dbc.CardBody(
                             [
-                                html.H5(f'{net_worth:.2f} {currency_symbol}'),
-                                html.H6(f'{prefix}{performance:.2%}', style={'color': color})
+                                html.H5(f'Portfolio value', className='card-title'),
+                                html.H5(f'{net_worth:,.2f} {currency_symbol}', className='card-text'),
+                                html.H6(f'{prefix}{performance:,.2%}', style={'color': color}, className='card-text')
                             ]
                         )
                     ],
@@ -381,11 +397,13 @@ class Dashboard:
                 ),
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Invested"),
+                        # dbc.CardHeader("Invested"),
                         dbc.CardBody(
                             [
-                                html.H5(f'{invested:.2f} {currency_symbol}'),
-                                html.H6(f'{prefix}{net_worth - invested:.2f} {currency_symbol}', style={'color': color})
+                                html.H5(f'Money invested', className='card-title'),
+                                html.H5(f'{invested:,.2f} {currency_symbol}', className='card-text'),
+                                html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}', style={'color': color},
+                                        className='card-text')
                             ]
                         )
                     ],
@@ -401,18 +419,26 @@ class Dashboard:
             [
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Top Gainers"),
+                        # dbc.CardHeader("Top Gainers"),
                         dbc.CardBody(
-                            [html.P('Test')]
+                            [
+                                html.H5(f'Winners', className='card-title')
+                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
+                                                              pill=True)])
+                                 for sym, perf in zip(top_symbols, top_performances)]
                         )
                     ]),
                     sm=12, md=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("News"),
+                        # dbc.CardHeader("News"),
                         dbc.CardBody(
-                            [html.P('Test')]
+                            [
+                                html.H5(f'Loosers', className='card-title')
+                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
+                                                              pill=True)])
+                                 for sym, perf in zip(worst_symbols, worst_performances)]
                         )
                     ]),
                     sm=12, md=6, style={'margin': '1rem 0rem'}
@@ -422,47 +448,6 @@ class Dashboard:
         )
 
         info_cards = [card_row_1, card_row_2]
-
-        # info_cards = dbc.CardGroup(
-        #     [
-        #         dbc.Card([
-        #             dbc.CardHeader("Portfolio Worth"),
-        #             dbc.CardBody(
-        #                 [
-        #                     html.H5(f'{net_worth:.2f} {currency_symbol}'),
-        #                     html.H6(f'{prefix}{performance:.2%}', style={'color': color})
-        #                 ]
-        #             )
-        #         ],
-        #             color=color,
-        #             outline=True
-        #         ),
-        #         dbc.Card([
-        #             dbc.CardHeader("Invested"),
-        #             dbc.CardBody(
-        #                 [
-        #                     html.H5(f'{invested:.2f} {currency_symbol}'),
-        #                     html.H6(f'{prefix}{net_worth - invested:.2f} {currency_symbol}', style={'color': color})
-        #                 ]
-        #             )
-        #         ],
-        #             color=color,
-        #             outline=True
-        #         ),
-        #         dbc.Card([
-        #             dbc.CardHeader("Top Gainers"),
-        #             dbc.CardBody(
-        #                 [html.P('Test')]
-        #             )
-        #         ]),
-        #         dbc.Card([
-        #             dbc.CardHeader("News"),
-        #             dbc.CardBody(
-        #                 [html.P('Test')]
-        #             )
-        #         ])
-        #     ]
-        # )
 
         return html.Div(children=[
             # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
@@ -495,12 +480,30 @@ class Dashboard:
                 dbc.Row(
                     [
                         dbc.Col([
-                            dcc.Graph(
-                                id='performance_chart',
-                                figure=self.performance_chart,
-                                config={
-                                    'displayModeBar': False
-                                }
+                            dbc.Tabs(
+                                [dbc.Tab(
+                                    dbc.Card(
+                                        dcc.Graph(
+                                            id='history_chart',
+                                            figure=self.history_chart,
+                                            config={
+                                                'displayModeBar': False
+                                            }
+                                        ), body=True
+                                    ), label='History'
+                                ),
+                                    dbc.Tab(
+                                        dbc.Card(
+                                            dcc.Graph(
+                                                id='performance_chart',
+                                                figure=self.performance_chart,
+                                                config={
+                                                    'displayModeBar': False
+                                                }
+                                            ), body=True
+                                        ), label='Performance'
+                                    )
+                                ]
                             )
                         ],
                             xs=12,
@@ -509,5 +512,5 @@ class Dashboard:
                     ],
                     justify='center', no_gutters=False
                 )],
-                fluid=True),
+                fluid=False),
         ])

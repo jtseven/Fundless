@@ -78,7 +78,7 @@ class PortfolioAnalytics:
 
         # update index portfolio value
         other = pd.DataFrame(index=self.config.cherry_pick_symbols)
-        self.index_df = self.trades_df[['buy_symbol', 'amount']].copy().groupby('buy_symbol').sum()
+        self.index_df = self.trades_df[['buy_symbol', 'amount', 'cost']].copy().groupby('buy_symbol').sum()
         self.index_df.index = self.index_df.index.str.lower()
         self.index_df = pd.merge(self.index_df, other, how='outer', left_index=True, right_index=True)
         self.index_df.fillna(value=0, inplace=True, axis='columns')
@@ -86,6 +86,7 @@ class PortfolioAnalytics:
         self.index_df['value'] = self.index_df['current_price'] * self.index_df['amount']
         self.index_df['allocation'] = self.index_df['value'] / self.index_df['value'].sum()
         self.index_df['symbol'] = self.index_df['symbol'].str.upper()
+        self.index_df['performance'] = self.index_df['value'] / self.index_df['cost'] - 1
 
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
@@ -126,7 +127,7 @@ class PortfolioAnalytics:
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide',
                           annotations=[
-                              dict(text=f"{allocation_df['value'].sum():.2f} {self.config.base_currency.values[1]}",
+                              dict(text=f"{allocation_df['value'].sum():,.2f} {self.config.base_currency.values[1]}",
                                    x=0.5, y=0.5, font_size=text_size, showarrow=False)],
                           title_font=dict(size=title_size),
                           margin=dict(l=20, r=20, t=20, b=20))
@@ -140,7 +141,7 @@ class PortfolioAnalytics:
     def update_historical_prices(self, from_timestamp=None, force=False):
         if not force:
             # do not update, if last update less than 10 seconds ago
-            if self.last_history_update > time()-10:
+            if self.last_history_update > time()-60:
                 print('stopped history update')
                 return
 
@@ -188,7 +189,7 @@ class PortfolioAnalytics:
 
         return value, invested
 
-    def performance_chart(self, as_image=False, from_timestamp=None, title=True):
+    def value_history_chart(self, as_image=False, from_timestamp=None, title=True):
         value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
@@ -210,7 +211,41 @@ class PortfolioAnalytics:
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=20, r=20, t=20, b=20))
         if title:
-            fig.update_layout(title='Portfolio Performance')
+            fig.update_layout(title='Portfolio value')
+        if as_image:
+            return fig.to_image(format='png', width=1200, height=600)
+        else:
+            return fig
+
+    def performance_chart(self, as_image=False, from_timestamp=None, title=True):
+        value, invested = self.compute_value_history(from_timestamp=from_timestamp)
+        performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
+        performance_df['invested'] = invested.sum(axis=1)
+        performance_df['net_worth'] = value.sum(axis=1)
+        performance_df['performance'] = (performance_df['net_worth'] / performance_df['invested'] - 1) * 100
+
+        fig = px.line(performance_df, x=performance_df.index, y='performance',
+                      # line_shape='spline',
+                      color_discrete_sequence=['green'])
+        fig.update_xaxes(showgrid=False, title_text='')
+        fig.update_yaxes(side='right', showgrid=True, ticksuffix=' %',
+                         title_text='', gridcolor='lightgray', gridwidth=0.15)
+        fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
+                          uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
+                          plot_bgcolor='white', margin=dict(l=20, r=20, t=20, b=20))
+        # fig.data = []
+        # fig.add_scatter(x=performance_df.index, y=performance_df.performance.where(performance_df.performance >= 0),
+        #                 fill='tozeroy',
+        #                   line={'color': 'green',
+        #                         # 'shape': 'spline'
+        #                         })
+        fig.add_scatter(x=performance_df.index, y=performance_df.performance.where(performance_df.performance < 0),
+                        # fill='tozeroy',
+                          line={'color': 'red',
+                                # 'shape': 'spline'
+                                })
+        if title:
+            fig.update_layout(title='Portfolio performance')
         if as_image:
             return fig.to_image(format='png', width=1200, height=600)
         else:

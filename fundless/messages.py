@@ -137,7 +137,7 @@ class TelegramBot:
         balance = self.trading_bot.analytics.index_balance()[2].sum()
         performance = self.trading_bot.analytics.performance(balance)
 
-        chart = self.trading_bot.analytics.performance_chart(as_image=True)
+        chart = self.trading_bot.analytics.value_history_chart(as_image=True)
 
         if balance-invested > 0:
             pl = 'Profit'
