@@ -404,7 +404,7 @@ class Dashboard:
                         # dbc.CardHeader("Invested"),
                         dbc.CardBody(
                             [
-                                html.H5(f'Money invested', className='card-title'),
+                                html.H5(f'Invested amount', className='card-title'),
                                 html.H5(f'{invested:,.2f} {currency_symbol}', className='card-text'),
                                 html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}', style={'color': color},
                                         className='card-text')
