@@ -207,9 +207,9 @@ class PortfolioAnalytics:
             color = ['gray', px.colors.sequential.Viridis[0]]
 
         fig = px.line(performance_df, x=performance_df.index, y=y, line_shape='spline', color_discrete_sequence=color)
-        fig.update_xaxes(showgrid=False, title_text='')
+        fig.update_xaxes(showgrid=False, title_text='', fixedrange=True)
         fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
-                         title_text='', gridcolor='lightgray', gridwidth=0.15)
+                         title_text='', gridcolor='lightgray', gridwidth=0.15, fixedrange=True)
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
@@ -231,9 +231,9 @@ class PortfolioAnalytics:
         fig = px.line(performance_df, x=performance_df.index, y='performance',
                       # line_shape='spline',
                       color_discrete_sequence=['green'])
-        fig.update_xaxes(showgrid=False, title_text='', zeroline=True)
+        fig.update_xaxes(showgrid=False, title_text='', zeroline=True, fixedrange=True)
         fig.update_yaxes(side='right', showgrid=False, ticksuffix=' %', zeroline=True, zerolinecolor='lightgray',
-                         title_text='', zerolinewidth=0.2)
+                         title_text='', zerolinewidth=0.2, fixedrange=True)
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
