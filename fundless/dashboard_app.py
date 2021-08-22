@@ -52,7 +52,7 @@ def create_login_layout():
          dbc.Container(dbc.Row(dbc.Col(dbc.Card(
              [
                  html.Div([
-                     html.H4('FundLess', className='card-title'),
+                     html.H2('FundLess', className='card-title text-info'),
                      html.H6('Please login', className='card-subtitle')
                  ], style={'textAlign': 'center'}),
                  dbc.Form([
@@ -72,16 +72,6 @@ def create_login_layout():
          )
          ],
     )
-
-
-# Failed Login
-def create_failed_layout():
-    return html.Div([html.Div([html.H4('Log in Failed. Please try again.'),
-                               html.Br(),
-                               html.Div([create_login_layout()]),
-                               ], style=dict(textAlign='center'))  # end div
-                     ])  # end div
-
 
 # Logout screen
 def create_logout_layout():
@@ -115,14 +105,14 @@ def create_page_with_sidebar(content):
                     bs_size='sm',
 
                 )),
-                dbc.Col(dbc.Button(id='user-status-div', color='primary'))
+                dbc.Col(dbc.Button(id='user-status-div', color='primary'), style={'margin': '6px'})
             ],
             align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
         )
         ],
         brand="FundLess",
         brand_href="/dashboard",
-        color="primary",
+        color="info",
         dark=True,
     )
 
@@ -164,11 +154,10 @@ def create_page_with_sidebar(content):
         style=SIDEBAR_STYLE,
     )
 
-    page = html.Div([html.Div(navbar,
-                              ),
-                     html.Div(children=content,
-                              )
-                     ])
+    page = html.Div([
+        html.Div(navbar),
+        html.Div(children=content)
+    ])
     return html.Div([page])
 
 
@@ -182,7 +171,15 @@ class Dashboard:
 
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
-        external_stylesheets = [dbc.themes.LITERA]
+        external_stylesheets = [
+            dbc.themes.LITERA,  # FLATLY, LITERA, YETI
+            {
+                "href": "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
+                "rel": "stylesheet",
+                "crossorigin": "anonymous",
+                "referrerpolicy": "no-referrer",
+            }
+        ]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
                              title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
                              meta_tags=[
@@ -242,7 +239,8 @@ class Dashboard:
             [State('username_input', 'value'), State('password_input', 'value')]
         )
         def login_button_click(n, username: str, password: str):
-            username = username.lower().strip()
+            if username:
+                username = username.lower().strip()
             if n:
                 if n > 0:
                     if username == config.secrets.dashboard_user and password == config.secrets.dashboard_password:
@@ -320,7 +318,7 @@ class Dashboard:
                 if current_user.is_authenticated:
                     view = create_page_with_sidebar(self.create_dashboard())
                 else:
-                    view = create_failed_layout()
+                    view = create_login_layout()
             elif pathname == '/logout':
                 if current_user.is_authenticated:
                     logout_user()
@@ -360,10 +358,10 @@ class Dashboard:
         worst_performances = worst_gainers['performance'].values
 
         if performance > 0:
-            color = 'green'
+            color = 'text-success'
             prefix = '+ '
         else:
-            color = 'red'
+            color = 'text-danger'
             prefix = ''
 
         def get_color(val: float):
@@ -379,9 +377,10 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H5(f'Portfolio value', className='card-title'),
+                                # html.I(className='fa-solid fa-up', style={'fontsize': '36'}),
+                                html.H1('Portfolio value', className='small card-title text-secondary'),
                                 html.H5(f'{net_worth:,.2f} {currency_symbol}', className='card-text'),
-                                html.H6(f'{prefix}{performance:,.2%}', style={'color': color}, className='card-text')
+                                html.H6(f'{prefix}{performance:,.2%}', className=f'card-text {color}')
                             ]
                         )
                     ],
@@ -393,11 +392,10 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H5(f'Invested amount', className='card-title'),
-                                html.H5(f'{invested:,.2f} {currency_symbol}', className='card-text'),
+                                html.H1(f'Invested amount', className='small card-title text-secondary'),
+                                html.H5(f'{invested:,.2f} {currency_symbol}', className=f'card-text'),
                                 html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}',
-                                        style={'color': color},
-                                        className='card-text')
+                                        className=f'card-text {color}')
                             ]
                         )
                     ],
@@ -414,7 +412,7 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H5(f'Winners', className='card-title')
+                                html.H1(f'Winners', className='small card-title text-secondary')
                             ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
                                                               pill=True)])
                                  for sym, perf in zip(top_symbols, top_performances)]
@@ -426,7 +424,7 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H5(f'Loosers', className='card-title')
+                                html.H1(f'Loosers', className='small card-title text-secondary')
                             ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
                                                               pill=True)])
                                  for sym, perf in zip(worst_symbols, worst_performances)]
@@ -477,7 +475,7 @@ class Dashboard:
                                             config={
                                                 'displayModeBar': False
                                             }
-                                        ), body=True, style={'margin': '1rem 1rem'}
+                                        ), body=True, style={'margin': '1rem 0rem'}
                                     ), label='History'
                                 ),
                                     dbc.Tab(
@@ -488,7 +486,7 @@ class Dashboard:
                                                 config={
                                                     'displayModeBar': False
                                                 }
-                                            ), body=True, style={'margin': '1rem 1rem'}
+                                            ), body=True, style={'margin': '1rem 0rem'}
                                         ), label='Performance'
                                     )
                                 ]
@@ -499,5 +497,5 @@ class Dashboard:
                     ],
                     justify='center', no_gutters=False
                 )],
-                fluid=True),
+                fluid=False,),
         ])
