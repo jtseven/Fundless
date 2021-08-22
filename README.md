@@ -1,9 +1,14 @@
 # FundLess
 A crypto currency trading bot, that is aiming at a buy and hold strategy with marketcap weighted index-like portfolio and recurrent buys.
 
-Interaction with the bot is done by Telegram for now:
+Interaction with the bot is done by Telegram, analytics on the bots performance is available via a web-based dashboard.
 
+### Telegram Interface
 <img src="doc/screenshot_telegram.jpeg" width="300" />
+
+### Dashboard
+<img src="doc/screenshot_dashboard.png" width="900" />
+
 
 ## Get Started
 To get started you need to:
