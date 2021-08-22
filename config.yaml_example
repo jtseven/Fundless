@@ -71,3 +71,6 @@ trading_bot:
         btc: 0.1
         eth: 0.9
 
+general:
+  dashboard: on
+

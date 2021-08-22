@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 import plotly.graph_objs
 from dash.dependencies import Output, Input, State
 import secrets
@@ -23,59 +24,54 @@ class User(UserMixin):
 #                                                  Layouts                                                     #
 ################################################################################################################
 
-def create_dashboard(allocation_chart: plotly.graph_objs.Figure, performance_chart: plotly.graph_objs.Figure):
-    # Main Dashboard
-    return html.Div(children=[
-        html.H1('FundLess Dashboard', style=dict(textAlign='center')),
-        html.Div([
-            # update allocation chart every 20 seconds
-            dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
-            # update performance chart every 5 minutes
-            dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
-            html.Div([
-                dcc.Graph(
-                    id='allocation_chart',
-                    figure=allocation_chart,
-                    config={
-                        'displayModeBar': False
-                    }
-                )], className='four columns'),
-            html.Div([
-                dcc.Dropdown(
-                    id='chart_time_range',
-                    options=[
-                        {'label': '1 Day', 'value': 'day'},
-                        {'label': '1 Week', 'value': 'week'},
-                        {'label': '1 Month', 'value': 'month'},
-                        {'label': '6 Month', 'value': '6month'},
-                        {'label': '1 Year', 'value': 'year'},
-                        {'label': 'Since Buy', 'value': 'buy'}
-                    ],
-                    value='buy'
-                ),
-                dcc.Graph(
-                    id='performance_chart',
-                    figure=performance_chart,
-                    config={
-                        'displayModeBar': False
-                    }
-                )], className='eight columns')
-        ],
-            className='row')
-    ])
-
 
 # Login screen
 def create_login_layout():
-    return html.Div([dcc.Location(id='url_login', refresh=True),
-                     html.H2('''Please log in to continue:''', id='h1'),
-                     dcc.Input(placeholder='Enter your username',
-                               type='text', id='uname-box', n_submit=0),
-                     dcc.Input(placeholder='Enter your password',
-                               type='password', id='pwd-box', n_submit=0),
-                     html.Button(children='Login', n_clicks=0,
-                                 type='submit', id='login-button'),
-                     html.Div(children='', id='output-state')], style=dict(textAlign='center'))
+    username_input = dbc.FormGroup(
+        [
+            dbc.Label("Username", html_for='username_input'),
+            dbc.Input(type='text', id='username_input', placeholder='Enter username', autoFocus=True),
+        ]
+    )
+    password_input = dbc.FormGroup(
+        [
+            dbc.Label('Password', html_for='password_input'),
+            dbc.Input(
+                type='password',
+                id='password_input',
+                placeholder='Enter password'
+            ),
+            dbc.FormText(
+                'Forgot your password? Too bad...', color='secondary'
+            )
+        ]
+    )
+
+    return html.Div(
+        [dcc.Location(id='url_login', refresh=True),
+         dbc.Container(dbc.Row(dbc.Col(dbc.Card(
+             [
+                 html.Div([
+                     html.H4('FundLess', className='card-title'),
+                     html.H6('Please login', className='card-subtitle')
+                 ], style={'textAlign': 'center'}),
+                 dbc.Form([
+                     username_input,
+                     password_input,
+                     dbc.Button('Login', color='primary', id='login_button', block=True),
+                     dbc.Alert('Incorrect username or password', id='output-state', is_open=False, color='danger',
+                               style={'margin': '1rem'})
+                 ], id='login_form'),
+             ],
+             body=True,
+             style={'width': '22rem',
+                    # 'height': '26rem'
+                    }
+         ), align='center', width='auto', style={'height': '100%', 'padding-top': '15%'}),
+             justify='center'),
+         )
+         ],
+    )
 
 
 # Failed Login
@@ -89,8 +85,91 @@ def create_failed_layout():
 
 # Logout screen
 def create_logout_layout():
-    return html.Div([html.Div(html.H3('You have been logged out')),
-                     html.Div(html.H3('- Good Bye -'))], style=dict(textAlign='center'))  # end div
+    return html.Div(dbc.Row([
+        dbc.Card(
+            [html.Div(html.H4('You have been logged out')),
+             html.Div(html.H6('- Good Bye -')),
+             dbc.Button('Login', href='/login', color='primary')],
+            style={'padding': '2rem 2rem'}
+        )
+    ], justify='center', style={'padding-top': '15%'}), style=dict(textAlign='center'))  # end div
+
+
+# Sidebar
+def create_page_with_sidebar(content):
+    navbar = dbc.NavbarSimple(
+        children=[dbc.Row(
+            [
+                dbc.Col(dbc.Select(
+                    id='chart_time_range',
+                    options=[
+                        {'label': '1 Day', 'value': 'day'},
+                        {'label': '1 Week', 'value': 'week'},
+                        {'label': '1 Month', 'value': 'month'},
+                        {'label': '6 Month', 'value': '6month'},
+                        {'label': '1 Year', 'value': 'year'},
+                        {'label': 'Since Buy', 'value': 'buy'}
+                    ],
+                    value='buy',
+                    placeholder='Select time range',
+                    bs_size='sm',
+
+                )),
+                dbc.Col(dbc.Button(id='user-status-div', color='primary'))
+            ],
+            align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
+        )
+        ],
+        brand="FundLess",
+        brand_href="/dashboard",
+        color="primary",
+        dark=True,
+    )
+
+    # the style arguments for the sidebar. We use position:fixed and a fixed width
+    SIDEBAR_STYLE = {
+        "position": "fixed",
+        "top": 0,
+        "left": 0,
+        "bottom": 0,
+        "width": "16rem",
+        "padding": "2rem 1rem",
+        "background-color": "#f8f9fa",
+    }
+
+    # the styles for the main content position it to the right of the sidebar and
+    # add some padding.
+    CONTENT_STYLE = {
+        "margin-left": "18rem",
+        "margin-right": "2rem",
+        "padding": "2rem 1rem",
+    }
+
+    sidebar = html.Div(
+        [
+            html.H2("FundLess", className="display-4"),
+            html.Hr(),
+            html.P(
+                "Crypto Portfolio", className="lead"
+            ),
+            dbc.Nav(
+                [
+                    dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
+                    dbc.NavLink("Savings Plan", href="/page-2", active="exact"),
+                ],
+                vertical=True,
+                pills=True,
+            ),
+        ],
+        style=SIDEBAR_STYLE,
+    )
+
+    page = html.Div([html.Div(navbar,
+                              ),
+                     html.Div(children=content,
+                              )
+                     ])
+    return html.Div([page])
 
 
 ################################################################################################################
@@ -103,15 +182,20 @@ class Dashboard:
 
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
-        external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+        external_stylesheets = [dbc.themes.LITERA]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False)
+                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
+                             meta_tags=[
+                                 {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                             ]
+                             )
         self.config = config
         self.analytics = analytics
 
         # Preload data heavy figures
-        self.allocation_chart = self.analytics.allocation_pie()
-        self.performance_chart = self.analytics.performance_chart()
+        self.allocation_chart = self.analytics.allocation_pie(title=False)
+        self.history_chart = self.analytics.value_history_chart(title=False)
+        self.performance_chart = self.analytics.performance_chart(title=False)
 
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
@@ -125,9 +209,9 @@ class Dashboard:
             dcc.Location(id='url', refresh=False),
             dcc.Location(id='redirect', refresh=True),
             dcc.Store(id='login-status', storage_type='session'),
-            html.Div(id='user-status-div', style=dict(textAlign='right')),
+            # html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
-            dcc.Interval('file_update_interval', 60*1000, n_intervals=0),
+            dcc.Interval('file_update_interval', 60 * 1000, n_intervals=0),
             html.Div(id='dummy', style={'display': 'none'})
         ])
 
@@ -140,22 +224,35 @@ class Dashboard:
             """
             return User(username)
 
+        # add callback for toggling the collapse of navbar on small screens
+        @self.app.callback(
+            Output("navbar-collapse", "is_open"),
+            [Input("navbar-toggler", "n_clicks")],
+            [State("navbar-collapse", "is_open")],
+        )
+        def toggle_navbar_collapse(n, is_open):
+            if n:
+                return not is_open
+            return is_open
+
         # Login callback
         @self.app.callback(
-            [Output('url_login', 'pathname'), Output('output-state', 'children')],
-            [Input('login-button', 'n_clicks'), Input('pwd-box', 'n_submit'), Input('uname-box', 'n_submit')],
-            [State('uname-box', 'value'), State('pwd-box', 'value')]
+            [Output('url_login', 'pathname'), Output('output-state', 'is_open')],
+            [Input('login_form', 'n_submit')],
+            [State('username_input', 'value'), State('password_input', 'value')]
         )
-        def login_button_click(n_clicks, pwd_submits, uname_submits, username, password):
-            if n_clicks > 0 or pwd_submits > 0 or uname_submits > 0:
-                if username == 'test' and password == 'test':
-                    user = User(username)
-                    login_user(user)
-                    return '/success', ''
-                else:
-                    return '/login', 'Incorrect username or password'
+        def login_button_click(n, username: str, password: str):
+            username = username.lower().strip()
+            if n:
+                if n > 0:
+                    if username == config.secrets.dashboard_user and password == config.secrets.dashboard_password:
+                        user = User(username)
+                        login_user(user)
+                        return '/dashboard', False
+                    else:
+                        return '/login', True
             else:
-                return '/login', ''
+                return '/login', False
 
         # Update csv files
         @self.app.callback(Output('dummy', 'children'), Input('file_update_interval', 'n_intervals'))
@@ -166,13 +263,13 @@ class Dashboard:
         # Allocation chart update
         @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
         def update_allocation_chart(n):
-            self.allocation_chart = analytics.allocation_pie()
+            self.allocation_chart = analytics.allocation_pie(title=False)
             return self.allocation_chart
 
         # Performance chart update
-        @self.app.callback(Output('performance_chart', 'figure'), Input('performance-interval', 'n_intervals'),
-                           Input('chart_time_range', 'value'))
-        def update_performance_chart(_, value):
+        @self.app.callback(Output('history_chart', 'figure'), Output('performance_chart', 'figure'),
+                           Input('performance-interval', 'n_intervals'), Input('chart_time_range', 'value'))
+        def update_history_chart(_, value):
             now = datetime.datetime.now()
             if value == 'day':
                 timestamp = (now - datetime.timedelta(days=1)).timestamp()
@@ -186,22 +283,25 @@ class Dashboard:
                 timestamp = (now - datetime.timedelta(days=365)).timestamp()
             else:
                 timestamp = None
-            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp)
-            return self.performance_chart
+            self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
+            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp, title=False)
+
+            return self.history_chart, self.performance_chart
 
         # Check login status to show correct login/logout button
-        @self.app.callback(Output('user-status-div', 'children'), Output('login-status', 'data'),
+        @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'),
+                           Output('login-status', 'data'),
                            [Input('url', 'pathname')])
         def login_status(url):
             """ callback to display login/logout link in the header """
             if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated \
                     and url != '/logout':  # If the URL is /logout, then the user is about to be logged out anyways
-                return dcc.Link(html.Button('logout'), href='/logout'), current_user.get_id()
+                return 'Logout', '/logout', current_user.get_id()
             elif url == '/login':
                 # do not show login button, if already on login screen
-                return None, 'loggedout'
+                return None, None, 'loggedout'
             else:
-                return dcc.Link(html.Button('login'), href='/login'), 'loggedout'
+                return 'Login', '/login', 'loggedout'
 
         # Page forward callback
         @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
@@ -213,12 +313,12 @@ class Dashboard:
             if pathname == '/login':
                 if current_user.is_authenticated:
                     view = 'Already logged in, forwarding...'
-                    url = '/success'
+                    url = '/dashboard'
                 else:
                     view = create_login_layout()
-            elif pathname == '/success':
+            elif pathname == '/dashboard':
                 if current_user.is_authenticated:
-                    view = create_dashboard(self.allocation_chart, self.performance_chart)
+                    view = create_page_with_sidebar(self.create_dashboard())
                 else:
                     view = create_failed_layout()
             elif pathname == '/logout':
@@ -230,7 +330,7 @@ class Dashboard:
                     url = '/login'
             else:  # You could also return a 404 "URL not found" page here
                 if current_user.is_authenticated:
-                    view = create_dashboard(self.allocation_chart, self.performance_chart)
+                    view = create_page_with_sidebar(self.create_dashboard())
                 else:
                     view = 'Redirecting to login...'
                     url = '/login'
@@ -239,3 +339,165 @@ class Dashboard:
     def run_dashboard(self):
         self.app.run_server(host='0.0.0.0', port=80,
                             debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
+
+    ################################################################################################################
+    #                                                  Layouts                                                     #
+    ################################################################################################################
+
+    # Main Dashboard
+    def create_dashboard(self):
+
+        symbols, amounts, values, allocations = self.analytics.index_balance()
+        net_worth = values.sum()
+        performance = self.analytics.performance(net_worth)
+        invested = self.analytics.invested()
+        currency_symbol = self.config.trading_bot_config.base_currency.values[1]
+        top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
+        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
+        top_symbols = top_gainers['symbol'].values
+        top_performances = top_gainers['performance'].values
+        worst_symbols = worst_gainers['symbol'].values
+        worst_performances = worst_gainers['performance'].values
+
+        if performance > 0:
+            color = 'green'
+            prefix = '+ '
+        else:
+            color = 'red'
+            prefix = ''
+
+        def get_color(val: float):
+            if val >= 0:
+                return 'success'
+            else:
+                return 'danger'
+
+        # Info Cards
+        card_row_1 = dbc.Row(
+            [
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody(
+                            [
+                                html.H5(f'Portfolio value', className='card-title'),
+                                html.H5(f'{net_worth:,.2f} {currency_symbol}', className='card-text'),
+                                html.H6(f'{prefix}{performance:,.2%}', style={'color': color}, className='card-text')
+                            ]
+                        )
+                    ],
+                        outline=True
+                    ),
+                    xs=6, style={'margin': '1rem 0rem'}
+                ),
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody(
+                            [
+                                html.H5(f'Invested amount', className='card-title'),
+                                html.H5(f'{invested:,.2f} {currency_symbol}', className='card-text'),
+                                html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}',
+                                        style={'color': color},
+                                        className='card-text')
+                            ]
+                        )
+                    ],
+                        outline=True
+                    ),
+                    xs=6, style={'margin': '1rem 0rem'}
+                ),
+            ],
+            className='mb-6',
+        )
+        card_row_2 = dbc.Row(
+            [
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody(
+                            [
+                                html.H5(f'Winners', className='card-title')
+                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
+                                                              pill=True)])
+                                 for sym, perf in zip(top_symbols, top_performances)]
+                        )
+                    ], color='success', outline=True),
+                    xs=6, style={'margin': '1rem 0rem'}
+                ),
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardBody(
+                            [
+                                html.H5(f'Loosers', className='card-title')
+                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
+                                                              pill=True)])
+                                 for sym, perf in zip(worst_symbols, worst_performances)]
+                        )
+                    ], color='danger', outline=True),
+                    xs=6, style={'margin': '1rem 0rem'}
+                )
+            ],
+            className='mb-6',
+        )
+
+        info_cards = [card_row_1, card_row_2]
+
+        return html.Div(children=[
+            # update allocation chart every 20 seconds
+            dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
+            # update performance chart every 5 minutes
+            dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
+            dbc.Container([
+                dbc.Row([
+                    dbc.Col([
+                        dcc.Graph(
+                            id='allocation_chart',
+                            figure=self.allocation_chart,
+                            config={
+                                'displayModeBar': False
+                            }
+                        ),
+
+                    ],
+                        lg=4, md=6
+                    ),
+                    dbc.Col(
+                        info_cards,
+                        lg=8, md=6
+                    )
+                ], justify='center', no_gutters=False, align='center'),
+
+                dbc.Row(
+                    [
+                        dbc.Col([
+                            dbc.Tabs(
+                                [dbc.Tab(
+                                    dbc.Card(
+                                        dcc.Graph(
+                                            id='history_chart',
+                                            figure=self.history_chart,
+                                            config={
+                                                'displayModeBar': False
+                                            }
+                                        ), body=True, style={'margin': '1rem 1rem'}
+                                    ), label='History'
+                                ),
+                                    dbc.Tab(
+                                        dbc.Card(
+                                            dcc.Graph(
+                                                id='performance_chart',
+                                                figure=self.performance_chart,
+                                                config={
+                                                    'displayModeBar': False
+                                                }
+                                            ), body=True, style={'margin': '1rem 1rem'}
+                                        ), label='Performance'
+                                    )
+                                ]
+                            )
+                        ],
+                            xs=12,
+                        )
+                    ],
+                    justify='center', no_gutters=False
+                )],
+                fluid=True),
+        ])
