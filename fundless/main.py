@@ -46,9 +46,10 @@ if __name__ == '__main__':
     message_bot = TelegramBot(config, trading_bot)
 
     # dashboard as web application
-    dashboard = Dashboard(config, analytics)
-    webapp = threading.Thread(target=dashboard.run_dashboard)
-    webapp.start()
+    if config.general_config.dashboard:
+        dashboard = Dashboard(config, analytics)
+        webapp = threading.Thread(target=dashboard.run_dashboard)
+        webapp.start()
 
     # automated saving plan execution
     interval = config.trading_bot_config.savings_plan_interval

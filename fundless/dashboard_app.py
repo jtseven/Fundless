@@ -251,10 +251,11 @@ class Dashboard:
             [Input('login_form', 'n_submit')],
             [State('username_input', 'value'), State('password_input', 'value')]
         )
-        def login_button_click(n, username, password):
+        def login_button_click(n, username: str, password: str):
+            username = username.lower().strip()
             if n:
                 if n > 0:
-                    if username == 'test' and password == 'test':
+                    if username == config.secrets.dashboard_user and password == config.secrets.dashboard_password:
                         user = User(username)
                         login_user(user)
                         return '/dashboard', False

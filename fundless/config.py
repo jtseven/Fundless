@@ -74,6 +74,30 @@ class BaseConfig(BaseModel):
         msg += "\n```"
         return msg
 
+class GeneralConfig(BaseConfig):
+    dashboard: bool
+
+    @classmethod
+    def from_config_yaml(cls, file_path):
+        file = Path(file_path)
+        with open(file) as f:
+            try:
+                data = yaml.safe_load(f)
+            except yaml.YAMLError as exc:
+                print("Error while parsing config file:")
+                print(exc)
+                raise exc
+        config = data['general']
+        self = cls.from_dict(config)
+        return self
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        self = cls(
+            dashboard=dictionary['dashboard'],
+        )
+        return self
+
 
 class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
@@ -161,6 +185,8 @@ class SecretsStore(BaseConfig):
     binance: ExchangeToken
     kraken: ExchangeToken
     telegram: TelegramToken
+    dashboard_user: str
+    dashboard_password: str
 
     @classmethod
     def from_secrets_yaml(cls, file_path):
@@ -197,7 +223,9 @@ class SecretsStore(BaseConfig):
             telegram=TelegramToken(
                 token=dictionary['telegram']['token'],
                 chat_id=dictionary['telegram']['chat_id']
-            )
+            ),
+            dashboard_user=dictionary['dashboard']['user'],
+            dashboard_password=dictionary['dashboard']['password']
         )
         return self
 
@@ -205,6 +233,7 @@ class SecretsStore(BaseConfig):
 class Config(BaseModel):
     trading_bot_config: TradingBotConfig
     telegram_bot_config: TelegramBotConfig
+    general_config: GeneralConfig
     secrets: SecretsStore
 
     @classmethod
@@ -212,6 +241,7 @@ class Config(BaseModel):
         self = cls(
             trading_bot_config=TradingBotConfig.from_config_yaml(file_path=config_yaml),
             telegram_bot_config=TelegramBotConfig.from_config_yaml(file_path=config_yaml),
+            general_config=GeneralConfig.from_config_yaml(file_path=config_yaml),
             secrets=SecretsStore.from_secrets_yaml(file_path=secrets_yaml)
         )
         return self
