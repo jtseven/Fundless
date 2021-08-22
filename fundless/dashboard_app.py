@@ -64,17 +64,13 @@ def create_login_layout():
                  ], id='login_form'),
              ],
              body=True,
-             # style={'padding-top': '15%'}
              style={'width': '22rem',
                     # 'height': '26rem'
                     }
          ), align='center', width='auto', style={'height': '100%', 'padding-top': '15%'}),
              justify='center'),
-             # style={'height': '100vh', 'width': '100vh'}
          )
          ],
-        # style={'align-items': 'center', 'justify-content': 'center', 'display': 'flex', 'padding-top': '5%',
-        #        'width': '20rem'}
     )
 
 
@@ -130,8 +126,6 @@ def create_page_with_sidebar(content):
         dark=True,
     )
 
-
-
     # the style arguments for the sidebar. We use position:fixed and a fixed width
     SIDEBAR_STYLE = {
         "position": "fixed",
@@ -171,10 +165,8 @@ def create_page_with_sidebar(content):
     )
 
     page = html.Div([html.Div(navbar,
-                              # style={"margin-left": "16rem"}
                               ),
                      html.Div(children=content,
-                              # style=CONTENT_STYLE
                               )
                      ])
     return html.Div([page])
@@ -211,8 +203,6 @@ class Dashboard:
         login_manager = LoginManager()
         login_manager.init_app(server)
         login_manager.login_view = '/login'
-
-
 
         # Main Layout
         self.app.layout = html.Div([
@@ -299,7 +289,8 @@ class Dashboard:
             return self.history_chart, self.performance_chart
 
         # Check login status to show correct login/logout button
-        @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'), Output('login-status', 'data'),
+        @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'),
+                           Output('login-status', 'data'),
                            [Input('url', 'pathname')])
         def login_status(url):
             """ callback to display login/logout link in the header """
@@ -386,7 +377,6 @@ class Dashboard:
             [
                 dbc.Col(
                     dbc.Card([
-                        # dbc.CardHeader("Portfolio Worth"),
                         dbc.CardBody(
                             [
                                 html.H5(f'Portfolio value', className='card-title'),
@@ -395,24 +385,22 @@ class Dashboard:
                             ]
                         )
                     ],
-                        # color=color,
                         outline=True
                     ),
                     xs=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
-                        # dbc.CardHeader("Invested"),
                         dbc.CardBody(
                             [
                                 html.H5(f'Invested amount', className='card-title'),
                                 html.H5(f'{invested:,.2f} {currency_symbol}', className='card-text'),
-                                html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}', style={'color': color},
+                                html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}',
+                                        style={'color': color},
                                         className='card-text')
                             ]
                         )
                     ],
-                        # color=color,
                         outline=True
                     ),
                     xs=6, style={'margin': '1rem 0rem'}
@@ -424,7 +412,6 @@ class Dashboard:
             [
                 dbc.Col(
                     dbc.Card([
-                        # dbc.CardHeader("Top Gainers"),
                         dbc.CardBody(
                             [
                                 html.H5(f'Winners', className='card-title')
@@ -437,7 +424,6 @@ class Dashboard:
                 ),
                 dbc.Col(
                     dbc.Card([
-                        # dbc.CardHeader("News"),
                         dbc.CardBody(
                             [
                                 html.H5(f'Loosers', className='card-title')
@@ -455,7 +441,6 @@ class Dashboard:
         info_cards = [card_row_1, card_row_2]
 
         return html.Div(children=[
-            # html.H1('FundLess Dashboard', style=dict(textAlign='center')),
             # update allocation chart every 20 seconds
             dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
             # update performance chart every 5 minutes
@@ -473,12 +458,10 @@ class Dashboard:
 
                     ],
                         lg=4, md=6
-                        # style={'background-color': 'blue'}
                     ),
                     dbc.Col(
                         info_cards,
                         lg=8, md=6
-                        # style={'background-color': 'blue'}
                     )
                 ], justify='center', no_gutters=False, align='center'),
 
@@ -512,7 +495,6 @@ class Dashboard:
                             )
                         ],
                             xs=12,
-                            # style={'background-color': 'blue'}
                         )
                     ],
                     justify='center', no_gutters=False
