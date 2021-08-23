@@ -3,7 +3,7 @@ import sys
 import yaml
 from typing import List, Union, Dict
 from pydantic import BaseModel
-from pydantic.types import confloat, conint, constr
+from pydantic.types import confloat, conint, constr, Optional
 from pydantic import validator, root_validator
 from aenum import MultiValueEnum
 
@@ -74,8 +74,10 @@ class BaseConfig(BaseModel):
         msg += "\n```"
         return msg
 
-class GeneralConfig(BaseConfig):
+
+class DashboardConfig(BaseConfig):
     dashboard: bool
+    domain_name: Optional[str]
 
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -87,14 +89,19 @@ class GeneralConfig(BaseConfig):
                 print("Error while parsing config file:")
                 print(exc)
                 raise exc
-        config = data['general']
+        config = data['dashboard']
         self = cls.from_dict(config)
         return self
 
     @classmethod
     def from_dict(cls, dictionary):
+        if dictionary.get('domain_name'):
+            domain_name = dictionary['domain_name']
+        else:
+            domain_name = None
         self = cls(
             dashboard=dictionary['dashboard'],
+            domain_name=domain_name
         )
         return self
 
@@ -233,7 +240,7 @@ class SecretsStore(BaseConfig):
 class Config(BaseModel):
     trading_bot_config: TradingBotConfig
     telegram_bot_config: TelegramBotConfig
-    general_config: GeneralConfig
+    dashboard_config: DashboardConfig
     secrets: SecretsStore
 
     @classmethod
@@ -241,7 +248,7 @@ class Config(BaseModel):
         self = cls(
             trading_bot_config=TradingBotConfig.from_config_yaml(file_path=config_yaml),
             telegram_bot_config=TelegramBotConfig.from_config_yaml(file_path=config_yaml),
-            general_config=GeneralConfig.from_config_yaml(file_path=config_yaml),
+            dashboard_config=DashboardConfig.from_config_yaml(file_path=config_yaml),
             secrets=SecretsStore.from_secrets_yaml(file_path=secrets_yaml)
         )
         return self

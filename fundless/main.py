@@ -46,7 +46,7 @@ if __name__ == '__main__':
     message_bot = TelegramBot(config, trading_bot)
 
     # dashboard as web application
-    if config.general_config.dashboard:
+    if config.dashboard_config.dashboard:
         dashboard = Dashboard(config, analytics)
         webapp = threading.Thread(target=dashboard.run_dashboard)
         webapp.start()
