@@ -1,5 +1,7 @@
 import pandas as pd
 from pathlib import Path
+
+import requests.exceptions
 from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr
@@ -7,6 +9,7 @@ import plotly.express as px
 from typing import Tuple
 import numpy as np
 from time import time
+from redo import retrying
 
 from config import Config
 
@@ -140,7 +143,7 @@ class PortfolioAnalytics:
 
     def update_historical_prices(self, from_timestamp=None, force=False):
         if not force:
-            # do not update, if last update less than 10 seconds ago
+            # do not update, if last update less than 60 seconds ago
             if self.last_history_update > time()-60:
                 if from_timestamp:
                     if from_timestamp == self.last_history_update_from:
@@ -157,8 +160,10 @@ class PortfolioAnalytics:
         end_date = time()
         for coin in self.index_df['symbol'].str.lower():
             id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-            data = self.coingecko.get_coin_market_chart_range_by_id(id=id, vs_currency=self.config.base_currency.value,
-                                                                    from_timestamp=start_date, to_timestamp=end_date)
+            with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=0.5, sleepscale=1, jitter=0,
+                          retry_exceptions=requests.exceptions.HTTPError) as get_history:
+                data = get_history(id=id, vs_currency=self.config.base_currency.value,
+                                   from_timestamp=start_date, to_timestamp=end_date)
             data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
             data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms', utc=True)
             data_df.set_index('timestamp', inplace=True)
@@ -226,6 +231,7 @@ class PortfolioAnalytics:
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
         performance_df['net_worth'] = value.sum(axis=1)
+        performance_df['invested'] += performance_df['net_worth'].iloc[0] - performance_df['invested'].iloc[0]
         performance_df['performance'] = (performance_df['net_worth'] / performance_df['invested'] - 1) * 100
 
         fig = px.line(performance_df, x=performance_df.index, y='performance',
