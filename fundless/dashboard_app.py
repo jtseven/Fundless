@@ -197,7 +197,7 @@ class Dashboard:
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
         if config.dashboard_config.domain_name:
-            server.config.update(SERVER_NAME=f'config.dashboard_config.domain_name:{80}')
+            server.config.update(SERVER_NAME=f'{config.dashboard_config.domain_name}:{80}')
 
         # Login manager object will be used to login / logout users
         login_manager = LoginManager()
@@ -338,10 +338,7 @@ class Dashboard:
             return view, url
 
     def run_dashboard(self):
-        if self.config.dashboard_config.domain_name:
-            host = self.config.dashboard_config.domain_name
-        else:
-            host = '0.0.0.0'
+        host = '0.0.0.0'
         self.app.run_server(host=host, port=80,
                             debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
 
