@@ -69,27 +69,29 @@ class PortfolioAnalytics:
 
         # update market data from coingecko
         try:
-            self.markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
+            markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
                 vs_currency=self.config.base_currency.value, per_page=150))
-            self.markets['symbol'] = self.markets['symbol'].str.lower()
+            markets['symbol'] = markets['symbol'].str.lower()
         except Exception as e:
             print('Error while updating market data from CoinGecko:')
             print(e)
             raise e
-        self.markets.replace(coingecko_symbol_dict, inplace=True)
+        markets.replace(coingecko_symbol_dict, inplace=True)
+        self.markets = markets
         self.last_market_update = time()
 
         # update index portfolio value
         other = pd.DataFrame(index=self.config.cherry_pick_symbols)
-        self.index_df = self.trades_df[['buy_symbol', 'amount', 'cost']].copy().groupby('buy_symbol').sum()
-        self.index_df.index = self.index_df.index.str.lower()
-        self.index_df = pd.merge(self.index_df, other, how='outer', left_index=True, right_index=True)
-        self.index_df.fillna(value=0, inplace=True, axis='columns')
-        self.index_df = self.markets[['symbol', 'current_price']].join(self.index_df, on='symbol', how='inner')
-        self.index_df['value'] = self.index_df['current_price'] * self.index_df['amount']
-        self.index_df['allocation'] = self.index_df['value'] / self.index_df['value'].sum()
-        self.index_df['symbol'] = self.index_df['symbol'].str.upper()
-        self.index_df['performance'] = self.index_df['value'] / self.index_df['cost'] - 1
+        index_df = self.trades_df[['buy_symbol', 'amount', 'cost']].copy().groupby('buy_symbol').sum()
+        index_df.index = index_df.index.str.lower()
+        index_df = pd.merge(index_df, other, how='outer', left_index=True, right_index=True)
+        index_df.fillna(value=0, inplace=True, axis='columns')
+        index_df = self.markets[['symbol', 'current_price']].join(index_df, on='symbol', how='inner')
+        index_df['value'] = index_df['current_price'] * index_df['amount']
+        index_df['allocation'] = index_df['value'] / index_df['value'].sum()
+        index_df['symbol'] = index_df['symbol'].str.upper()
+        index_df['performance'] = index_df['value'] / index_df['cost'] - 1
+        self.index_df = index_df
 
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
@@ -105,11 +107,11 @@ class PortfolioAnalytics:
 
     def index_balance(self) -> Tuple:
         self.update_markets()
-        self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
-        allocations = self.index_df['allocation'].values * 100
-        symbols = self.index_df['symbol'].values
-        values = self.index_df['value'].values
-        amounts = self.index_df['amount'].values
+        index = self.index_df.sort_values(by='allocation', ascending=False)
+        allocations = index['allocation'].values * 100
+        symbols = index['symbol'].values
+        values = index['value'].values
+        amounts = index['amount'].values
         return symbols, amounts, values, allocations
 
     def performance(self, current_portfolio_value: float) -> float:
@@ -174,10 +176,12 @@ class PortfolioAnalytics:
                 history_df = history_df.join(data_df, how='outer')
 
         n = 200 if len_data > 200 else len_data
-        self.history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
-        self.history_df.index = self.history_df.index.tz_convert('Europe/Berlin')
+        history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(pd.date_range(pd.to_datetime(start_date, unit='s', utc=True), pd.to_datetime(end_date, unit='s', utc=True), n), method='nearest')
+        history_df.index = history_df.index.tz_convert('Europe/Berlin')
+
+        self.history_df = history_df
         self.last_history_update = time()
-        self.last_history_update_from = min_time
+        self.last_history_update_from = start_date
 
     def compute_value_history(self, from_timestamp=None):
         self.update_historical_prices(from_timestamp=from_timestamp)
