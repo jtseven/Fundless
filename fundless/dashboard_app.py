@@ -197,7 +197,7 @@ class Dashboard:
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
         if config.dashboard_config.domain_name:
-            server.config.update(SERVER_NAME=config.dashboard_config.domain_name)
+            server.config.update(SERVER_NAME=f'config.dashboard_config.domain_name:{80}')
 
         # Login manager object will be used to login / logout users
         login_manager = LoginManager()
