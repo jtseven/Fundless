@@ -17,6 +17,7 @@ To be inline with german tax legislation it is not rebalancing on a monthly basi
 orders and will possibly be able to rebalance after the one year waiting period required for tax free trades.
 
 """
+telegram_bot = True
 
 secrets_yaml = 'secrets.yaml'
 config_yaml = 'config.yaml'
@@ -43,7 +44,8 @@ if __name__ == '__main__':
     trading_bot = TradingBot(config, analytics)
 
     # telegram bot interacting with the user
-    message_bot = TelegramBot(config, trading_bot)
+    if telegram_bot:
+        message_bot = TelegramBot(config, trading_bot)
 
     # dashboard as web application
     if config.dashboard_config.dashboard:
@@ -52,27 +54,28 @@ if __name__ == '__main__':
         webapp.start()
 
     # automated saving plan execution
-    interval = config.trading_bot_config.savings_plan_interval
-    execution_time = config.trading_bot_config.savings_plan_execution_time
+    if telegram_bot:
+        interval = config.trading_bot_config.savings_plan_interval
+        execution_time = config.trading_bot_config.savings_plan_execution_time
 
-    def job():
-        if isinstance(interval, List):
-            if date.today().day not in interval:
-                logger.info(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
-                return
+        def job():
+            if isinstance(interval, List):
+                if date.today().day not in interval:
+                    logger.info(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
+                    return
 
-        logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
-        message_bot.ask_savings_plan_execution()
-    if interval == IntervalEnum.daily:
-        schedule.every().day.at(execution_time).do(job)
-    elif interval == IntervalEnum.weekly:
-        schedule.every().week.at(execution_time).do(job)
-    elif interval == IntervalEnum.biweekly:
-        schedule.every(2).weeks.at(execution_time).do(job)
-    elif isinstance(interval, List):
-        schedule.every().day.at(execution_time).do(job)
-    else:
-        raise ValueError(f'Unknown interval for savings plan execution: {interval}')
-    while True:
-        schedule.run_pending()
-        time.sleep(10)
+            logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
+            message_bot.ask_savings_plan_execution()
+        if interval == IntervalEnum.daily:
+            schedule.every().day.at(execution_time).do(job)
+        elif interval == IntervalEnum.weekly:
+            schedule.every().week.at(execution_time).do(job)
+        elif interval == IntervalEnum.biweekly:
+            schedule.every(2).weeks.at(execution_time).do(job)
+        elif isinstance(interval, List):
+            schedule.every().day.at(execution_time).do(job)
+        else:
+            raise ValueError(f'Unknown interval for savings plan execution: {interval}')
+        while True:
+            schedule.run_pending()
+            time.sleep(10)

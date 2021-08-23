@@ -193,6 +193,7 @@ class Dashboard:
         self.allocation_chart = self.analytics.allocation_pie(title=False)
         self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
+        self.update_portfolio_metrics()
 
         # config flask login
         server.config.update(SECRET_KEY=secret_key)
@@ -266,6 +267,11 @@ class Dashboard:
         def update_allocation_chart(n):
             self.allocation_chart = analytics.allocation_pie(title=False)
             return self.allocation_chart
+
+        # Info cards update
+        @self.app.callback(Output('info_cards', 'children'), Input('allocation-interval', 'n_intervals'))
+        def update_info_cards(n):
+            return self.create_info_cards()
 
         # Performance chart update
         @self.app.callback(Output('history_chart', 'figure'), Output('performance_chart', 'figure'),
@@ -342,29 +348,28 @@ class Dashboard:
         self.app.run_server(host=host, port=80,
                             debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
 
+    def update_portfolio_metrics(self):
+        symbols, amounts, values, allocations = self.analytics.index_balance()
+        self.net_worth = values.sum()
+        self.performance = self.analytics.performance(self.net_worth)
+        self.invested = self.analytics.invested()
+        top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
+        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
+        self.top_symbols = top_gainers['symbol'].values
+        self.top_performances = top_gainers['performance'].values
+        self.top_growth = top_gainers['value'].values - top_gainers['cost'].values
+        self.worst_symbols = worst_gainers['symbol'].values
+        self.worst_performances = worst_gainers['performance'].values
+        self.worst_growth = worst_gainers['value'].values - worst_gainers['cost'].values
+
     ################################################################################################################
     #                                                  Layouts                                                     #
     ################################################################################################################
 
-    # Main Dashboard
-    def create_dashboard(self):
-
-        symbols, amounts, values, allocations = self.analytics.index_balance()
-        net_worth = values.sum()
-        performance = self.analytics.performance(net_worth)
-        invested = self.analytics.invested()
+    def create_info_cards(self):
+        self.update_portfolio_metrics()
         currency_symbol = self.config.trading_bot_config.base_currency.values[1]
-        top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
-        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
-        top_symbols = top_gainers['symbol'].values
-        top_performances = top_gainers['performance'].values
-        top_growth = top_gainers['value'].values - top_gainers['cost'].values
-        worst_symbols = worst_gainers['symbol'].values
-        worst_performances = worst_gainers['performance'].values
-        worst_growth = worst_gainers['value'].values - worst_gainers['cost'].values
-
-
-        if performance > 0:
+        if self.performance > 0:
             color = 'text-success'
             prefix = '+ '
         else:
@@ -376,7 +381,6 @@ class Dashboard:
                 return 'success'
             else:
                 return 'danger'
-
         # Info Cards
         card_row_1 = dbc.Row(
             [
@@ -386,8 +390,8 @@ class Dashboard:
                             [
                                 # html.I(className='fa-solid fa-up', style={'fontsize': '36'}),
                                 html.H1('Portfolio value', className='small text-secondary'),
-                                html.H5(f'{net_worth:,.2f} {currency_symbol}', className='card-text'),
-                                html.H6(f'{prefix}{performance:,.2%}', className=f'card-text {color}')
+                                html.H5(f'{self.net_worth:,.2f} {currency_symbol}', className='card-text'),
+                                html.H6(f'{prefix}{self.performance:,.2%}', className=f'card-text {color}')
                             ]
                         )
                     ], color='secondary', outline=True),
@@ -398,8 +402,8 @@ class Dashboard:
                         dbc.CardBody(
                             [
                                 html.H1(f'Invested amount', className='small text-secondary'),
-                                html.H5(f'{invested:,.2f} {currency_symbol}', className=f'card-text'),
-                                html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}',
+                                html.H5(f'{self.invested:,.2f} {currency_symbol}', className=f'card-text'),
+                                html.H6(f'{prefix}{self.net_worth - self.invested:,.2f} {currency_symbol}',
                                         className=f'card-text {color}')
                             ]
                         )
@@ -417,11 +421,12 @@ class Dashboard:
                             [
                                 html.H1(f'Winners', className='small text-secondary')
                             ] + [html.H6([f"{sym}",
-                                         dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
-                                         dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1", color=get_color(pl),
-                                                   pill=True)
-                                         ])
-                                 for sym, perf, pl in zip(top_symbols, top_performances, top_growth)],
+                                          dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
+                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
+                                                    color=get_color(pl),
+                                                    pill=True)
+                                          ])
+                                 for sym, perf, pl in zip(self.top_symbols, self.top_performances, self.top_growth)],
                         )
                     ], color='secondary', outline=True),
                     xs=12, sm=6, style={'margin': '1rem 0rem'}
@@ -433,9 +438,11 @@ class Dashboard:
                                 html.H1(f'Loosers', className='small text-secondary')
                             ] + [html.H6([f"{sym}",
                                           dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
-                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1", color=get_color(pl), pill=True)
+                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
+                                                    color=get_color(pl), pill=True)
                                           ])
-                                 for sym, perf, pl in zip(worst_symbols, worst_performances, worst_growth)]
+                                 for sym, perf, pl in
+                                 zip(self.worst_symbols, self.worst_performances, self.worst_growth)]
                         )
                     ], color='secondary', outline=True),
                     xs=12, sm=6, style={'margin': '1rem 0rem'}
@@ -445,9 +452,12 @@ class Dashboard:
         )
 
         info_cards = [card_row_1, card_row_2]
+        return info_cards
 
+    # Main Dashboard
+    def create_dashboard(self):
         return html.Div(children=[
-            # update allocation chart every 20 seconds
+            # update allocation chart and info cards every 20 seconds
             dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
             # update performance chart every 5 minutes
             dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
@@ -466,7 +476,8 @@ class Dashboard:
                         lg=4, md=12
                     ),
                     dbc.Col(
-                        info_cards,
+                        id='info_cards',
+                        children=self.create_info_cards(),
                         lg=8, md=12
                     )
                 ], justify='center', no_gutters=False, align='center'),
