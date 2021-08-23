@@ -338,7 +338,11 @@ class Dashboard:
             return view, url
 
     def run_dashboard(self):
-        self.app.run_server(host='0.0.0.0', port=80,
+        if self.config.dashboard_config.domain_name:
+            host = self.config.dashboard_config.domain_name
+        else:
+            host = '0.0.0.0'
+        self.app.run_server(host=host, port=80,
                             debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
 
     ################################################################################################################
