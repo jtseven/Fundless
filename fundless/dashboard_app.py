@@ -93,11 +93,11 @@ def create_page_with_sidebar(content):
                 dbc.Col(dbc.Select(
                     id='chart_time_range',
                     options=[
-                        {'label': '1 Day', 'value': 'day'},
-                        {'label': '1 Week', 'value': 'week'},
-                        {'label': '1 Month', 'value': 'month'},
+                        {'label': 'Today', 'value': 'day'},
+                        {'label': 'Last week', 'value': 'week'},
+                        {'label': 'Last month', 'value': 'month'},
                         {'label': '6 Month', 'value': '6month'},
-                        {'label': '1 Year', 'value': 'year'},
+                        {'label': 'Last Year', 'value': 'year'},
                         {'label': 'Since Buy', 'value': 'buy'}
                     ],
                     value='buy',
@@ -105,7 +105,7 @@ def create_page_with_sidebar(content):
                     bs_size='sm',
 
                 )),
-                dbc.Col(dbc.Button(id='user-status-div', color='primary'), style={'margin': '6px'})
+                dbc.Col(dbc.Button(id='user-status-div', color='primary'), style={'margin': '0px 0px 0px 6px'})
             ],
             align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
         )
