@@ -190,6 +190,7 @@ class Dashboard:
         self.analytics = analytics
 
         # Preload data heavy figures
+        self.analytics.update_historical_prices()
         self.allocation_chart = self.analytics.allocation_pie(title=False)
         self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
@@ -213,7 +214,8 @@ class Dashboard:
             # html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
             dcc.Interval('file_update_interval', 60 * 1000, n_intervals=0),
-            html.Div(id='dummy', style={'display': 'none'})
+            html.Div(id='dummy', style={'display': 'none'}),
+            html.Div(id='dummy2', style={'display': 'none'})
         ])
 
         @login_manager.user_loader
@@ -263,19 +265,24 @@ class Dashboard:
             return ''
 
         # Allocation chart update
-        @self.app.callback(Output('allocation_chart', 'figure'), Input('allocation-interval', 'n_intervals'))
+        @self.app.callback(Output('allocation_chart', 'figure'), Input('update-interval', 'n_intervals'))
         def update_allocation_chart(n):
             self.allocation_chart = analytics.allocation_pie(title=False)
             return self.allocation_chart
 
         # Info cards update
-        @self.app.callback(Output('info_cards', 'children'), Input('allocation-interval', 'n_intervals'))
+        @self.app.callback(Output('info_cards', 'children'), Input('update-interval', 'n_intervals'))
         def update_info_cards(n):
             return self.create_info_cards()
 
+        # Price history update
+        @self.app.callback(Output('dummy2', 'children'), Input('update-interval', 'n_intervals'))
+        def update_price_history(n):
+            return self.analytics.update_historical_prices()
+
         # Performance chart update
         @self.app.callback(Output('history_chart', 'figure'), Output('performance_chart', 'figure'),
-                           Input('performance-interval', 'n_intervals'), Input('chart_time_range', 'value'))
+                           Input('update-interval', 'n_intervals'), Input('chart_time_range', 'value'))
         def update_history_chart(_, value):
             now = datetime.datetime.now()
             if value == 'day':
@@ -458,9 +465,9 @@ class Dashboard:
     def create_dashboard(self):
         return html.Div(children=[
             # update allocation chart and info cards every 20 seconds
-            dcc.Interval(id='allocation-interval', interval=20 * 1000, n_intervals=0),
+            dcc.Interval(id='update-interval', interval=20 * 1000, n_intervals=0),
             # update performance chart every 5 minutes
-            dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
+            # dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
             dbc.Container([
                 dbc.Row([
                     dbc.Col([
@@ -473,12 +480,12 @@ class Dashboard:
                         ),
 
                     ],
-                        lg=4, md=12
+                        lg=5, md=12
                     ),
                     dbc.Col(
                         id='info_cards',
                         children=self.create_info_cards(),
-                        lg=8, md=12
+                        lg=7, md=12
                     )
                 ], justify='center', no_gutters=False, align='center'),
 
