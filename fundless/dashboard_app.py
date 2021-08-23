@@ -112,8 +112,8 @@ def create_page_with_sidebar(content):
         ],
         brand="FundLess",
         brand_href="/dashboard",
-        color="info",
-        dark=True,
+        color="light",
+        dark=False,
     )
 
     # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -357,8 +357,11 @@ class Dashboard:
         worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
         top_symbols = top_gainers['symbol'].values
         top_performances = top_gainers['performance'].values
+        top_growth = top_gainers['value'].values - top_gainers['cost'].values
         worst_symbols = worst_gainers['symbol'].values
         worst_performances = worst_gainers['performance'].values
+        worst_growth = worst_gainers['value'].values - worst_gainers['cost'].values
+
 
         if performance > 0:
             color = 'text-success'
@@ -381,29 +384,25 @@ class Dashboard:
                         dbc.CardBody(
                             [
                                 # html.I(className='fa-solid fa-up', style={'fontsize': '36'}),
-                                html.H1('Portfolio value', className='small card-title text-secondary'),
+                                html.H1('Portfolio value', className='small text-secondary'),
                                 html.H5(f'{net_worth:,.2f} {currency_symbol}', className='card-text'),
                                 html.H6(f'{prefix}{performance:,.2%}', className=f'card-text {color}')
                             ]
                         )
-                    ],
-                        outline=True
-                    ),
+                    ], color='secondary', outline=True),
                     xs=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Invested amount', className='small card-title text-secondary'),
+                                html.H1(f'Invested amount', className='small text-secondary'),
                                 html.H5(f'{invested:,.2f} {currency_symbol}', className=f'card-text'),
                                 html.H6(f'{prefix}{net_worth - invested:,.2f} {currency_symbol}',
                                         className=f'card-text {color}')
                             ]
                         )
-                    ],
-                        outline=True
-                    ),
+                    ], color='secondary', outline=True),
                     xs=6, style={'margin': '1rem 0rem'}
                 ),
             ],
@@ -415,25 +414,30 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Winners', className='small card-title text-secondary')
-                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
-                                                              pill=True)])
-                                 for sym, perf in zip(top_symbols, top_performances)]
+                                html.H1(f'Winners', className='small text-secondary')
+                            ] + [html.H6([f"{sym}",
+                                         dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
+                                         dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1", color=get_color(pl),
+                                                   pill=True)
+                                         ])
+                                 for sym, perf, pl in zip(top_symbols, top_performances, top_growth)],
                         )
-                    ], color='success', outline=True),
-                    xs=6, style={'margin': '1rem 0rem'}
+                    ], color='secondary', outline=True),
+                    xs=12, sm=6, style={'margin': '1rem 0rem'}
                 ),
                 dbc.Col(
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Loosers', className='small card-title text-secondary')
-                            ] + [html.H6([f"{sym}", dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf),
-                                                              pill=True)])
-                                 for sym, perf in zip(worst_symbols, worst_performances)]
+                                html.H1(f'Loosers', className='small text-secondary')
+                            ] + [html.H6([f"{sym}",
+                                          dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
+                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1", color=get_color(pl), pill=True)
+                                          ])
+                                 for sym, perf, pl in zip(worst_symbols, worst_performances, worst_growth)]
                         )
-                    ], color='danger', outline=True),
-                    xs=6, style={'margin': '1rem 0rem'}
+                    ], color='secondary', outline=True),
+                    xs=12, sm=6, style={'margin': '1rem 0rem'}
                 )
             ],
             className='mb-6',
@@ -458,11 +462,11 @@ class Dashboard:
                         ),
 
                     ],
-                        lg=4, md=6
+                        lg=4, md=12
                     ),
                     dbc.Col(
                         info_cards,
-                        lg=8, md=6
+                        lg=8, md=12
                     )
                 ], justify='center', no_gutters=False, align='center'),
 
