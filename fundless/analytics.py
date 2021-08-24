@@ -43,6 +43,7 @@ class PortfolioAnalytics:
     last_history_update_month: float = 0  # seconds since epoch
     last_history_update_day: float = 0
     history_update_lock = Lock()
+    last_trades_update: float = 0
 
     def __init__(self, file_path, config: Config):
         self.config = config.trading_bot_config
@@ -52,12 +53,16 @@ class PortfolioAnalytics:
         else:
             self.trades_df = pd.DataFrame(columns=trades_cols)
             self.trades_df.to_csv(self.trades_file, index=False)
+            self.last_trades_update = time()
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
 
     def update_trades_df(self):
-        self.trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
-        self.trades_df['date'] = self.trades_df['date'].dt.tz_localize('UTC')
+        if self.last_trades_update < time() - 60:
+            trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
+            trades_df['date'] = trades_df['date'].dt.tz_localize('UTC')
+            self.trades_df = trades_df
+            self.last_trades_update = time()
 
     def update_file(self):
         self.trades_df.sort_values('date', inplace=True)
@@ -66,7 +71,7 @@ class PortfolioAnalytics:
     def update_markets(self, force=False):
         if not force:
             # do not update, if last update less than 10 seconds ago
-            if self.last_market_update > time()-10:
+            if self.last_market_update > time()-8:
                 return
 
         # update market data from coingecko
@@ -124,7 +129,10 @@ class PortfolioAnalytics:
         return self.trades_df['cost'].sum()
 
     def allocation_pie(self, as_image=False, title=True):
-        self.update_markets()
+        try:
+            self.update_markets()
+        except requests.exceptions.HTTPError:
+            pass
         allocation_df = self.index_df.copy()
         # allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
 

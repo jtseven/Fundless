@@ -90,21 +90,6 @@ def create_page_with_sidebar(content):
     navbar = dbc.NavbarSimple(
         children=[dbc.Row(
             [
-                dbc.Col(dbc.Select(
-                    id='chart_time_range',
-                    options=[
-                        {'label': 'Today', 'value': 'day'},
-                        {'label': 'Last week', 'value': 'week'},
-                        {'label': 'Last month', 'value': 'month'},
-                        {'label': '6 Month', 'value': '6month'},
-                        {'label': 'Last Year', 'value': 'year'},
-                        {'label': 'Since Buy', 'value': 'buy'}
-                    ],
-                    value='buy',
-                    placeholder='Select time range',
-                    bs_size='sm',
-
-                )),
                 dbc.Col(dbc.Button(id='user-status-div', color='primary'), style={'margin': '0px 0px 0px 6px'})
             ],
             align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
@@ -213,9 +198,11 @@ class Dashboard:
             dcc.Store(id='login-status', storage_type='session'),
             # html.Div(id='user-status-div', style=dict(textAlign='right')),
             html.Div(id='page-content'),
-            dcc.Interval('file_update_interval', 60 * 1000, n_intervals=0),
+            # update UI charts and info cards
+            dcc.Interval(id='update-interval', interval=10 * 1000, n_intervals=0),
             html.Div(id='dummy', style={'display': 'none'}),
-            html.Div(id='dummy2', style={'display': 'none'})
+            html.Div(id='dummy2', style={'display': 'none'}),
+
         ])
 
         @login_manager.user_loader
@@ -258,49 +245,46 @@ class Dashboard:
             else:
                 return '/login', False
 
-        # Update csv files
-        @self.app.callback(Output('dummy', 'children'), Input('file_update_interval', 'n_intervals'))
-        def update_files(n):
-            self.analytics.update_trades_df()
-            return ''
-
-        # Allocation chart update
-        @self.app.callback(Output('allocation_chart', 'figure'), Input('update-interval', 'n_intervals'))
-        def update_allocation_chart(n):
+        # Update pie chart and info cards (quick)
+        @self.app.callback(Output('allocation_chart', 'figure'), Output('info_cards', 'children'),
+                           Input('update-interval', 'n_intervals'),
+                           State('chart_time_range', 'value'), State('chart_tabs', 'active_tab'))
+        def update_data_quick(_, chart_range, active_tab):
             self.allocation_chart = analytics.allocation_pie(title=False)
-            return self.allocation_chart
+            info_cards = self.create_info_cards()
+            return self.allocation_chart, info_cards
 
-        # Info cards update
-        @self.app.callback(Output('info_cards', 'children'), Input('update-interval', 'n_intervals'))
-        def update_info_cards(n):
-            return self.create_info_cards()
+        # Update markets from API (quick)
+        @self.app.callback(Output('dummy2', 'children'),
+                           Input('update-interval', 'n_intervals'))
+        def update_data_quick(_):
+            self.analytics.update_trades_df()
+            self.analytics.update_markets()
+            return None
 
-        # Price history update
-        @self.app.callback(Output('dummy2', 'children'), Input('update-interval', 'n_intervals'))
-        def update_price_history(n):
-            return self.analytics.update_historical_prices()
-
-        # Performance chart update
-        @self.app.callback(Output('history_chart', 'figure'), Output('performance_chart', 'figure'),
-                           Input('update-interval', 'n_intervals'), Input('chart_time_range', 'value'))
-        def update_history_chart(_, value):
-            now = datetime.datetime.now()
-            if value == 'day':
-                timestamp = (now - datetime.timedelta(days=1)).timestamp()
-            elif value == 'week':
-                timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
-            elif value == 'month':
-                timestamp = (now - datetime.timedelta(days=30)).timestamp()
-            elif value == '6month':
-                timestamp = (now - datetime.timedelta(days=182)).timestamp()
-            elif value == 'year':
-                timestamp = (now - datetime.timedelta(days=365)).timestamp()
-            else:
-                timestamp = None
+        # Update performance and history charts
+        @self.app.callback(Output('chart', 'figure'),
+                           Input('update-interval', 'n_intervals'),
+                           Input('chart_time_range', 'value'), Input('chart_tabs', 'active_tab'))
+        def update_slow_charts(_, chart_range, active_tab):
+            timestamp = self.get_timerange(chart_range)
+            self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
             self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
-            self.performance_chart = analytics.performance_chart(from_timestamp=timestamp, title=False)
+            if active_tab == 'history_tab':
+                chart = self.history_chart
+            elif active_tab == 'performance_tab':
+                chart = self.performance_chart
+            else:
+                print('Invalid tab selected!')
+                chart = None
+            return chart
 
-            return self.history_chart, self.performance_chart
+        # Update price history from API (slow)
+        @self.app.callback(Output('dummy', 'children'),
+                           Input('update-interval', 'n_intervals'))
+        def update_data_slow(_):
+            self.analytics.update_historical_prices()
+            return None
 
         # Check login status to show correct login/logout button
         @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'),
@@ -368,6 +352,22 @@ class Dashboard:
         self.worst_symbols = worst_gainers['symbol'].values
         self.worst_performances = worst_gainers['performance'].values
         self.worst_growth = worst_gainers['value'].values - worst_gainers['cost'].values
+
+    def get_timerange(self, value: str):
+        now = datetime.datetime.now()
+        if value == 'day':
+            timestamp = (now - datetime.timedelta(days=1)).timestamp()
+        elif value == 'week':
+            timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
+        elif value == 'month':
+            timestamp = (now - datetime.timedelta(days=30)).timestamp()
+        elif value == '6month':
+            timestamp = (now - datetime.timedelta(days=182)).timestamp()
+        elif value == 'year':
+            timestamp = (now - datetime.timedelta(days=365)).timestamp()
+        else:
+            timestamp = None
+        return timestamp
 
     ################################################################################################################
     #                                                  Layouts                                                     #
@@ -461,11 +461,62 @@ class Dashboard:
         info_cards = [card_row_1, card_row_2]
         return info_cards
 
+    def create_chart_tabs(self):
+        card = dbc.Card(
+            [
+                dbc.Row(
+                    [dbc.Col(
+                        dbc.Tabs(
+                            [
+                                dbc.Tab(label='History', tab_id='history_tab'),
+                                dbc.Tab(label='Performance', tab_id='performance_tab'),
+                            ],
+                            id='chart_tabs',
+                            card=True,
+                            active_tab='history_tab',
+                            className='m-1'
+                        ),
+                        xs=12,
+                        sm=6,
+                        # className='col-auto me-auto'
+                    ), dbc.Col(
+                        dbc.Select(
+                            id='chart_time_range',
+                            options=[
+                                {'label': 'Today', 'value': 'day'},
+                                {'label': 'Last week', 'value': 'week'},
+                                {'label': 'Last month', 'value': 'month'},
+                                {'label': '6 Month', 'value': '6month'},
+                                {'label': 'Last Year', 'value': 'year'},
+                                {'label': 'Since Buy', 'value': 'buy'}
+                            ],
+                            value='buy',
+                            placeholder='Chart range',
+                            bs_size='sm',
+                            className='w-auto m-1'
+                        ),
+                        className='col-auto ml-auto',
+                    )],
+                    justify='between'
+                ),
+                dbc.CardBody(
+                    [
+                        dcc.Graph(
+                            id='chart',
+                            config={
+                                'displayModeBar': False
+                            },
+                        )
+                    ]
+                )
+            ],
+            color='secondary', outline=True
+        )
+        return card
+
     # Main Dashboard
     def create_dashboard(self):
         return html.Div(children=[
-            # update allocation chart and info cards every 20 seconds
-            dcc.Interval(id='update-interval', interval=20 * 1000, n_intervals=0),
             # update performance chart every 5 minutes
             # dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
             dbc.Container([
@@ -491,35 +542,7 @@ class Dashboard:
 
                 dbc.Row(
                     [
-                        dbc.Col([
-                            dbc.Tabs(
-                                [dbc.Tab(
-                                    dbc.Card(
-                                        dcc.Graph(
-                                            id='history_chart',
-                                            figure=self.history_chart,
-                                            config={
-                                                'displayModeBar': False
-                                            }
-                                        ), body=True, style={'margin': '1rem 0rem'}
-                                    ), label='History'
-                                ),
-                                    dbc.Tab(
-                                        dbc.Card(
-                                            dcc.Graph(
-                                                id='performance_chart',
-                                                figure=self.performance_chart,
-                                                config={
-                                                    'displayModeBar': False
-                                                }
-                                            ), body=True, style={'margin': '1rem 0rem'}
-                                        ), label='Performance'
-                                    )
-                                ]
-                            )
-                        ],
-                            xs=12,
-                        )
+                        dbc.Col([self.create_chart_tabs()], xs=12,)
                     ],
                     justify='center', no_gutters=False
                 )],
