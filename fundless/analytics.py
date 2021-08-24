@@ -148,20 +148,19 @@ class PortfolioAnalytics:
     def update_historical_prices(self):
         to_timestamp = time()
         freq = None
+        month = 60*60*24*30
+        day = 60*60*24
         if self.history_df is None:
             # get full history from api
             min_time = (self.trades_df['date'].min() - pd.DateOffset(2)).timestamp()
             from_timestamp = min_time
         elif self.last_history_update_month < time() - 60*60*24*2:  # t - 2days
             # get data from last month
-            from_timestamp = time() - 60*60*24*30
+            from_timestamp = time() - month
             freq = 'H'
             self.last_history_update_month = time()
         elif self.last_history_update_day < time() - 60*15:  # t - 15min
-            if self.last_history_update_day == 0:
-                from_timestamp = time() - 60*60*24
-            else:
-                from_timestamp = self.last_history_update_day
+            from_timestamp = time() - day
             self.last_history_update_day = time()
             freq = '5T'  # 5 minutes
         else:
@@ -188,17 +187,27 @@ class PortfolioAnalytics:
                 # round datetime index to given frequency,
                 # otherwise all coins have price data at slightly different times
                 history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(history_df.index.round(freq).drop_duplicates(), method='nearest')
+                if freq == 'H':
+                    truncate_from = pd.to_datetime(from_timestamp, unit='s', utc=True)
+                    truncate_to = pd.to_datetime(to_timestamp-day, unit='s', utc=True)
+                elif freq == '5T':
+                    truncate_from = pd.to_datetime(to_timestamp-day, unit='s', utc=True)
+                    truncate_to = pd.to_datetime(time(), unit='s', utc=True)
+            else:
+                truncate_from = pd.to_datetime(time(), unit='s', utc=True)
+                truncate_to = truncate_from
 
             # add most recent prices for data consistency
             current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol in list(history_df.columns)]
             history_df = history_df.append(pd.DataFrame([current_prices], columns=history_df.columns, index=[
-                pd.to_datetime(time(), unit='s', utc=True)])).sort_index()
+                pd.to_datetime(int(time()), unit='s', utc=True)])).sort_index()
 
             # convert to local timezone
             history_df.index = history_df.index.tz_convert('Europe/Berlin')
 
             if self.history_df is not None:
-                history_df = pd.concat([history_df, self.history_df])
+                mask = (self.history_df.index < truncate_from) | (self.history_df.index > truncate_to)
+                history_df = pd.concat([history_df, self.history_df.loc[mask]])
                 history_df = history_df[~history_df.index.duplicated(keep='first')].sort_index()
             self.history_df = history_df
 
@@ -212,11 +221,17 @@ class PortfolioAnalytics:
         else:
             price_history = self.history_df.copy()
             start_time = price_history.index.min()
-        n = len(price_history)
-        n = 300 if n > 300 else n
-        price_history = price_history.reindex(
-            pd.date_range(price_history.index.min(), price_history.index.max(), n,
-                          tz='Europe/Berlin'), method='nearest')
+        if start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=31)):
+            freq = 'D'
+        elif start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=14, minutes=2)):
+            freq = '3H'
+        elif start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=1, minutes=2)):
+            freq = 'H'
+        else:
+            freq = '5T'  # 5 minutes
+
+        price_history = price_history.asfreq(freq=freq, method='pad')
+        price_history = price_history.append(self.history_df.tail(1))
         if start_time+pd.Timedelta(days=2) < price_history.index.min():
             price_history = price_history.append(pd.DataFrame(0, index=[start_time], columns=price_history.columns)).sort_index()
 
@@ -284,7 +299,6 @@ class PortfolioAnalytics:
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
         fig.add_scatter(x=performance_df.index, y=performance_df.performance.where(performance_df.performance < 0),
-                        # fill='tozeroy',
                           line={'color': 'red',
                                 'shape': 'spline'
                                 })
