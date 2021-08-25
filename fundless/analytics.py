@@ -34,7 +34,7 @@ min_font_size = 10
 class PortfolioAnalytics:
     trades_df: pd.DataFrame
     trades_file: Path
-    index_df: pd.DataFrame
+    index_df: pd.DataFrame = None
     history_df: pd.DataFrame = None
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
@@ -56,6 +56,7 @@ class PortfolioAnalytics:
             self.last_trades_update = time()
         self.coingecko = CoinGeckoAPI()
         self.update_markets()
+        self.update_historical_prices()
 
     def update_trades_df(self):
         if self.last_trades_update < time() - 60:
@@ -79,10 +80,10 @@ class PortfolioAnalytics:
             markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
                 vs_currency=self.config.base_currency.value, per_page=150))
             markets['symbol'] = markets['symbol'].str.lower()
-        except Exception as e:
-            print('Error while updating market data from CoinGecko:')
+        except requests.exceptions.HTTPError as e:
+            print('Network error while updating market data from CoinGecko:')
             print(e)
-            raise e
+            return
         markets.replace(coingecko_symbol_dict, inplace=True)
         self.markets = markets
         self.last_market_update = time()
@@ -179,10 +180,15 @@ class PortfolioAnalytics:
             # pull historic market data for all coins (pretty heavy on API requests)
             for coin in self.index_df['symbol'].str.lower():
                 id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
-                with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=0.5, sleepscale=1, jitter=0,
-                              retry_exceptions=requests.exceptions.HTTPError) as get_history:
-                    data = get_history(id=id, vs_currency=self.config.base_currency.value,
-                                       from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+                try:
+                    with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=0.5, sleepscale=1, jitter=0,
+                                  retry_exceptions=(requests.exceptions.HTTPError, )) as get_history:
+                        data = get_history(id=id, vs_currency=self.config.base_currency.value,
+                                           from_timestamp=from_timestamp, to_timestamp=to_timestamp)
+                except requests.exceptions.HTTPError as e:
+                    print('Error while updating historic prices from API')
+                    print(e)
+                    return
                 data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
                 data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms', utc=True)
                 data_df.set_index('timestamp', inplace=True)
@@ -278,13 +284,14 @@ class PortfolioAnalytics:
             color = ['gray', px.colors.sequential.Viridis[0]]
 
         fig = px.line(performance_df, x=performance_df.index, y=y, line_shape='spline', color_discrete_sequence=color)
-        fig.update_xaxes(showgrid=False, title_text='', fixedrange=True)
-        fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
-                         title_text='', gridcolor='lightgray', gridwidth=0.15, fixedrange=True)
+
         fig.update_traces(selector=dict(name='invested'), line_shape='hv')
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
+        fig.update_xaxes(showgrid=False, title_text='', fixedrange=True)
+        fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
+                         title_text='', gridcolor='lightgray', gridwidth=0.15, fixedrange=True)
         if title:
             fig.update_layout(title='Portfolio value')
         if as_image:
@@ -304,9 +311,6 @@ class PortfolioAnalytics:
         fig = px.line(performance_df, x=performance_df.index, y='performance',
                       line_shape='spline',
                       color_discrete_sequence=['green'])
-        fig.update_xaxes(showgrid=False, title_text='', zeroline=True, fixedrange=True)
-        fig.update_yaxes(side='right', showgrid=False, ticksuffix=' %', zeroline=True, zerolinecolor='lightgray',
-                         title_text='', zerolinewidth=0.2, fixedrange=True)
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
@@ -314,6 +318,9 @@ class PortfolioAnalytics:
                           line={'color': 'red',
                                 'shape': 'spline'
                                 })
+        fig.update_xaxes(showgrid=False, title_text='', zeroline=True, fixedrange=True)
+        fig.update_yaxes(side='right', showgrid=False, ticksuffix=' %', zeroline=True, zerolinecolor='lightgray',
+                         title_text='', zerolinewidth=0.2, fixedrange=True)
         if title:
             fig.update_layout(title='Portfolio performance')
         if as_image:
