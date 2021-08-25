@@ -2,7 +2,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
-import plotly.graph_objs
+import dash_trich_components as dtc
 from dash.dependencies import Output, Input, State
 import secrets
 import flask
@@ -87,60 +87,65 @@ def create_logout_layout():
 
 # Sidebar
 def create_page_with_sidebar(content):
-    navbar = dbc.NavbarSimple(
-        children=[dbc.Row(
-            [
-                dbc.Col(dbc.Button(id='user-status-div', color='primary'), style={'margin': '0px 0px 0px 6px'})
-            ],
-            align='center', className="ml-auto flex-nowrap mt-3 mt-md-0", no_gutters=True
-        )
-        ],
-        brand="FundLess",
-        brand_href="/dashboard",
-        color="light",
-        dark=False,
+    sidebar_header = dbc.Row(
+        [
+            dbc.Col(html.H2("FundLess", className="display-4")),
+            dbc.Col(
+                html.Button(
+                    # use the Bootstrap navbar-toggler classes to style the toggle
+                    html.Span(className="navbar-toggler-icon"),
+                    className="navbar-toggler",
+                    # the navbar-toggler classes don't set color, so we do it here
+                    style={
+                        "color": "rgba(0,0,0,.5)",
+                        "border-color": "rgba(0,0,0,.1)",
+                    },
+                    id="toggle",
+                ),
+                # the column containing the toggle will be only as wide as the
+                # toggle, resulting in the toggle being right aligned
+                width="auto",
+                # vertically align the toggle in the center
+                align="center",
+            ),
+        ], no_gutters=True
     )
-
-    # the style arguments for the sidebar. We use position:fixed and a fixed width
-    SIDEBAR_STYLE = {
-        "position": "fixed",
-        "top": 0,
-        "left": 0,
-        "bottom": 0,
-        "width": "16rem",
-        "padding": "2rem 1rem",
-        "background-color": "#f8f9fa",
-    }
-
-    # the styles for the main content position it to the right of the sidebar and
-    # add some padding.
-    CONTENT_STYLE = {
-        "margin-left": "18rem",
-        "margin-right": "2rem",
-        "padding": "2rem 1rem",
-    }
-
     sidebar = html.Div(
         [
-            html.H2("FundLess", className="display-4"),
-            html.Hr(),
-            html.P(
-                "Crypto Portfolio", className="lead"
-            ),
-            dbc.Nav(
+            sidebar_header,
+            # we wrap the horizontal rule and short blurb in a div that can be
+            # hidden on a small screen
+            html.Div(
                 [
-                    dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
-                    dbc.NavLink("Savings Plan", href="/page-2", active="exact"),
+                    html.Hr(),
+                    html.P(
+                        "Passively invest into the world of crypto",
+                        className="lead",
+                    ),
                 ],
-                vertical=True,
-                pills=True,
+                id="blurb",
+            ),
+            # use the Collapse component to animate hiding / revealing links
+            dbc.Collapse(
+                dbc.Nav(
+                    [
+                        dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
+                        dbc.NavLink("Holdings", href="/holdings", active="exact", disabled=True),
+                        dbc.NavLink("Strategy", href="/strategy", active="exact", disabled=True),
+                        dbc.Button(id='user-status-div', color='primary'),
+                    ],
+                    vertical=True,
+                    pills=True,
+                ),
+                id="collapse",
             ),
         ],
-        style=SIDEBAR_STYLE,
+        id="sidebar",
+        className='sticky-top'
     )
 
     page = html.Div([
-        html.Div(navbar),
+        sidebar,
         html.Div(children=content)
     ])
     return html.Div([page])
@@ -157,13 +162,14 @@ class Dashboard:
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
         external_stylesheets = [
+            "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
             dbc.themes.LITERA,  # FLATLY, LITERA, YETI
-            {
-                "href": "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
-                "rel": "stylesheet",
-                "crossorigin": "anonymous",
-                "referrerpolicy": "no-referrer",
-            }
+            # {
+            #     "href": "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
+            #     "rel": "stylesheet",
+            #     "crossorigin": "anonymous",
+            #     "referrerpolicy": "no-referrer",
+            # }
         ]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
                              title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
@@ -175,7 +181,6 @@ class Dashboard:
         self.analytics = analytics
 
         # Preload data heavy figures
-        self.analytics.update_historical_prices()
         self.allocation_chart = self.analytics.allocation_pie(title=False)
         self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
@@ -221,6 +226,16 @@ class Dashboard:
             [State("navbar-collapse", "is_open")],
         )
         def toggle_navbar_collapse(n, is_open):
+            if n:
+                return not is_open
+            return is_open
+
+        @self.app.callback(
+            Output("collapse", "is_open"),
+            [Input("toggle", "n_clicks")],
+            [State("collapse", "is_open")],
+        )
+        def toggle_collapse(n, is_open):
             if n:
                 return not is_open
             return is_open
@@ -301,6 +316,24 @@ class Dashboard:
             else:
                 return 'Login', '/login', 'loggedout'
 
+        def create_not_implemented(name: str):
+            return dbc.Jumbotron(
+                [
+                    html.H1(f"{name} not found", className="text-info"),
+                    html.Hr(),
+                    html.P(f"This page is not yet implemented"),
+                ]
+            )
+
+        def create_404(pathname: str):
+            return dbc.Jumbotron(
+                [
+                    html.H1("404: Not found", className="text-danger"),
+                    html.Hr(),
+                    html.P(f"The pathname {pathname} was not recognised..."),
+                ]
+            )
+
         # Page forward callback
         @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
                            [Input('url', 'pathname')])
@@ -317,6 +350,16 @@ class Dashboard:
             elif pathname == '/dashboard':
                 if current_user.is_authenticated:
                     view = create_page_with_sidebar(self.create_dashboard())
+                else:
+                    view = create_login_layout()
+            elif pathname == '/holdings':
+                if current_user.is_authenticated:
+                    view = create_page_with_sidebar(create_not_implemented('Holdings'))
+                else:
+                    view = create_login_layout()
+            elif pathname == '/strategy':
+                if current_user.is_authenticated:
+                    view = create_page_with_sidebar(create_not_implemented('Strategy'))
                 else:
                     view = create_login_layout()
             elif pathname == '/logout':
@@ -531,12 +574,12 @@ class Dashboard:
                         ),
 
                     ],
-                        lg=5, md=12
+                        xl=5, lg=12
                     ),
                     dbc.Col(
                         id='info_cards',
                         children=self.create_info_cards(),
-                        lg=7, md=12
+                        xl=7, lg=12
                     )
                 ], justify='center', no_gutters=False, align='center'),
 
