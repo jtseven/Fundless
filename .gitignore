@@ -4,6 +4,10 @@ config.yaml
 trades.csv
 trades_backup.csv
 
+### IDE Folders
+.vscode
+.idea
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
