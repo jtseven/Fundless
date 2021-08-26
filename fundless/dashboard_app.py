@@ -134,13 +134,17 @@ def create_page_with_sidebar(content):
                             href="/dashboard", active="exact", className='navbar-element'
                         ),
                         dbc.NavLink(
-                            [html.I(className='fas fa-align-justify mr-2 nav-icon'), html.Span('Holdings')],
-                            href="/holdings", active="exact", disabled=True, className='navbar-element'
+                            [html.I(className='fas fa-align-justify mr-2 nav-icon'), html.Span('Holdings', id='nav_holdings'),
+                             dbc.Tooltip('Coming soon ...', target='nav_holdings', placement='top')],
+                            href="/holdings", active="exact", disabled=False, className='navbar-element'
                         ),
                         dbc.NavLink(
-                            [html.I(className='fas fa-chess mr-2 nav-icon'), html.Span('Strategy')],
-                            href="/strategy", active="exact", disabled=True, className='navbar-element'
+                            [html.I(className='fas fa-chess mr-2 nav-icon'), html.Span('Strategy', id='nav_strategy'),
+                             dbc.Tooltip('Coming soon ...', target='nav_strategy', placement='top')],
+                            href="/strategy", active="exact", disabled=False, className='navbar-element'
                         ),
+
+
                         dbc.Button(id='user-status-div', color='primary', block=True)
                     ],
                     vertical=True,
@@ -328,7 +332,8 @@ class Dashboard:
                     html.H1(f"{name} not found", className="text-info"),
                     html.Hr(),
                     html.P(f"This page is not yet implemented"),
-                ]
+                ],
+                className='mt-8'
             )
 
         def create_404(pathname: str):
@@ -428,9 +433,11 @@ class Dashboard:
         if self.performance > 0:
             color = 'text-success'
             prefix = '+ '
+            text = 'Profit'
         else:
             color = 'text-danger'
-            prefix = ''
+            prefix = '',
+            text = 'Loss'
 
         def get_color(val: float):
             if val >= 0:
@@ -457,10 +464,12 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Invested amount', className='small text-secondary'),
-                                html.H5(f'{self.invested:,.2f} {currency_symbol}', className=f'card-text'),
-                                html.H6(f'{prefix}{self.net_worth - self.invested:,.2f} {currency_symbol}',
-                                        className=f'card-text {color}')
+                                html.H1(f'{text}', className='small text-secondary'),
+                                html.H5(f'{prefix}{self.net_worth - self.invested:,.2f} {currency_symbol}',
+                                        className=f'card-text {color}'),
+                                html.H6(f'{self.invested:,.2f} {currency_symbol}',
+                                        className=f'card-text', id='invested'),
+                                dbc.Tooltip('Your invested amount', target='invested', placement='left')
                             ]
                         )
                     ], color='secondary', outline=True),
@@ -475,7 +484,8 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Winners', className='small text-secondary')
+                                html.H1(f'Winners', className='small text-secondary', id='winners'),
+                                dbc.Tooltip('The best performing coins', target='winners', placement='left')
                             ] + [html.H6([f"{sym}",
                                           dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
                                           dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
@@ -491,7 +501,8 @@ class Dashboard:
                     dbc.Card([
                         dbc.CardBody(
                             [
-                                html.H1(f'Loosers', className='small text-secondary')
+                                html.H1(f'Losers', className='small text-secondary', id='losers'),
+                                dbc.Tooltip('The worst performing coins', target='losers', placement='left')
                             ] + [html.H6([f"{sym}",
                                           dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
                                           dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
