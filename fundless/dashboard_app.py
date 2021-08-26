@@ -88,7 +88,7 @@ def create_logout_layout():
 def create_page_with_sidebar(content):
     sidebar_header = dbc.Row(
         [
-            dbc.Col(html.H2("FundLess", className="display-4")),
+            dbc.Col(html.H2("Fundless", className="display-4")),
             dbc.Col(
                 html.Button(
                     # use the Bootstrap navbar-toggler classes to style the toggle
