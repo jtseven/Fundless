@@ -1,6 +1,6 @@
 #sidebar {
   text-align: center;
-  padding: 1rem 1rem;
+  padding: 0.5rem 1rem;
   background-color: #f8f9fa;
 }
 
@@ -14,12 +14,24 @@
   display: none;
 }
 
+.nav-icon {
+  display: none;
+}
+
 #collapse *:first-child {
   margin-top: 1rem;
 }
 
 #page-content {
   padding: 0;
+}
+
+#sidebar-page-content {
+  padding: 0;
+}
+
+.navbar-element {
+  margin: 0
 }
 
 /* add the three horizontal bars icon for the toggle */
@@ -37,14 +49,24 @@
     text-align: left;
   }
 
+  .navbar-element{
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+
   /* reveal the blurb on a large screen */
   #blurb {
     display: block;
+    margin-bottom: 0.5rem;
   }
 
   /* Hide the toggle on a large screen */
   #toggle {
     display: none;
+  }
+
+  .nav-icon {
+    display: inline;
   }
 
   #collapse {
@@ -55,7 +77,14 @@
     margin-top: 0;
   }
 
-  #page-content {
+  #user-status-div {
+    position: absolute;
+    bottom: 0;
+    margin-bottom: 1rem;
+    width: 14rem;
+  }
+
+  #sidebar-page-content {
     margin-left: 18rem;
     margin-right: 2rem;
   }

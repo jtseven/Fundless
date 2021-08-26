@@ -109,6 +109,7 @@ def create_page_with_sidebar(content):
             ),
         ], no_gutters=True
     )
+
     sidebar = html.Div(
         [
             sidebar_header,
@@ -128,13 +129,23 @@ def create_page_with_sidebar(content):
             dbc.Collapse(
                 dbc.Nav(
                     [
-                        dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
-                        dbc.NavLink("Holdings", href="/holdings", active="exact", disabled=True),
-                        dbc.NavLink("Strategy", href="/strategy", active="exact", disabled=True),
-                        dbc.Button(id='user-status-div', color='primary'),
+                        dbc.NavLink(
+                            [html.I(className='fas fa-chart-line mr-2 nav-icon'), html.Span('Dashboard')],
+                            href="/dashboard", active="exact", className='navbar-element'
+                        ),
+                        dbc.NavLink(
+                            [html.I(className='fas fa-align-justify mr-2 nav-icon'), html.Span('Holdings')],
+                            href="/holdings", active="exact", disabled=True, className='navbar-element'
+                        ),
+                        dbc.NavLink(
+                            [html.I(className='fas fa-chess mr-2 nav-icon'), html.Span('Strategy')],
+                            href="/strategy", active="exact", disabled=True, className='navbar-element'
+                        ),
+                        dbc.Button(id='user-status-div', color='primary', block=True)
                     ],
                     vertical=True,
                     pills=True,
+                    id='sidebar-nav'
                 ),
                 id="collapse",
             ),
@@ -145,7 +156,7 @@ def create_page_with_sidebar(content):
 
     page = html.Div([
         sidebar,
-        html.Div(children=content)
+        html.Div(children=content, id='sidebar-page-content')
     ])
     return html.Div([page])
 
@@ -161,14 +172,10 @@ class Dashboard:
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
         external_stylesheets = [
-            "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
+            # "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
             dbc.themes.LITERA,  # FLATLY, LITERA, YETI
-            # {
-            #     "href": "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
-            #     "rel": "stylesheet",
-            #     "crossorigin": "anonymous",
-            #     "referrerpolicy": "no-referrer",
-            # }
+            'https://use.fontawesome.com/releases/v5.15.1/css/all.css',
+
         ]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
                              title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
@@ -263,7 +270,7 @@ class Dashboard:
         @self.app.callback(Output('allocation_chart', 'figure'), Output('info_cards', 'children'),
                            Input('update-interval', 'n_intervals'),
                            State('chart_time_range', 'value'), State('chart_tabs', 'active_tab'))
-        def update_data_quick(_, chart_range, active_tab):
+        def update_charts_quick(_, chart_range, active_tab):
             self.allocation_chart = analytics.allocation_pie(title=False)
             info_cards = self.create_info_cards()
             return self.allocation_chart, info_cards
@@ -280,7 +287,7 @@ class Dashboard:
         @self.app.callback(Output('chart', 'figure'),
                            Input('update-interval', 'n_intervals'),
                            Input('chart_time_range', 'value'), Input('chart_tabs', 'active_tab'))
-        def update_slow_charts(_, chart_range, active_tab):
+        def update_charts_slow(_, chart_range, active_tab):
             timestamp = self.get_timerange(chart_range)
             self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
             self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
@@ -504,13 +511,17 @@ class Dashboard:
         return info_cards
 
     def create_chart_tabs(self):
-        card = dbc.Card(
+        card = html.Div(
             [
                 dbc.Row(
                     [dbc.Col(
                         dbc.Tabs(
                             [
-                                dbc.Tab(label='History', tab_id='history_tab'),
+                                dbc.Tab(
+                                    # [html.I(className='fas fa-chart-line mr-2'), html.Span('History')],
+                                    label='History',
+                                    tab_id='history_tab'
+                                ),
                                 dbc.Tab(label='Performance', tab_id='performance_tab'),
                             ],
                             id='chart_tabs',
@@ -541,18 +552,21 @@ class Dashboard:
                     )],
                     justify='between'
                 ),
-                dbc.CardBody(
+                html.Div(
+                dbc.Card(
                     [
                         dcc.Graph(
                             id='chart',
                             config={
                                 'displayModeBar': False
                             },
-                        )
-                    ]
-                )
+                            className='chart'
+                        ),
+                    ],
+                    body=True,
+                ), )
             ],
-            color='secondary', outline=True
+            # color='secondary', outline=True,
         )
         return card
 

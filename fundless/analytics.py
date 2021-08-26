@@ -115,6 +115,8 @@ class PortfolioAnalytics:
 
     def index_balance(self) -> Tuple:
         self.update_markets()
+        if self.index_df is None:
+            return None, None, None, None
         index = self.index_df.sort_values(by='allocation', ascending=False)
         allocations = index['allocation'].values * 100
         symbols = index['symbol'].values
@@ -134,6 +136,8 @@ class PortfolioAnalytics:
             self.update_markets()
         except requests.exceptions.HTTPError:
             pass
+        if self.index_df is None:
+            return {}
         allocation_df = self.index_df.copy()
         # allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
 
@@ -155,6 +159,8 @@ class PortfolioAnalytics:
             return fig
 
     def update_historical_prices(self):
+        if self.last_market_update == 0:
+            return
         to_timestamp = time()
         freq = None
         month = 60*60*24*30
@@ -228,6 +234,8 @@ class PortfolioAnalytics:
     def compute_value_history(self, from_timestamp=None):
         if self.history_df is None:
             self.update_historical_prices()
+            if self.history_df is None:
+                return None, None
 
         if from_timestamp is not None:
             start_time = pd.to_datetime(from_timestamp, unit='s', utc=True)
@@ -272,6 +280,8 @@ class PortfolioAnalytics:
 
     def value_history_chart(self, as_image=False, from_timestamp=None, title=True):
         value, invested = self.compute_value_history(from_timestamp=from_timestamp)
+        if value is None or invested is None:
+            return {}
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
         performance_df['net_worth'] = value.sum(axis=1)
@@ -301,6 +311,8 @@ class PortfolioAnalytics:
 
     def performance_chart(self, as_image=False, from_timestamp=None, title=True):
         value, invested = self.compute_value_history(from_timestamp=from_timestamp)
+        if self.history_df is None:
+            return {}
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
         performance_df['net_worth'] = value.sum(axis=1)
