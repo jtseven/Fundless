@@ -252,7 +252,7 @@ class TelegramBot:
             update.message.reply_text("The order volume is too low, to buy the following coins:")
             update.message.reply_text(f"{[symbol for symbol in symbols if symbol not in symbols_filtered]}")
             update.message.reply_text(
-                "But don't worry, I will fix this by rebalancing your portfolio with the next savings plan execution!")
+                "But don't worry, I will include them another time and keep your portfolio well balanced!")
         symbols = symbols_filtered
         weights = weights_filtered
         msg = ("```\nThat's what I came up with:\n"
@@ -290,7 +290,7 @@ class TelegramBot:
             err = abs(rel_to_volume.max())
             update.message.reply_text(f"The absolute allocation error of {symbol} is {err:.1%} of your order volume!")
             reply_keyboard = [[
-                "Yes",
+                "Yes (recommended)",
                 "No"
             ]]
             markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -305,7 +305,7 @@ class TelegramBot:
                 "No"
             ]]
             markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
-            update.message.reply_text("Should I proceed computing your buy order?", reply_markup=markup)
+            update.message.reply_text("Should I proceed with a overview of the planned buy order?", reply_markup=markup)
             return PLANNING
 
     @authorized_only
@@ -321,7 +321,7 @@ class TelegramBot:
             "No"
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
-        update.message.reply_text("Should I proceed?", reply_markup=markup)
+        update.message.reply_text("Should I proceed with a overview of the planned buy order?", reply_markup=markup)
         return PLANNING
 
     @authorized_only
