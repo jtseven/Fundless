@@ -333,7 +333,7 @@ class Dashboard:
                     html.Hr(),
                     html.P(f"This page is not yet implemented"),
                 ],
-                className='mt-8'
+                className='mt-4'
             )
 
         def create_404(pathname: str):
@@ -569,7 +569,8 @@ class Dashboard:
                         dcc.Graph(
                             id='chart',
                             config={
-                                'displayModeBar': False
+                                'displayModeBar': False,
+                                'staticPlot': True
                             },
                             className='chart'
                         ),
@@ -593,7 +594,8 @@ class Dashboard:
                             id='allocation_chart',
                             figure=self.allocation_chart,
                             config={
-                                'displayModeBar': False
+                                'displayModeBar': False,
+                                'staticPlot': True,
                             }
                         ),
 
