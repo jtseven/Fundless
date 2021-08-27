@@ -131,17 +131,17 @@ def create_page_with_sidebar(content):
                     [
                         dbc.NavLink(
                             [html.I(className='fas fa-chart-line mr-2 nav-icon'), html.Span('Dashboard')],
-                            href="/dashboard", active="exact", className='navbar-element'
+                            href="/dashboard", active="exact", className='navbar-element btn-outline-dark'
                         ),
                         dbc.NavLink(
                             [html.I(className='fas fa-align-justify mr-2 nav-icon'), html.Span('Holdings', id='nav_holdings'),
                              dbc.Tooltip('Coming soon ...', target='nav_holdings', placement='top')],
-                            href="/holdings", active="exact", disabled=False, className='navbar-element'
+                            href="/holdings", active="exact", disabled=False, className='navbar-element btn-outline-dark'
                         ),
                         dbc.NavLink(
                             [html.I(className='fas fa-chess mr-2 nav-icon'), html.Span('Strategy', id='nav_strategy'),
                              dbc.Tooltip('Coming soon ...', target='nav_strategy', placement='top')],
-                            href="/strategy", active="exact", disabled=False, className='navbar-element'
+                            href="/strategy", active="exact", disabled=False, className='navbar-element btn-outline-dark'
                         ),
 
 
