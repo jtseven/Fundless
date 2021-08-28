@@ -182,7 +182,7 @@ class Dashboard:
 
         ]
         self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='FundLess', update_title='FundLess...', suppress_callback_exceptions=False,
+                             title='Fundless', update_title='Fundless...', suppress_callback_exceptions=False,
                              meta_tags=[
                                  {"name": "viewport", "content": "width=device-width, initial-scale=1"},
                              ]
