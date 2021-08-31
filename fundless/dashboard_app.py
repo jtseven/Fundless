@@ -402,10 +402,10 @@ class Dashboard:
         worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
         self.top_symbols = top_gainers['symbol'].values
         self.top_performances = top_gainers['performance'].values
-        self.top_growth = top_gainers['value'].values - top_gainers['cost'].values
+        self.top_growth = top_gainers['value'].values - top_gainers[self.analytics.base_cost_row].values
         self.worst_symbols = worst_gainers['symbol'].values
         self.worst_performances = worst_gainers['performance'].values
-        self.worst_growth = worst_gainers['value'].values - worst_gainers['cost'].values
+        self.worst_growth = worst_gainers['value'].values - worst_gainers[self.analytics.base_cost_row].values
 
     def get_timerange(self, value: str):
         now = datetime.datetime.now()

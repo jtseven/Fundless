@@ -1,23 +1,18 @@
 import pandas as pd
 from pathlib import Path
-
+import logging
 import requests.exceptions
 from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
-from pydantic.types import constr
+from pydantic.types import constr, Optional
 import plotly.express as px
 from typing import Tuple
 import numpy as np
-from time import time
+from time import time, sleep
 from redo import retrying
 from threading import Lock
 
 from config import Config
-
-csv_dtypes = {'buy_symbol': 'object', 'sell_symbol': 'object', 'price': 'float64',
-              'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'object'}
-trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol']
-index_cols = ['symbol', 'amount', 'value', 'current_price', 'allocation']
 
 date_time_regex = '(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})'
 
@@ -46,24 +41,67 @@ class PortfolioAnalytics:
     last_trades_update: float = 0
 
     def __init__(self, file_path, config: Config):
+        self.logger = logging.getLogger('AnalyticsLogger')
         self.config = config.trading_bot_config
+        self.base_cost_row = f'cost_{self.config.base_currency.value.lower()}'
+        self.csv_dtypes = {'buy_symbol': 'object', 'sell_symbol': 'object', 'price': 'float64',
+                           'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'object',
+                           self.base_cost_row: 'float64'}
+        self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
+                            self.base_cost_row]
         self.trades_file = Path(file_path)
+        self.coingecko = CoinGeckoAPI()
+        self.update_markets()
         if self.trades_file.exists():
             self.update_trades_df()
         else:
-            self.trades_df = pd.DataFrame(columns=trades_cols)
+            self.trades_df = pd.DataFrame(columns=self.trades_cols)
             self.trades_df.to_csv(self.trades_file, index=False)
             self.last_trades_update = time()
-        self.coingecko = CoinGeckoAPI()
-        self.update_markets()
+        self.update_index_df()
         self.update_historical_prices()
+
+    def get_coin_id(self, symbol: str):
+        symbol = symbol.lower()
+        coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
+        return coin_id
+
+    def get_coin_name(self, symbol: str):
+        symbol = symbol.lower()
+        coin_name = self.markets.loc[self.markets['symbol'] == symbol, ['name']].values[0][0]
+        return coin_name
 
     def update_trades_df(self):
         if self.last_trades_update < time() - 60:
-            trades_df = pd.read_csv(self.trades_file, dtype=csv_dtypes, parse_dates=['date'])
-            trades_df['date'] = trades_df['date'].dt.tz_localize('UTC')
+            trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=['date'])
+            if trades_df['date'].iloc[0].tzinfo is None:
+                trades_df['date'] = trades_df['date'].dt.tz_localize('UTC')
+
+
+            update_file = False
+            if self.base_cost_row not in trades_df.columns:  # the cost denoted in base_currency rather than buy_symbol
+                print('Updating your trades file with historic cost in base currency, this will take a while '
+                      'but is only performed once!')
+
+                def compute_base_cost(row):
+                    date = row.date.strftime('%d-%m-%Y')
+                    coin_id = self.get_coin_id(row.sell_symbol)
+                    func = lambda: self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
+                        'market_data']['current_price'][self.config.base_currency.value.lower()] * row.cost
+
+                    with retrying(func, sleeptime=60, sleepscale=1, jitter=0,
+                                  retry_exceptions=(requests.exceptions.HTTPError,)) as get_base_cost:
+                        base_cost = get_base_cost()
+
+                    return base_cost
+
+                trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
+                update_file = True
+
             self.trades_df = trades_df
             self.last_trades_update = time()
+            if update_file:
+                self.update_file()
 
     def update_file(self):
         self.trades_df.sort_values('date', inplace=True)
@@ -88,9 +126,13 @@ class PortfolioAnalytics:
         self.markets = markets
         self.last_market_update = time()
 
+        if self.last_trades_update > 0:
+            self.update_index_df()
+
+    def update_index_df(self):
         # update index portfolio value
         other = pd.DataFrame(index=self.config.cherry_pick_symbols)
-        index_df = self.trades_df[['buy_symbol', 'amount', 'cost']].copy().groupby('buy_symbol').sum()
+        index_df = self.trades_df[['buy_symbol', 'amount', self.base_cost_row]].copy().groupby('buy_symbol').sum()
         index_df.index = index_df.index.str.lower()
         index_df = pd.merge(index_df, other, how='outer', left_index=True, right_index=True)
         index_df.fillna(value=0, inplace=True, axis='columns')
@@ -98,19 +140,32 @@ class PortfolioAnalytics:
         index_df['value'] = index_df['current_price'] * index_df['amount']
         index_df['allocation'] = index_df['value'] / index_df['value'].sum()
         index_df['symbol'] = index_df['symbol'].str.upper()
-        index_df['performance'] = index_df['value'] / index_df['cost'] - 1
+        index_df['performance'] = index_df['value'] / index_df[self.base_cost_row] - 1
         self.index_df = index_df
 
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
-                  cost: float, fee: float, fee_symbol: str):
+                  cost: float, fee: float, fee_symbol: str, base_cost: Optional[float]=None):
+
+        if base_cost is None:
+            coin_id = self.get_coin_id(sell_symbol)
+            base_currency = self.config.base_currency.value
+            try:
+                with retrying(self.coingecko.get_price, sleeptime=1, sleepscale=1.5, jitter=0,
+                              retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+                    base_cost = get_price(ids=coin_id, vs_currencies=base_currency)[coin_id][base_currency]
+            except requests.exceptions.HTTPError:
+                self.logger.error('Could not pull cost of trade in base currency from API! Added np.nan as cost')
+                base_cost = np.nan
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
-                      'fee_symbol': [fee_symbol.upper()]}
+                      'fee_symbol': [fee_symbol.upper()],
+                      self.base_cost_row: [base_cost]
+                      }
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
-        self.trades_df['date'] = pd.to_datetime(self.trades_df['date'], infer_datetime_format=True)
+        self.trades_df['date'] = pd.to_datetime(self.trades_df['date'], infer_datetime_format=True, utc=True)
         self.update_file()
 
     def index_balance(self) -> Tuple:
@@ -125,11 +180,11 @@ class PortfolioAnalytics:
         return symbols, amounts, values, allocations
 
     def performance(self, current_portfolio_value: float) -> float:
-        amount_invested = self.trades_df['cost'].sum()
+        amount_invested = self.trades_df[self.base_cost_row].sum()
         return current_portfolio_value / amount_invested - 1
 
     def invested(self) -> float:
-        return self.trades_df['cost'].sum()
+        return self.trades_df[self.base_cost_row].sum()
 
     def allocation_pie(self, as_image=False, title=True):
         try:
@@ -187,7 +242,7 @@ class PortfolioAnalytics:
             for coin in self.index_df['symbol'].str.lower():
                 id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
                 try:
-                    with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=0.5, sleepscale=1, jitter=0,
+                    with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=1, sleepscale=1.5, jitter=0,
                                   retry_exceptions=(requests.exceptions.HTTPError, )) as get_history:
                         data = get_history(id=id, vs_currency=self.config.base_currency.value,
                                            from_timestamp=from_timestamp, to_timestamp=to_timestamp)
@@ -261,11 +316,11 @@ class PortfolioAnalytics:
         if start_time+pd.Timedelta(days=2) < price_history.index.min():
             price_history = price_history.append(pd.DataFrame(0, index=[start_time], columns=price_history.columns)).sort_index()
 
-        invested = self.trades_df[['date', 'buy_symbol', 'cost']].groupby(
+        invested = self.trades_df[['date', 'buy_symbol', self.base_cost_row]].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
         value = self.trades_df[['date', 'buy_symbol', 'amount']].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
-        invested = invested.pivot(index='date', columns='buy_symbol', values='cost')
+        invested = invested.pivot(index='date', columns='buy_symbol', values=self.base_cost_row)
         invested = invested.cumsum().fillna(method='pad').fillna(0)
         invested = invested.reindex(price_history.index, method='pad').fillna(0)
         invested.columns = invested.columns.str.lower()
