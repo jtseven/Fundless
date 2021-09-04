@@ -22,8 +22,8 @@ class ExchangeEnum(str, MultiValueEnum):
 
 
 class BaseCurrencyEnum(str, MultiValueEnum):
-    eur = 'EUR', '€', 'euro', 'Euro', 'eur'
-    usd = 'USD', '$', 'usd', 'US Dollar', 'usdollar'
+    eur = 'EUR', '€', 'Euro', 'euro', 'eur'
+    usd = 'USD', '$', 'US Dollar', 'usd', 'usdollar'
     btc = 'BTC', 'btc', 'Bitcoin', 'bitcoin'
     eth = 'ETH', 'eth', 'Ethereum', 'ethereum', 'ether'
 
@@ -110,7 +110,7 @@ class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
     test_mode: bool
     base_currency: BaseCurrencyEnum
-    base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd|eur)$')
+    base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd|eur|btc)$')
     savings_plan_cost: confloat(gt=0, le=10000)
     savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
     savings_plan_execution_time: constr(regex='^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')

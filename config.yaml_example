@@ -18,6 +18,8 @@ trading_bot:
       - usdc
       - usdt
       - usd
+      - eur
+      - btc
     selected: busd
   savings_plan:
     cost: 500  # denoted in base_currency

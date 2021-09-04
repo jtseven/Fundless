@@ -61,6 +61,22 @@ class PortfolioAnalytics:
         self.update_index_df()
         self.update_historical_prices()
 
+    def base_symbol_to_base_currency(self, base_symbol_amount: float):
+        base_symbol_id = self.get_coin_id(self.config.base_symbol)
+        with retrying(self.coingecko.get_price, sleeptime=30, sleepscale=1, jitter=0,
+                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency)[
+                base_symbol_id][self.config.base_currency]
+        return base_symbol_amount * base_symbol_price
+
+    def base_currency_to_base_symbol(self, base_currency_amount: float):
+        base_symbol_id = self.get_coin_id(self.config.base_symbol)
+        with retrying(self.coingecko.get_price, sleeptime=30, sleepscale=1, jitter=0,
+                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency.value.lower())[
+                base_symbol_id][self.config.base_currency.value.lower()]
+        return base_currency_amount / base_symbol_price
+
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
         coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
@@ -146,18 +162,9 @@ class PortfolioAnalytics:
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
-                  cost: float, fee: float, fee_symbol: str, base_cost: Optional[float]=None):
-
+                  cost: float, fee: float, fee_symbol: str, base_cost: Optional[float] = None):
         if base_cost is None:
-            coin_id = self.get_coin_id(sell_symbol)
-            base_currency = self.config.base_currency.value
-            try:
-                with retrying(self.coingecko.get_price, sleeptime=1, sleepscale=1.5, jitter=0,
-                              retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-                    base_cost = get_price(ids=coin_id, vs_currencies=base_currency)[coin_id][base_currency]
-            except requests.exceptions.HTTPError:
-                self.logger.error('Could not pull cost of trade in base currency from API! Added np.nan as cost')
-                base_cost = np.nan
+            base_cost = self.base_symbol_to_base_currency(cost)
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],

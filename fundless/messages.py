@@ -281,6 +281,12 @@ class TelegramBot:
     @authorized_only
     def _rebalancing_question(self, update: Update, context: CallbackContext):
         update.message.reply_text("Great!")
+        update.message.reply_text(
+            f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} {self.currency_string}")
+        update.message.reply_text(
+            f"Buying with {self.trading_bot.analytics.base_currency_to_base_symbol(self.trading_bot.bot_config.savings_plan_cost):,.4f}" +
+            f" {self.trading_bot.analytics.get_coin_name(self.trading_bot.bot_config.base_symbol)}"
+        )
         update.message.reply_text("I will first check, if rebalancing of your portfolio is recommended...")
 
         allocation_error = self.trading_bot.allocation_error()
@@ -290,12 +296,13 @@ class TelegramBot:
             err = abs(rel_to_volume.max())
             update.message.reply_text(f"The absolute allocation error of {symbol} is {err:.1%} of your order volume!")
             reply_keyboard = [[
-                "Yes (recommended)",
+                "Yes",
                 "No"
             ]]
             markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
             update.message.reply_text("Would you like me to rebalance your portfolio with this savings plan execution?",
                                       reply_markup=markup)
+            update.message.reply_text("I would recommend to execute rebalancing")
             return REBALANCING_DECISION
         else:
             update.message.reply_text("Ahh perfect, your portfolio looks well balanced!")
@@ -305,7 +312,7 @@ class TelegramBot:
                 "No"
             ]]
             markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
-            update.message.reply_text("Should I proceed with a overview of the planned buy order?", reply_markup=markup)
+            update.message.reply_text("Should I proceed with an overview of the planned buy order?", reply_markup=markup)
             return PLANNING
 
     @authorized_only
@@ -329,8 +336,6 @@ class TelegramBot:
         if update.message.text == 'Yes':
             update.message.reply_text(
                 f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
-            update.message.reply_text(
-                f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} {self.currency_string} ...")
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
@@ -403,7 +408,8 @@ class TelegramBot:
                 msg += f"\n  - {symbol.split('/')[0].upper()}"
                 volume += order_report[symbol]['cost']
             msg += "\n---------------------------"
-            msg += f"\n-- Filled Volume: {volume:<4.0f} {self.currency_string} --"
+            base_currency_volume = self.trading_bot.analytics.base_symbol_to_base_currency(volume)
+            msg += f"\n-- Filled Volume: {base_currency_volume:<4.0f} {self.currency_string} --"
             msg += "\n```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
 

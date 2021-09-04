@@ -79,7 +79,7 @@ class TradingBot:
 
         return symbols, amounts, values, allocations
 
-    def allocation_error(self, order_volume: float = None) -> dict:
+    def allocation_error(self, base_currency_volume: float = None) -> dict:
         allocation_error = {}
 
         symbols, amounts, values, allocations = self.analytics.index_balance()
@@ -91,14 +91,14 @@ class TradingBot:
         allocation_error['absolute'] = values - index_weights * values.sum()
         allocation_error['index_weights'] = index_weights
 
-        volume = order_volume or self.bot_config.savings_plan_cost
+        volume = base_currency_volume or self.bot_config.savings_plan_cost
         allocation_error['rel_to_order_volume'] = \
             np.divide(np.abs(allocation_error['absolute']), volume)
 
         return allocation_error
 
-    def rebalancing_weights(self, order_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
-        volume = order_volume or self.bot_config.savings_plan_cost
+    def rebalancing_weights(self, base_currency_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
+        volume = base_currency_volume or self.bot_config.savings_plan_cost
         allocation_error = self.allocation_error()
         index_weights = allocation_error['index_weights']
         absolute_error = allocation_error['absolute']
@@ -110,8 +110,9 @@ class TradingBot:
         weights = volumes / volumes.sum()
         return allocation_error['symbols'], weights
 
-    def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, order_volume: float = None):
-        volume = order_volume or self.bot_config.savings_plan_cost
+    def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None):
+        volume = base_currency_volume or self.bot_config.savings_plan_cost
+        volume = self.analytics.base_currency_to_base_symbol(volume)
         volume_fail = self.check_order_limits(symbols, weights, volume, fail_fast=True)
         if len(volume_fail) > 0:
             sorter = weights.argsort()
@@ -166,7 +167,7 @@ class TradingBot:
             weights = weights / weights.sum()
         return symbols, weights
 
-    def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float):
+    def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float):
         # Pull latest market data
         self.exchange.fetch_markets()
         # Check for any complications
@@ -182,7 +183,7 @@ class TradingBot:
         if problems['occurred']:
             return problems
 
-        volume_fail = self.check_order_limits(symbols, weights, volume_usd)
+        volume_fail = self.check_order_limits(symbols, weights, base_symbol_volume)
         if len(volume_fail) > 0:
             for symbol in volume_fail:
                 print(f"The order amount of {symbol.upper()} is to low! Skipping...")
@@ -195,22 +196,25 @@ class TradingBot:
             balance = balance['free'][self.bot_config.base_symbol.upper()]
         else:
             balance = balance['total'][self.bot_config.base_symbol.upper()]
-        if balance < self.bot_config.savings_plan_cost:
+        if balance < base_symbol_volume:
             print(
-                f"Warning: Insufficient funds to execute savings plan! Your have {balance:.2f} {self.bot_config.base_symbol.upper()}")
+                f"Warning: Insufficient funds to execute savings plan! You have {balance:.2f} {self.bot_config.base_symbol.upper()}")
             problems['occurred'] = True
             problems['fail'] = True
             problems['description'] = \
-                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}'
+                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}' + \
+                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.base_symbol.upper()}'
         return problems
 
-    def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float, fail_fast=False):
+    def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
         volume_fail = []
         for symbol, weight in zip(symbols, weights):
+            if symbol.lower() == self.bot_config.base_symbol.lower():
+                continue
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
-            cost = weight * volume_usd
-            amount = weight * volume_usd / price
+            cost = weight * base_symbol_volume
+            amount = weight * base_symbol_volume / price
 
             if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
                 volume_fail.append(symbol)
@@ -224,9 +228,10 @@ class TradingBot:
         return volume_fail
 
     # Place a weighted market buy order on Binance for multiple coins
-    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, volume_usd: float = None,
+    def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None,
                            order_type: OrderTypeEnum = OrderTypeEnum.market) -> dict:
-        volume = volume_usd or self.bot_config.savings_plan_cost  # order volume denoted in base currency
+        volume = base_currency_volume or self.bot_config.savings_plan_cost  # order volume denoted in base currency
+        volume = self.analytics.base_currency_to_base_symbol(volume)
         print_order_allocation(symbols, weights)
         self.exchange.load_markets()
         report = {'problems': self.check_order_executable(symbols, weights, volume), 'order_ids': []}
@@ -239,8 +244,13 @@ class TradingBot:
         placed_symbols = []
 
         # Start buying
-        before = self.exchange.fetch_total_balance()
+        # before = self.exchange.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
+            if symbol.lower() == self.bot_config.base_symbol.lower():
+                print(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
+                placed_symbols.append(symbol.upper())
+                placed_ids.append(-weight*volume)  # storing the imagined cost of this order as a negative id as suboptimal workaround
+                continue
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
             limit_price = 0.998*price
@@ -270,8 +280,8 @@ class TradingBot:
         report['order_ids'] = placed_ids
         report['symbols'] = placed_symbols
         report['invalid_symbols'] = invalid
-        # Report state of portfolio before and after buy orders
-        after = self.exchange.fetch_total_balance()
+        # # Report state of portfolio before and after buy orders
+        # after = self.exchange.fetch_total_balance()
         return report
 
     def check_orders(self, order_ids: List, symbols: List) -> dict:
@@ -279,25 +289,41 @@ class TradingBot:
         open_orders = []
         order_report = {symbol: {} for symbol in symbols}
         for id, symbol in zip(order_ids, symbols):
-            order = self.exchange.fetch_order(id, symbol)
-            if order['status'] == 'closed':
+            if id < 0:
+                # this is a 'fake' order, when buying coin equals the base symbol we are using to buy the index
                 order_report[symbol]['status'] = 'closed'
-                order_report[symbol]['price'] = order['price']
-                order_report[symbol]['cost'] = order['cost']
-                closed_orders.append(symbol)
-                self.analytics.add_trade(date=datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
-                                         buy_symbol=order['symbol'].split('/')[0],
-                                         sell_symbol=order['symbol'].split('/')[1],
-                                         price=order['price'],
-                                         amount=order['amount'],
-                                         cost=order['cost'],
-                                         fee=order['fee'] or 0.0,
-                                         fee_symbol='')
-            elif order['status'] == 'open':
-                order_report['symbol'] = 'open'
-                open_orders.append(symbol)
+                price = 1
+                cost = -1 * id  # the imagined cost of this order is stored in place of the id of regular orders
+                amount = cost
+                date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                buy_symbol = symbol.upper()
+                sell_symbol = symbol.upper()
+                fee = 0
             else:
-                print('Your order is neither open, nor closed... something went wrong!')
+                order = self.exchange.fetch_order(id, symbol)
+                if order['status'] == 'open':
+                    order_report['symbol'] = 'open'
+                    open_orders.append(symbol)
+                    continue
+                order_report[symbol]['status'] = 'closed'
+                price = order['price']
+                amount = order['amount']
+                cost = order['cost']
+                date = datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S')
+                buy_symbol = order['symbol'].split('/')[0]
+                sell_symbol = order['symbol'].split('/')[1]
+                fee = order['fee']
+            order_report[symbol]['price'] = price
+            order_report[symbol]['cost'] = cost
+            closed_orders.append(symbol)
+            self.analytics.add_trade(date=date,
+                                     buy_symbol=buy_symbol,
+                                     sell_symbol=sell_symbol,
+                                     price=price,
+                                     amount=amount,
+                                     cost=cost,
+                                     fee=fee,
+                                     fee_symbol='')
         order_report['closed'] = closed_orders
         order_report['open'] = open_orders
         return order_report
