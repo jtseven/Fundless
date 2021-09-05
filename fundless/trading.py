@@ -4,6 +4,7 @@ import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from typing import List, Tuple
 from datetime import datetime
+from redo import retrying
 
 from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
@@ -53,6 +54,7 @@ class TradingBot:
         self.exchange.load_markets()
 
     def balance(self) -> Tuple:
+        # TODO fix for different base symbol and base currency and use analytics module
         try:
             data = self.exchange.fetch_total_balance()
             markets = self.exchange.fetch_tickers()
@@ -125,7 +127,7 @@ class TradingBot:
                 check = self.check_order_limits(check_symbols, check_weights, volume, fail_fast=True)
                 if len(check) == 0:
                     return check_symbols, check_weights
-            raise ValueError('Order is not executable, overall volume too low!')
+            return [], []  # the volume is too low even when buying just one coin -> no order executable
         return symbols, weights
 
     # Compute the weights by market cap, fetching data from coingecko
@@ -212,7 +214,13 @@ class TradingBot:
             if symbol.lower() == self.bot_config.base_symbol.lower():
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
-            price = self.exchange.fetch_ticker(ticker).get('last')
+            try:
+                price = self.exchange.fetch_ticker(ticker).get('last')
+            except ccxt.errors.BadSymbol:
+                volume_fail.append(symbol)
+                if fail_fast:
+                    return volume_fail
+                continue
             cost = weight * base_symbol_volume
             amount = weight * base_symbol_volume / price
 
@@ -275,7 +283,7 @@ class TradingBot:
             else:
                 print(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 placed_symbols.append(ticker)
-                placed_ids.append(order['id'])
+                placed_ids.append(int(order['id']))
 
         report['order_ids'] = placed_ids
         report['symbols'] = placed_symbols
@@ -300,7 +308,9 @@ class TradingBot:
                 sell_symbol = symbol.upper()
                 fee = 0
             else:
-                order = self.exchange.fetch_order(id, symbol)
+                with retrying(self.exchange.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
+                              retry_exceptions=(ccxt.errors.BaseError,)) as fetch_order:
+                    order = fetch_order(id, symbol)
                 if order['status'] == 'open':
                     order_report['symbol'] = 'open'
                     open_orders.append(symbol)

@@ -248,6 +248,10 @@ class TelegramBot:
             symbols, weights = self.trading_bot.fetch_index_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
             symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
+        if len(symbols_filtered) == 0:
+            update.message.reply_text('Your order is not executable, as your overall savings plan volume is to low!')
+            update.message.reply_text("Set up a higher savings plan!")
+            return ConversationHandler.END
         if len(symbols_filtered) < len(symbols):
             update.message.reply_text("The order volume is too low, to buy the following coins:")
             update.message.reply_text(f"{[symbol for symbol in symbols if symbol not in symbols_filtered]}")
@@ -366,8 +370,7 @@ class TelegramBot:
             else:
                 order_ids = report['order_ids']
                 placed_symbols = report['symbols']
-                update.message.reply_text("I did it!")
-                update.message.reply_text("Was a pleasure working with you")
+                update.message.reply_text("Done! I placed your orders")
                 update.message.reply_text(
                     "I will check if your orders went threw in a few seconds and get back to you :)")
                 context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1, update))

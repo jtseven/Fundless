@@ -65,8 +65,8 @@ class PortfolioAnalytics:
         base_symbol_id = self.get_coin_id(self.config.base_symbol)
         with retrying(self.coingecko.get_price, sleeptime=30, sleepscale=1, jitter=0,
                       retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency)[
-                base_symbol_id][self.config.base_currency]
+            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency.value.lower())[
+                base_symbol_id][self.config.base_currency.value.lower()]
         return base_symbol_amount * base_symbol_price
 
     def base_currency_to_base_symbol(self, base_currency_amount: float):
@@ -92,7 +92,6 @@ class PortfolioAnalytics:
             trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=['date'])
             if trades_df['date'].iloc[0].tzinfo is None:
                 trades_df['date'] = trades_df['date'].dt.tz_localize('UTC')
-
 
             update_file = False
             if self.base_cost_row not in trades_df.columns:  # the cost denoted in base_currency rather than buy_symbol
@@ -162,9 +161,14 @@ class PortfolioAnalytics:
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
-                  cost: float, fee: float, fee_symbol: str, base_cost: Optional[float] = None):
+                  cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None):
         if base_cost is None:
             base_cost = self.base_symbol_to_base_currency(cost)
+        if fee is None:
+            fee = 0
+        if fee_symbol is None:
+            fee_symbol = ''
+        date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
@@ -172,7 +176,6 @@ class PortfolioAnalytics:
                       }
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
-        self.trades_df['date'] = pd.to_datetime(self.trades_df['date'], infer_datetime_format=True, utc=True)
         self.update_file()
 
     def index_balance(self) -> Tuple:
