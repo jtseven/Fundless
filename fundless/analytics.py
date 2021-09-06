@@ -95,6 +95,7 @@ class PortfolioAnalytics:
 
             update_file = False
             if self.base_cost_row not in trades_df.columns:  # the cost denoted in base_currency rather than buy_symbol
+                # TODO fill nan values if any in base_cost column
                 print('Updating your trades file with historic cost in base currency, this will take a while '
                       'but is only performed once!')
 

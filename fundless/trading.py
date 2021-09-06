@@ -1,3 +1,4 @@
+import math
 import ccxt
 import numpy as np
 import pandas as pd
@@ -175,6 +176,8 @@ class TradingBot:
         # Check for any complications
         problems = {'symbols': {}, 'fail': False, 'occurred': False, 'description': '', 'skip_coins': []}
         for symbol, weight in zip(symbols, weights):
+            if symbol.lower() == self.bot_config.base_symbol.lower():
+                continue
             ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
             if ticker not in self.exchange.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
@@ -198,14 +201,38 @@ class TradingBot:
             balance = balance['free'][self.bot_config.base_symbol.upper()]
         else:
             balance = balance['total'][self.bot_config.base_symbol.upper()]
+        insufficient = False
         if balance < base_symbol_volume:
+            insufficient = True
+            problems['description'] = \
+                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}' + \
+                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.base_symbol.upper()}'
+        if self.bot_config.base_symbol.upper() in symbols:
+            index_symbols, index_amounts, _, _ = self.analytics.index_balance()
+            index = index_symbols.tolist().index(self.bot_config.base_symbol.upper())
+            base_symbol_index_balance = index_amounts[index]
+            if balance < base_symbol_volume + base_symbol_index_balance:
+                insufficient = True
+                balance_oom = math.floor(math.log(balance-base_symbol_index_balance, 10))
+                volume_oom = math.floor(math.log(base_symbol_volume, 10))
+                bal_prec = 2
+                vol_prec = 2
+                if volume_oom <= -2:
+                    vol_prec = -1 * volume_oom + 1
+                if balance_oom <= -2:
+                    bal_prec = -1 * balance_oom + 1
+                balance_string = f'{balance-base_symbol_index_balance:.{bal_prec}f} {self.bot_config.base_symbol.upper()}'
+                balance_base_curr = self.analytics.base_symbol_to_base_currency(balance-base_symbol_index_balance)
+                volume_base_curr = self.analytics.base_symbol_to_base_currency(base_symbol_volume)
+                volume_string = f'{base_symbol_volume:.{vol_prec}f} {self.bot_config.base_symbol.upper()}'
+                problems['description'] = \
+                f'Insufficient funds to execute savings plan, you have {balance_string} ({balance_base_curr:.2f} {self.bot_config.base_currency.values[1]})' + \
+                f' available over the ones in your portfolio.\nYou need {volume_string} ({volume_base_curr:.0f} {self.bot_config.base_currency.values[1]})'
+        if insufficient:
             print(
                 f"Warning: Insufficient funds to execute savings plan! You have {balance:.2f} {self.bot_config.base_symbol.upper()}")
             problems['occurred'] = True
             problems['fail'] = True
-            problems['description'] = \
-                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}' + \
-                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.base_symbol.upper()}'
         return problems
 
     def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
