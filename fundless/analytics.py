@@ -1,6 +1,5 @@
 import pandas as pd
 from pathlib import Path
-import logging
 import requests.exceptions
 import schedule
 from pycoingecko import CoinGeckoAPI
@@ -13,12 +12,13 @@ from time import time, sleep
 from redo import retrying
 from threading import Lock
 import datetime
-from collections import Counter
 from threading import Thread
 import logging
+from currency_converter import CurrencyConverter
 
 from config import Config, TradingBotConfig, WeightingEnum
 from utils import print_crypto_amount
+from constants import FIAT_SYMBOLS
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ class PortfolioAnalytics:
             self.last_trades_update = time()
         self.update_data()
         self.run_api_updates()
+        self.currency_converter = CurrencyConverter()
 
     def run_api_updates(self):
         if self.running_updates:
@@ -106,7 +107,11 @@ class PortfolioAnalytics:
 
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
-        coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
+        try:
+            coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
+        except IndexError:
+            logger.warning(f"No coin ID found in Coingecko market data for {symbol.upper()}!")
+            return symbol.upper()
         return coin_id
 
     def get_coin_name(self, symbol: str, abbr=False):
@@ -128,25 +133,40 @@ class PortfolioAnalytics:
             return 'assets/coins-solid.png'
         return image
 
-    def base_symbol_to_base_currency(self, base_symbol_amount: float):
-        if self.config.trading_bot_config.base_currency.value.lower() == self.config.trading_bot_config.base_symbol.lower():
-            return base_symbol_amount
-        base_symbol_id = self.get_coin_id(self.config.trading_bot_config.base_symbol)
-        with retrying(self.coingecko.get_price, sleeptime=20, sleepscale=1, jitter=0,
+    def convert(self, amount: float, from_symbol: str, to_symbol: str):
+        from_symbol = from_symbol.upper()
+        to_symbol = to_symbol.upper()
+        if from_symbol == to_symbol:
+            # nothing to convert
+            return amount
+        elif from_symbol in FIAT_SYMBOLS and to_symbol in FIAT_SYMBOLS:
+            # convert fiat to fiat
+            return self.currency_converter.convert(amount, from_symbol, to_symbol)
+        elif from_symbol in FIAT_SYMBOLS:
+            # convert fiat to crypto
+            to_symbol_price = self.get_crypto_price(to_symbol, from_symbol)
+            return amount / to_symbol_price
+        else:
+            # convert crypto to crypto/fiat
+            from_symbol_price = self.get_crypto_price(from_symbol, to_symbol)
+            return amount * from_symbol_price
+
+    def get_crypto_price(self, crypto: str, vs_currency: str):
+        crypto_id = self.get_coin_id(crypto)
+        with retrying(self.coingecko.get_price, sleeptime=1, sleepscale=2, jitter=0,
                       retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.trading_bot_config.base_currency.value.lower())[
-                base_symbol_id][self.config.trading_bot_config.base_currency.value.lower()]
-        return base_symbol_amount * base_symbol_price
+            price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][vs_currency.lower()]
+        return price
+
+    def base_symbol_to_base_currency(self, base_symbol_amount: float):
+        base_currency = self.config.trading_bot_config.base_currency.value.upper()
+        base_symbol = self.config.trading_bot_config.base_symbol.upper()
+        return self.convert(base_symbol_amount, base_symbol, base_currency)
 
     def base_currency_to_base_symbol(self, base_currency_amount: float):
-        if self.config.trading_bot_config.base_currency.value.lower() == self.config.trading_bot_config.base_symbol.lower():
-            return base_currency_amount
-        base_symbol_id = self.get_coin_id(self.config.trading_bot_config.base_symbol)
-        with retrying(self.coingecko.get_price, sleeptime=20, sleepscale=1, jitter=0,
-                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.trading_bot_config.base_currency.value.lower())[
-                base_symbol_id][self.config.trading_bot_config.base_currency.value.lower()]
-        return base_currency_amount / base_symbol_price
+        base_currency = self.config.trading_bot_config.base_currency.value.upper()
+        base_symbol = self.config.trading_bot_config.base_symbol.upper()
+        return self.convert(base_currency_amount, base_currency, base_symbol)
 
     def update_trades_df(self):
         if self.last_trades_update < time() - 60:

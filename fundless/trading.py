@@ -9,6 +9,7 @@ import logging
 from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
+from constants import USD_SYMBOLS
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ class TradingBot:
     analytics: PortfolioAnalytics
     secrets: SecretsStore
     exchange: ccxt.Exchange
-    usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
     def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
         self.bot_config = bot_config
@@ -71,7 +71,7 @@ class TradingBot:
         base = self.bot_config.trading_bot_config.base_symbol.upper()
         try:
             values = np.array([float(
-                markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in self.usd_symbols else amount
+                markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in USD_SYMBOLS else amount
                                for key, amount in zip(symbols, amounts)])
         except KeyError as e:
             print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
@@ -119,7 +119,7 @@ class TradingBot:
     def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None):
         volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
         volume = self.analytics.base_currency_to_base_symbol(volume)
-        volume_fail = self.check_order_limits(symbols, weights, volume, fail_fast=True)
+        volume_fail, reason = self.check_order_limits(symbols, weights, volume, fail_fast=True)
         if len(volume_fail) > 0:
             sorter = weights.argsort()
             sorted_weights = weights[sorter[1:]]
@@ -128,13 +128,13 @@ class TradingBot:
                 check_symbols = sorted_symbols[i:].copy()
                 check_weights = sorted_weights[i:].copy()
                 check_weights = check_weights/check_weights.sum()
-                check = self.check_order_limits(check_symbols, check_weights, volume, fail_fast=True)
+                check, reason = self.check_order_limits(check_symbols, check_weights, volume, fail_fast=True)
                 if len(check) == 0:
                     # sort by weight again
                     sorter = check_weights.argsort()
-                    return check_symbols[sorter[::-1]], check_weights[::-1]
-            return [], []  # the volume is too low even when buying just one coin -> no order executable
-        return symbols, weights
+                    return check_symbols[sorter[::-1]], check_weights[::-1], None
+            return [], [], reason  # the volume is too low even when buying just one coin -> no order executable
+        return symbols, weights, None
 
     def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float):
         # Pull latest market data
@@ -154,13 +154,13 @@ class TradingBot:
         if problems['occurred']:
             return problems
 
-        volume_fail = self.check_order_limits(symbols, weights, base_symbol_volume)
+        volume_fail, reason = self.check_order_limits(symbols, weights, base_symbol_volume)
         if len(volume_fail) > 0:
             for symbol in volume_fail:
-                print(f"The order amount of {symbol.upper()} is to low! Skipping...")
+                print(f"Order of {symbol.upper()} not possible: {reason}. Skipping...")
                 problems['occurred'] = True
-                problems['description'] = f'Order amount for {symbol.upper()} too low'
-                problems['symbols'][symbol] = 'amount too low'
+                problems['description'] = f'{symbol.upper()}: {reason}'
+                problems['symbols'][symbol] = reason
                 problems['skip_coins'].append(symbol)
         balance = self.exchange.fetch_balance()
         if balance['free'][self.bot_config.trading_bot_config.base_symbol.upper()] is not None:
@@ -204,6 +204,7 @@ class TradingBot:
 
     def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
         volume_fail = []
+        reason = ''
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 continue
@@ -211,23 +212,27 @@ class TradingBot:
             try:
                 price = self.exchange.fetch_ticker(ticker).get('last')
             except ccxt.errors.BadSymbol:
+                logger.warning(f"Ticker {ticker} is not available on the exchange!")
                 volume_fail.append(symbol)
                 if fail_fast:
-                    return volume_fail
+                    return volume_fail, f'Ticker not available'
                 continue
             cost = weight * base_symbol_volume
             amount = weight * base_symbol_volume / price
 
             if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
+                logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
                 volume_fail.append(symbol)
                 if fail_fast:
-                    return volume_fail
+                    return volume_fail, f'Order amount too low'
             elif cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
+                logger.warning(f"The cost of {cost} {self.bot_config.trading_bot_config.base_symbol.upper()}"
+                               f" is too low to place an order!")
                 volume_fail.append(symbol)
                 if fail_fast:
-                    return volume_fail
+                    return volume_fail, 'Order cost too low'
 
-        return volume_fail
+        return volume_fail, reason
 
     # Place a weighted market buy order on Binance for multiple coins
     def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None,

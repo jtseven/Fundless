@@ -243,14 +243,21 @@ class TelegramBot:
         if self.rebalance:
             symbols, weights = self.trading_bot.rebalancing_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered, reason = self.trading_bot.volume_corrected_weights(symbols, weights)
         else:
             symbols, weights = self.trading_bot.analytics.fetch_index_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered, reason = self.trading_bot.volume_corrected_weights(symbols, weights)
         if len(symbols_filtered) == 0:
-            update.message.reply_text('Your order is not executable, as your overall savings plan volume is to low!')
-            update.message.reply_text("Set up a higher savings plan!")
+            update.message.reply_text('Your order is not executable!')
+            if 'too low' in reason:
+                update.message.reply_text("Your order volume is too low!")
+            elif 'not available' in reason:
+                update.message.reply_text("The currency you selected for buying the coins is not available "
+                                          "on the exchange!")
+            else:
+                update.message.reply_text("Either your order volume is too low or the tickers you want"
+                                          " to trade are not available on the exchange!")
             return ConversationHandler.END
         vol_problems = [symbol for symbol in symbols if symbol not in symbols_filtered and symbol in self.config.trading_bot_config.cherry_pick_symbols]
         if len(vol_problems) > 0:
