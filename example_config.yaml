@@ -19,8 +19,6 @@ trading_bot:
     options:
       - eur
       - usd
-      - btc
-      - eth
     selected: eur
   base_symbol:  # symbol used to buy the index
     options:
@@ -28,6 +26,8 @@ trading_bot:
       - usdc
       - usdt
       - usd
+      - eur
+      - btc
     selected: btc
   savings_plan:
     cost: 50  # denoted in base_currency
