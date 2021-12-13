@@ -127,8 +127,6 @@ def create_page_with_sidebar():
     with open('fundless/templates/sidebar.html', 'r') as html_code:
         sidebar = convert_html_to_dash(html_code.read())
 
-    # page = sidebar
-
     page = html.Div(
         className='container-fluid overflow-hidden',
         children=[
@@ -187,7 +185,6 @@ def create_404(pathname: str):
 
 
 def create_info_cards(analytics: PortfolioAnalytics):
-    # analytics.update_portfolio_metrics()
     symbol = analytics.currency_symbol
     if analytics.performance > 0:
         color = 'text-success'
@@ -210,7 +207,6 @@ def create_info_cards(analytics: PortfolioAnalytics):
                 dbc.Card([
                     dbc.CardBody(
                         [
-                            # html.I(className='fa-solid fa-up', style={'fontsize': '36'}),
                             html.H1('Portfolio value', className='small text-secondary'),
                             html.H5(f'{analytics.net_worth:,.2f} {symbol}', className='card-text'),
                             html.H6(f'{prefix}{analytics.performance:,.2%}', className=f'card-text {color}')
@@ -455,6 +451,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
             dbc.Collapse([
                 html.Hr(),
                 dbc.Label("Custom Weights", html_for='custom_form', style={'font-weight': 'bold'}),
+                html.Br(),
                 dbc.FormText("Set your custom weights of the index", className='text-muted'),
                 dbc.Form(id='custom_form')
             ], id='custom-weighting-collapse')
@@ -463,7 +460,6 @@ def create_strategy_page(analytics: PortfolioAnalytics):
     ]))
     return html.Div([
         settings,
-        # DeferScript(src='assets/custom.js')
     ])
 
 
@@ -483,7 +479,6 @@ def create_weighting_sliders(analytics: PortfolioAnalytics):
                     width=10,
                 ),
             ],
-            row=True,
         ) for coin, weight in zip(*analytics.fetch_index_weights())
     ]
 
@@ -547,6 +542,5 @@ def create_trades_page(analytics: PortfolioAnalytics):
         [
             masonry_cards,
             DeferScript(src='https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js'),
-            # DeferScript(src='assets/custom.js')
         ],
         className='pt-4')

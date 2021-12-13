@@ -3,9 +3,10 @@ import secrets
 from os import environ as env
 from dotenv import load_dotenv, find_dotenv
 from functools import wraps
-from flask import session, redirect, Flask, render_template, url_for, request
+from flask import session, redirect, Flask, render_template, url_for, request, jsonify
 from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.parse import urlencode
+from werkzeug.exceptions import HTTPException
 
 from config import DashboardConfig, LoginProviderEnum, SecretsStore
 from utils import Constants
@@ -66,6 +67,12 @@ class LoginProvider:
                     'scope': 'openid profile email',
                 },
             )
+
+            @server.errorhandler(Exception)
+            def handle_auth_error(ex):
+                response = jsonify(message=str(ex))
+                response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
+                return response
 
     # def login(self, username: str = None, password: str = None):
     #     if self.provider == LoginProviderEnum.custom:

@@ -1,5 +1,4 @@
 import logging
-
 import dash
 from dash import dcc
 from dash import html
@@ -10,12 +9,7 @@ from dash_extensions.enrich import NoOutputTransform, DashProxy, Input, Output, 
 from dash_extensions import DeferScript
 from gevent.pywsgi import WSGIServer
 from collections import Counter
-
-# imports for auth0
-from werkzeug.exceptions import HTTPException
-from flask import jsonify, render_template
-from flask import redirect
-from flask import session
+from flask import render_template, redirect
 
 # local imports
 from config import Config
@@ -65,11 +59,9 @@ class Dashboard:
         self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
 
-        @server.errorhandler(Exception)
-        def handle_auth_error(ex):
-            response = jsonify(message=str(ex))
-            response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
-            return response
+        ########################################################################################################
+        #                                        Static Routes                                                 #
+        ########################################################################################################
 
         @server.route('/', strict_slashes=False)
         @server.route('/home', strict_slashes=False)
@@ -123,10 +115,7 @@ class Dashboard:
         self.app.layout = html.Div([
             dcc.Location(id='url', refresh=False),
             dcc.Location(id='redirect', refresh=True),
-            dcc.Store(id='login-status', storage_type='session'),
             layouts.create_page_with_sidebar(),
-            # html.Div(id='page-content'),
-            # DeferScript(src='https://code.jquery.com/jquery-3.6.0.slim.js'),
             DeferScript(src='https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.js'),
             DeferScript(src='assets/custom.js')
 
@@ -141,26 +130,9 @@ class Dashboard:
             layouts.create_404('')
         ])
 
-        # add callback for toggling the collapse of navbar on small screens
-        @self.app.callback(
-            Output("navbar-collapse", "is_open"),
-            [Input("navbar-toggler", "n_clicks")],
-            [State("navbar-collapse", "is_open")],
-        )
-        def toggle_navbar_collapse(n, is_open):
-            if n:
-                return not is_open
-            return is_open
-
-        @self.app.callback(
-            Output("collapse", "is_open"),
-            [Input("toggle", "n_clicks")],
-            [State("collapse", "is_open")],
-        )
-        def toggle_collapse(n, is_open):
-            if n:
-                return not is_open
-            return is_open
+        ########################################################################################################
+        #                                          Callbacks                                                   #
+        ########################################################################################################
 
         # Update pie chart and info cards (quick)
         @self.app.callback(Output('allocation_chart', 'figure'), Output('info_cards', 'children'),
@@ -222,7 +194,6 @@ class Dashboard:
                            Output('index_coins', 'value'))
         def reset_index_coins(_):
             coins = [sym for sym in self.analytics.config.trading_bot_config.cherry_pick_symbols]
-            # set_index(coins)
             return coins
 
         @self.app.callback(Input('index-holdings', 'n_clicks'),
