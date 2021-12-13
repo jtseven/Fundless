@@ -1,0 +1,113 @@
+
+.crypto-icon {
+    display: inline;
+    width: 4em;
+    margin-right: 1em;
+}
+
+.crypto-icon img {
+    height: 2em;
+    width: auto;
+}
+
+.collapsing {
+  -webkit-transition: height .15s ease;
+       -o-transition: height .15s ease;
+          transition: height .15s ease;
+}
+
+.card-item {
+
+}
+
+.crypto-icon-small {
+    display: inline;
+    height: 1em;
+    width: auto;
+    margin: 0.25em 0.25em;
+    vertical-align: middle;
+}
+
+.coin-symbol-group {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.trade-card-text {
+    display: inline-block;
+    /*max-width: 100px;*/
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trade-card-body {
+    height: auto;
+    width: auto;
+}
+
+.chart_time_range {
+    width: auto;
+    margin: 1rem 0;
+}
+
+.crypto-text {
+    vertical-align: middle;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.volume-input {
+    max-width: 10em
+}
+
+/* Align Badges within Info Cards for Coin Winners and Losers */
+h6>.badge {
+    margin-top: -0.25em;
+    margin-left: 0.5em;
+    vertical-align: middle;
+}
+
+.table-cell {
+    /*display: flex;*/
+    vertical-align: middle;
+    /*height: 4rem;*/
+    white-space: nowrap;
+    overflow: hidden;
+    align-items: center;
+}
+
+.settings-card {
+    margin-top: 2em;
+    margin-bottom: 2em;
+    padding: 1em 4em;
+}
+
+.info-text {
+    display: inline-block;
+    min-width: 5em;
+}
+
+.info-badge {
+    display: inline-block;
+    min-width: 5em;
+    /*margin-left: 5%;*/
+    /*margin-right: 5%;*/
+}
+
+.chart {
+    aspect-ratio: 2 / 1;
+}
+
+@media(max-width:575px) {
+    .crypto-text {
+        max-width: 100px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .settings-card {
+        padding: 1em 1em;
+    }
+}

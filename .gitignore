@@ -4,6 +4,9 @@ config.yaml
 trades.csv
 trades_backup.csv
 
+### Data CSV Files
+trades_backup*
+
 ### IDE Folders
 .vscode
 .idea

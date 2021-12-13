@@ -1,14 +1,17 @@
 import math
 import ccxt
 import numpy as np
-import pandas as pd
-from pycoingecko import CoinGeckoAPI
 from typing import List, Tuple
 from datetime import datetime
 from redo import retrying
+import logging
 
-from config import Config, TradingBotConfig, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
+from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
+from utils import print_crypto_amount
+
+logger = logging.getLogger(__name__)
+
 
 
 def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
@@ -19,30 +22,30 @@ def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
 
 
 class TradingBot:
-    bot_config: TradingBotConfig
+    bot_config: Config
     analytics: PortfolioAnalytics
     secrets: SecretsStore
     exchange: ccxt.Exchange
     usd_symbols = ['USD', 'USDT', 'BUSD', 'USDC']
 
     def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
-        self.bot_config = bot_config.trading_bot_config
+        self.bot_config = bot_config
         self.secrets = bot_config.secrets
         self.analytics = analytics
         self.init_exchange()
 
     def init_exchange(self):
-        if self.bot_config.exchange == ExchangeEnum.binance:
+        if self.bot_config.trading_bot_config.exchange == ExchangeEnum.binance:
             self.exchange = ccxt.binance()
-            if self.bot_config.test_mode:
+            if self.bot_config.trading_bot_config.test_mode:
                 self.exchange.apiKey = self.secrets.binance_test['api_key']
                 self.exchange.secret = self.secrets.binance_test['secret']
             else:
                 self.exchange.apiKey = self.secrets.binance['api_key']
                 self.exchange.secret = self.secrets.binance['secret']
-        elif self.bot_config.exchange == ExchangeEnum.kraken:
+        elif self.bot_config.trading_bot_config.exchange == ExchangeEnum.kraken:
             self.exchange = ccxt.kraken()
-            if self.bot_config.test_mode:
+            if self.bot_config.trading_bot_config.test_mode:
                 self.exchange.apiKey = self.secrets.kraken_test['api_key']
                 self.exchange.secret = self.secrets.kraken_test['secret']
             else:
@@ -51,7 +54,7 @@ class TradingBot:
         else:
             raise ValueError('Invalid Exchange given!')
 
-        self.exchange.set_sandbox_mode(self.bot_config.test_mode)
+        self.exchange.set_sandbox_mode(self.bot_config.trading_bot_config.test_mode)
         self.exchange.load_markets()
 
     def balance(self) -> Tuple:
@@ -65,13 +68,13 @@ class TradingBot:
             raise e
         symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
-        base = self.bot_config.base_symbol.upper()
+        base = self.bot_config.trading_bot_config.base_symbol.upper()
         try:
             values = np.array([float(
                 markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in self.usd_symbols else amount
                                for key, amount in zip(symbols, amounts)])
         except KeyError as e:
-            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.exchange.value} market data!")
+            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
             raise
         allocations = values/values.sum()*100
         sorted = values.argsort()
@@ -87,21 +90,21 @@ class TradingBot:
 
         symbols, amounts, values, allocations = self.analytics.index_balance()
         allocations = allocations
-        _, index_weights = self.fetch_index_weights(symbols)
+        symbols, index_weights = self.analytics.fetch_index_weights(symbols)
         allocation_error['symbols'] = symbols
         allocation_error['relative'] = np.divide(allocations/100, index_weights)
         allocation_error['percentage_points'] = allocations - (index_weights * 100)
         allocation_error['absolute'] = values - index_weights * values.sum()
         allocation_error['index_weights'] = index_weights
 
-        volume = base_currency_volume or self.bot_config.savings_plan_cost
+        volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
         allocation_error['rel_to_order_volume'] = \
             np.divide(np.abs(allocation_error['absolute']), volume)
 
         return allocation_error
 
     def rebalancing_weights(self, base_currency_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
-        volume = base_currency_volume or self.bot_config.savings_plan_cost
+        volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
         allocation_error = self.allocation_error()
         index_weights = allocation_error['index_weights']
         absolute_error = allocation_error['absolute']
@@ -114,7 +117,7 @@ class TradingBot:
         return allocation_error['symbols'], weights
 
     def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None):
-        volume = base_currency_volume or self.bot_config.savings_plan_cost
+        volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
         volume = self.analytics.base_currency_to_base_symbol(volume)
         volume_fail = self.check_order_limits(symbols, weights, volume, fail_fast=True)
         if len(volume_fail) > 0:
@@ -127,47 +130,10 @@ class TradingBot:
                 check_weights = check_weights/check_weights.sum()
                 check = self.check_order_limits(check_symbols, check_weights, volume, fail_fast=True)
                 if len(check) == 0:
-                    return check_symbols, check_weights
+                    # sort by weight again
+                    sorter = check_weights.argsort()
+                    return check_symbols[sorter[::-1]], check_weights[::-1]
             return [], []  # the volume is too low even when buying just one coin -> no order executable
-        return symbols, weights
-
-    # Compute the weights by market cap, fetching data from coingecko
-    # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
-    def fetch_index_weights(self, symbols: np.ndarray = None):
-        self.analytics.update_markets()
-        if symbols is not None:
-            symbols = [symbol.lower() for symbol in symbols]
-            picked_markets = self.analytics.markets.loc[self.analytics.markets['symbol'].isin(symbols)]
-            # sort df equal to symbols array
-            sorter_index = dict(zip(symbols, range(len(symbols))))
-            picked_markets['rank'] = picked_markets['symbol'].map(sorter_index)
-            picked_markets.sort_values('rank', ascending=True, inplace=True)
-        else:
-            picked_markets = self.analytics.markets.loc[self.analytics.markets['symbol'].isin(self.bot_config.cherry_pick_symbols)]
-            symbols = picked_markets['symbol'].values
-            if len(picked_markets) < len(self.bot_config.cherry_pick_symbols):
-                print("Warning: Market data for some coins was not available on CoinGecko, they are not included in the index:")
-                for coin in self.bot_config.cherry_pick_symbols:
-                    if coin not in symbols:
-                        print(f"\t{coin.upper()}")
-
-        if self.bot_config.portfolio_weighting == WeightingEnum.equal:
-            weights = np.full(len(symbols), float(1/len(symbols)))
-        elif self.bot_config.portfolio_weighting == WeightingEnum.custom:
-            weights = np.zeros(len(symbols))
-            for k, symbol in enumerate(symbols):
-                if symbol in self.bot_config.custom_weights:
-                    weights[k] = self.bot_config.custom_weights[symbol]
-            weights = weights / weights.sum()
-        else:
-            weights = picked_markets['market_cap'].values
-            if self.bot_config.portfolio_weighting == WeightingEnum.sqrt_market_cap:
-                weights = np.sqrt(weights)
-            elif self.bot_config.portfolio_weighting == WeightingEnum.sqrt_sqrt_market_cap:
-                weights = np.sqrt(np.sqrt(weights))
-            elif self.bot_config.portfolio_weighting == WeightingEnum.cbrt_market_cap:
-                weights = np.cbrt(weights)
-            weights = weights / weights.sum()
         return symbols, weights
 
     def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float):
@@ -176,9 +142,9 @@ class TradingBot:
         # Check for any complications
         problems = {'symbols': {}, 'fail': False, 'occurred': False, 'description': '', 'skip_coins': []}
         for symbol, weight in zip(symbols, weights):
-            if symbol.lower() == self.bot_config.base_symbol.lower():
+            if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 continue
-            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
+            ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             if ticker not in self.exchange.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
                 problems['occurred'] = True
@@ -197,50 +163,51 @@ class TradingBot:
                 problems['symbols'][symbol] = 'amount too low'
                 problems['skip_coins'].append(symbol)
         balance = self.exchange.fetch_balance()
-        if balance['free'][self.bot_config.base_symbol.upper()] is not None:
-            balance = balance['free'][self.bot_config.base_symbol.upper()]
+        if balance['free'][self.bot_config.trading_bot_config.base_symbol.upper()] is not None:
+            balance = balance['free'][self.bot_config.trading_bot_config.base_symbol.upper()]
         else:
-            balance = balance['total'][self.bot_config.base_symbol.upper()]
+            balance = balance['total'][self.bot_config.trading_bot_config.base_symbol.upper()]
         insufficient = False
         if balance < base_symbol_volume:
             insufficient = True
             problems['description'] = \
-                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.base_symbol.upper()}' + \
-                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.base_symbol.upper()}'
-        if self.bot_config.base_symbol.upper() in symbols:
+                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}' + \
+                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}'
+        if self.bot_config.trading_bot_config.base_symbol.upper() in symbols:
             index_symbols, index_amounts, _, _ = self.analytics.index_balance()
-            index = index_symbols.tolist().index(self.bot_config.base_symbol.upper())
+            index = index_symbols.tolist().index(self.bot_config.trading_bot_config.base_symbol.upper())
             base_symbol_index_balance = index_amounts[index]
             if balance < base_symbol_volume + base_symbol_index_balance:
+                available = balance - base_symbol_index_balance
                 insufficient = True
-                balance_oom = math.floor(math.log(balance-base_symbol_index_balance, 10))
-                volume_oom = math.floor(math.log(base_symbol_volume, 10))
-                bal_prec = 2
-                vol_prec = 2
-                if volume_oom <= -2:
-                    vol_prec = -1 * volume_oom + 1
-                if balance_oom <= -2:
-                    bal_prec = -1 * balance_oom + 1
-                balance_string = f'{balance-base_symbol_index_balance:.{bal_prec}f} {self.bot_config.base_symbol.upper()}'
-                balance_base_curr = self.analytics.base_symbol_to_base_currency(balance-base_symbol_index_balance)
-                volume_base_curr = self.analytics.base_symbol_to_base_currency(base_symbol_volume)
-                volume_string = f'{base_symbol_volume:.{vol_prec}f} {self.bot_config.base_symbol.upper()}'
-                problems['description'] = \
-                f'Insufficient funds to execute savings plan, you have {balance_string} ({balance_base_curr:.2f} {self.bot_config.base_currency.values[1]})' + \
-                f' available over the ones in your portfolio.\nYou need {volume_string} ({volume_base_curr:.0f} {self.bot_config.base_currency.values[1]})'
+                if available > 0.98 * base_symbol_volume:
+                    corrected_volume = available
+                    problems['description'] = f'Available {self.bot_config.trading_bot_config.base_symbol.upper()} is slightly lower than your order volume, lowering the volume by that amount!'
+                    problems['adjusted_volume'] = corrected_volume
+                else:
+                    balance_string = f'{print_crypto_amount(balance-base_symbol_index_balance)} {self.bot_config.trading_bot_config.base_symbol.upper()}'
+                    balance_base_curr = self.analytics.base_symbol_to_base_currency(balance-base_symbol_index_balance)
+                    volume_base_curr = self.analytics.base_symbol_to_base_currency(base_symbol_volume)
+                    volume_string = f'{print_crypto_amount(base_symbol_volume)} {self.bot_config.trading_bot_config.base_symbol.upper()}'
+                    problems['description'] = \
+                    f'Insufficient funds to execute savings plan, you have {balance_string} ({balance_base_curr:.2f} {self.bot_config.trading_bot_config.base_currency.values[1]})' + \
+                    f' available over the ones in your portfolio.\nYou need {volume_string} ({volume_base_curr:.0f} {self.bot_config.trading_bot_config.base_currency.values[1]})'
         if insufficient:
             print(
-                f"Warning: Insufficient funds to execute savings plan! You have {balance:.2f} {self.bot_config.base_symbol.upper()}")
+                f"Warning: Insufficient funds to execute savings plan! You have {balance:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}")
             problems['occurred'] = True
-            problems['fail'] = True
+            if problems.get('adjusted_volume', False):
+                problems['fail'] = False
+            else:
+                problems['fail'] = True
         return problems
 
     def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
         volume_fail = []
         for symbol, weight in zip(symbols, weights):
-            if symbol.lower() == self.bot_config.base_symbol.lower():
+            if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 continue
-            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
+            ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             try:
                 price = self.exchange.fetch_ticker(ticker).get('last')
             except ccxt.errors.BadSymbol:
@@ -265,7 +232,7 @@ class TradingBot:
     # Place a weighted market buy order on Binance for multiple coins
     def weighted_buy_order(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None,
                            order_type: OrderTypeEnum = OrderTypeEnum.market) -> dict:
-        volume = base_currency_volume or self.bot_config.savings_plan_cost  # order volume denoted in base currency
+        volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost  # order volume denoted in base currency
         volume = self.analytics.base_currency_to_base_symbol(volume)
         print_order_allocation(symbols, weights)
         self.exchange.load_markets()
@@ -273,7 +240,9 @@ class TradingBot:
         if report['problems']['fail']:
             return report
 
-        placed_volume = 0
+        # possibly adjust volume
+        volume = report['problems'].get('adjusted_volume', volume)
+
         invalid = []
         placed_ids = []
         placed_symbols = []
@@ -281,15 +250,14 @@ class TradingBot:
         # Start buying
         # before = self.exchange.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
-            if symbol.lower() == self.bot_config.base_symbol.lower():
+            if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 print(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
                 placed_symbols.append(symbol.upper())
                 placed_ids.append(-weight*volume)  # storing the imagined cost of this order as a negative id as suboptimal workaround
                 continue
-            ticker = f'{symbol.upper()}/{self.bot_config.base_symbol.upper()}'
+            ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             price = self.exchange.fetch_ticker(ticker).get('last')
             limit_price = 0.998*price
-            cost = weight * volume
             amount = weight * volume / price
             try:
                 if order_type == OrderTypeEnum.limit:
@@ -320,12 +288,14 @@ class TradingBot:
         return report
 
     def check_orders(self, order_ids: List, symbols: List) -> dict:
+        logger.info("Checking order status...")
         closed_orders = []
         open_orders = []
         order_report = {symbol: {} for symbol in symbols}
         for id, symbol in zip(order_ids, symbols):
             if id < 0:
                 # this is a 'fake' order, when buying coin equals the base symbol we are using to buy the index
+                logger.info("Checking dummy order")
                 order_report[symbol]['status'] = 'closed'
                 price = 1
                 cost = -1 * id  # the imagined cost of this order is stored in place of the id of regular orders
@@ -335,24 +305,34 @@ class TradingBot:
                 sell_symbol = symbol.upper()
                 fee = 0
             else:
+                logger.info(f'Getting status of {symbol} order...')
                 with retrying(self.exchange.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
                               retry_exceptions=(ccxt.errors.BaseError,)) as fetch_order:
                     order = fetch_order(id, symbol)
                 if order['status'] == 'open':
+                    logger.info(f"{symbol} order is not yet closed!")
                     order_report['symbol'] = 'open'
                     open_orders.append(symbol)
                     continue
-                order_report[symbol]['status'] = 'closed'
-                price = order['price']
-                amount = order['amount']
-                cost = order['cost']
-                date = datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S')
-                buy_symbol = order['symbol'].split('/')[0]
-                sell_symbol = order['symbol'].split('/')[1]
-                fee = order['fee']
+                logger.info(f"{symbol} order closed!")
+                try:
+                    order_report[symbol]['status'] = 'closed'
+                    price = order['price']
+                    amount = order['amount']
+                    cost = order['cost']
+                    date = datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S')
+                    buy_symbol = order['symbol'].split('/')[0]
+                    sell_symbol = order['symbol'].split('/')[1]
+                    fee = order['fee']
+                except KeyError:
+                    logger.error(f"KeyError while checking {symbol} order status!")
+                    order_report['symbol'] = 'open'
+                    open_orders.append(symbol)
+                    continue
             order_report[symbol]['price'] = price
             order_report[symbol]['cost'] = cost
             closed_orders.append(symbol)
+            logger.info(f"Adding {symbol} order to the trades file")
             self.analytics.add_trade(date=date,
                                      buy_symbol=buy_symbol,
                                      sell_symbol=sell_symbol,
