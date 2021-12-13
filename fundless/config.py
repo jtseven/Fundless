@@ -1,9 +1,9 @@
 from pathlib import Path
 import sys
 import yaml
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Optional
 from pydantic import BaseModel
-from pydantic.types import confloat, conint, constr, Optional
+from pydantic.types import confloat, conint, constr
 from pydantic import validator, root_validator
 from aenum import MultiValueEnum
 
@@ -12,6 +12,7 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import TypedDict
 
+
 # Convention for multi value enums:
 #   - value: used in config and code
 #   - values[1]: beautiful name for printing
@@ -19,6 +20,11 @@ else:
 class ExchangeEnum(str, MultiValueEnum):
     binance = 'binance', 'Binance'
     kraken = 'kraken', 'Kraken'
+
+
+class LoginProviderEnum(str, MultiValueEnum):
+    custom = 'custom', 'Custom', 'own'
+    auth0 = 'auth0', 'Auth0', 'Auth 0', 'auth 0'
 
 
 class BaseCurrencyEnum(str, MultiValueEnum):
@@ -42,7 +48,7 @@ class OrderTypeEnum(str, MultiValueEnum):
 class WeightingEnum(str, MultiValueEnum):
     equal = 'equal'
     custom = 'custom'
-    market_cap = 'marketcap', 'market_cap'
+    market_cap = 'market_cap', 'marketcap', 'market cap'
     sqrt_market_cap = 'sqrt_market_cap', 'square root market cap', 'sqrt market cap'
     cbrt_market_cap = 'cbrt_market_cap', 'cubic root market cap', 'cbrt market cap'
     sqrt_sqrt_market_cap = 'sqrt_sqrt_market_cap', 'sqrt sqrt market cap'
@@ -64,6 +70,12 @@ class TelegramToken(TypedDict):
 
 
 class BaseConfig(BaseModel):
+    class Config:
+        json_encoders = {
+            MultiValueEnum: lambda v: v.value,
+        }
+        validate_assignment = True
+
     def print_markdown(self):
         config_dict = self.dict()
         for key, value in config_dict.items():
@@ -74,10 +86,15 @@ class BaseConfig(BaseModel):
         msg += "\n```"
         return msg
 
+    @classmethod
+    def from_json(cls, file_path):
+        return cls.parse_file(file_path)
+
 
 class DashboardConfig(BaseConfig):
     dashboard: bool
-    domain_name: Optional[str]
+    domain_name: str
+    login_provider: LoginProviderEnum
 
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -95,20 +112,17 @@ class DashboardConfig(BaseConfig):
 
     @classmethod
     def from_dict(cls, dictionary):
-        if dictionary.get('domain_name'):
-            domain_name = dictionary['domain_name']
-        else:
-            domain_name = None
         self = cls(
             dashboard=dictionary['dashboard'],
-            domain_name=domain_name
+            domain_name=dictionary.get('domain_name', 'localhost'),
+            login_provider=dictionary['login_provider'].get('selected', LoginProviderEnum.custom)
         )
         return self
 
 
 class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
-    test_mode: bool
+    test_mode: Optional[bool] = False
     base_currency: BaseCurrencyEnum
     base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd|eur|btc)$')
     savings_plan_cost: confloat(gt=0, le=10000)
@@ -116,10 +130,10 @@ class TradingBotConfig(BaseConfig):
     savings_plan_execution_time: constr(regex='^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
-    cherry_pick_symbols: List[str]
-    custom_weights: Dict[str, float]
-    index_top_n: conint(gt=0, le=100)
-    index_exclude_symbols: List[str]
+    cherry_pick_symbols: Optional[List[constr(to_lower=True)]]
+    custom_weights: Optional[Dict[constr(to_lower=True), float]]
+    index_top_n: Optional[conint(gt=0, le=100)]
+    index_exclude_symbols: Optional[List[constr(to_lower=True)]]
 
     @validator('base_currency')
     def check_if_currency_supported(cls, v):
@@ -137,8 +151,10 @@ class TradingBotConfig(BaseConfig):
     def check_custom_weights(cls, values):
         if values.get('portfolio_weighting') != WeightingEnum.custom:
             return values
-        custom_weights = values.get('custom_weights')
-        if values.get('portfolio_mode') == PortfolioModeEnum.cherry_pick:
+        custom_weights = values.get('custom_weights', None)
+        if custom_weights is None:
+            return values
+        elif values.get('portfolio_mode') == PortfolioModeEnum.cherry_pick:
             for symbol, weight in custom_weights.items():
                 if symbol not in values.get('cherry_pick_symbols'):
                     raise ValueError(f"{symbol} defined in custom weights, but not in cherry picked symbols")
@@ -160,9 +176,10 @@ class TradingBotConfig(BaseConfig):
 
     @classmethod
     def from_dict(cls, dictionary):
+
         self = cls(
             exchange=dictionary['exchange']['selected'],
-            test_mode=dictionary['test_mode'],
+            test_mode=dictionary.get('test_mode', None),
             base_currency=dictionary['base_currency']['selected'],
             base_symbol=dictionary['base_symbol']['selected'],
             savings_plan_cost=dictionary['savings_plan']['cost'],
@@ -170,10 +187,10 @@ class TradingBotConfig(BaseConfig):
             savings_plan_execution_time=dictionary['savings_plan']['execution_time'],
             portfolio_mode=dictionary['portfolio']['mode']['selected'],
             portfolio_weighting=dictionary['portfolio']['weighting']['selected'],
-            cherry_pick_symbols=dictionary['portfolio']['cherry_pick']['symbols'],
-            custom_weights=dictionary['portfolio']['weighting']['custom'],
-            index_top_n=dictionary['portfolio']['index']['top_n'],
-            index_exclude_symbols=dictionary['portfolio']['index']['exclude_symbols']
+            cherry_pick_symbols=dictionary['portfolio'].get('cherry_pick', {}).get('symbols', None),
+            custom_weights=dictionary['portfolio']['weighting'].get('custom', None),
+            index_top_n=dictionary['portfolio'].get('index', {}).get('top_n', None),
+            index_exclude_symbols=dictionary['portfolio'].get('index', {}).get('exclude_symbols', None)
         )
         return self
 

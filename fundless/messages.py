@@ -1,5 +1,5 @@
 import time
-import json
+from utils import print_crypto_amount
 import ccxt
 import telegram.error
 from telegram.ext import (
@@ -77,10 +77,10 @@ class TelegramBot:
         self.updater = Updater(token=secrets['token'])
         self.dispatcher = self.updater.dispatcher
         self.trading_bot = trading_bot
+        self.config = config
         self.rebalance = False
         self.order_weights = None
         self.order_symbols = None
-        self.currency_string = config.trading_bot_config.base_currency.values[1]
 
         self.UnknownAnswerHandler = MessageHandler(Filters.text & ~Filters.command, self._unknown)
 
@@ -125,7 +125,7 @@ class TelegramBot:
 
     @authorized_only
     def _config(self, update: Update, _: CallbackContext):
-        msg = self.trading_bot.bot_config.print_markdown()
+        msg = self.trading_bot.bot_config.trading_bot_config.print_markdown()
         update.message.reply_text("This is your current config:")
         update.message.reply_text(msg, parse_mode='MarkdownV2')
 
@@ -133,9 +133,9 @@ class TelegramBot:
     def _performance(self, update: Update, context: CallbackContext):
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
 
-        invested = self.trading_bot.analytics.invested()
+        invested = self.trading_bot.analytics.invested
         balance = self.trading_bot.analytics.index_balance()[2].sum()
-        performance = self.trading_bot.analytics.performance(balance)
+        performance = self.trading_bot.analytics.performance
 
         chart = self.trading_bot.analytics.value_history_chart(as_image=True)
 
@@ -145,10 +145,10 @@ class TelegramBot:
             pl = 'Loss'
         msg = "```\n"
         msg += "----- Performance Report: -----\n"
-        msg += f"\tInvested amount:\t{invested:7.2f} {self.currency_string}\n"
-        msg += f"\tPortfolio value:\t{balance:7.2f} {self.currency_string}\n"
+        msg += f"\tInvested amount:\t{invested:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
+        msg += f"\tPortfolio value:\t{balance:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
         msg += f"\tPerformance:\t\t\t\t\t{performance:.2%}\n"
-        msg += f"\t{pl}:\t\t\t\t\t\t\t\t\t\t{balance-invested:.2f} {self.currency_string}\n"
+        msg += f"\t{pl}:\t\t\t\t\t\t\t\t\t\t{balance-invested:.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
         msg += "-------------------------------"
         msg += "```"
 
@@ -180,16 +180,16 @@ class TelegramBot:
             context.bot.send_message(chat_id=self.chat_id,
                                      text='Uh ohhh, I had a problem while computing your balances')
             context.bot.send_message(chat_id=self.chat_id,
-                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
+                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.trading_bot_config.exchange.value}')
         else:
             msg = "```\n"
             msg += "--- Your current portfolio: ---\n"
             for symbol, allocation, value in zip(symbols, allocations, values):
                 if value < 1.0:
                     continue
-                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f} {self.currency_string}\n"
+                msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
             msg += "-------------------------------\n"
-            msg += f"  Overall Balance: {values.sum():,.2f} {self.currency_string}"
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
@@ -199,21 +199,21 @@ class TelegramBot:
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         try:
             symbols, amounts, values, allocations = self.trading_bot.analytics.index_balance()
-            _, index_weights = self.trading_bot.fetch_index_weights(symbols=symbols)
+            symbols, index_weights = self.trading_bot.analytics.fetch_index_weights(symbols=symbols)
         except KeyError as e:
             context.bot.send_message(chat_id=self.chat_id,
                                      text='Uh ohhh, I had a problem while computing your balances')
             context.bot.send_message(chat_id=self.chat_id,
-                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.exchange.value}')
+                                     text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.trading_bot_config.exchange.value}')
         else:
             tracking_error = allocations - (index_weights * 100)
             msg = "```\n"
             msg += "Your current index portfolio:\n"
             msg += f"- Coin  Alloc  Value AllocErr -\n"
             for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
-                msg += f"  {symbol + ':': <6} {allocation:4.1f}% {value:3,.0f} {self.currency_string}  {error:4.1f}pp\n"
+                msg += f"  {symbol.upper() + ':': <6} {allocation:4.1f}% {value:3,.0f} {self.config.trading_bot_config.base_currency.values[1]}  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
-            msg += f"  Overall Balance: {values.sum():,.2f} {self.currency_string}"
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
             msg += "```"
             context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
 
@@ -245,16 +245,17 @@ class TelegramBot:
             # filter coin order volumes that are below the minimum threshold for the exchange
             symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
         else:
-            symbols, weights = self.trading_bot.fetch_index_weights()
+            symbols, weights = self.trading_bot.analytics.fetch_index_weights()
             # filter coin order volumes that are below the minimum threshold for the exchange
             symbols_filtered, weights_filtered = self.trading_bot.volume_corrected_weights(symbols, weights)
         if len(symbols_filtered) == 0:
             update.message.reply_text('Your order is not executable, as your overall savings plan volume is to low!')
             update.message.reply_text("Set up a higher savings plan!")
             return ConversationHandler.END
-        if len(symbols_filtered) < len(symbols):
+        vol_problems = [symbol for symbol in symbols if symbol not in symbols_filtered and symbol in self.config.trading_bot_config.cherry_pick_symbols]
+        if len(vol_problems) > 0:
             update.message.reply_text("The order volume is too low, to buy the following coins:")
-            update.message.reply_text(f"{[symbol for symbol in symbols if symbol not in symbols_filtered]}")
+            update.message.reply_text(f"{vol_problems}")
             update.message.reply_text(
                 "But don't worry, I will include them another time and keep your portfolio well balanced!")
         symbols = symbols_filtered
@@ -262,13 +263,15 @@ class TelegramBot:
         msg = ("```\nThat's what I came up with:\n"
                "---------------------------")
         for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.savings_plan_cost:6.2f} {self.currency_string}"
+            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:6.2f} {self.config.trading_bot_config.base_currency.values[1]}"
         msg += "\n---------------------------"
-        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.savings_plan_cost:.2f} {self.currency_string}"
+        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
         msg += "\n```"
         print(msg)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
-        update.message.reply_text(f"You are buying with {self.trading_bot.bot_config.base_symbol.upper()}")
+        base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(self.config.trading_bot_config.savings_plan_cost)
+        base_amount = print_crypto_amount(base_amount)
+        update.message.reply_text(f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}")
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(2)
         reply_keyboard = [[
@@ -286,10 +289,11 @@ class TelegramBot:
     def _rebalancing_question(self, update: Update, context: CallbackContext):
         update.message.reply_text("Great!")
         update.message.reply_text(
-            f"Your order volume is {self.trading_bot.bot_config.savings_plan_cost:,.0f} {self.currency_string}")
+            f"Your order volume is {self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:,.0f} {self.config.trading_bot_config.base_currency.values[1]}")
+        cost = self.trading_bot.analytics.base_currency_to_base_symbol(self.trading_bot.bot_config.trading_bot_config.savings_plan_cost)
         update.message.reply_text(
-            f"Buying with {self.trading_bot.analytics.base_currency_to_base_symbol(self.trading_bot.bot_config.savings_plan_cost):,.4f}" +
-            f" {self.trading_bot.analytics.get_coin_name(self.trading_bot.bot_config.base_symbol)}"
+            f"Buying with {print_crypto_amount(cost)}" +
+            f" {self.trading_bot.analytics.get_coin_name(self.trading_bot.bot_config.trading_bot_config.base_symbol)}"
         )
         update.message.reply_text("I will first check, if rebalancing of your portfolio is recommended...")
 
@@ -297,8 +301,9 @@ class TelegramBot:
         rel_to_volume = allocation_error['rel_to_order_volume']
         if abs(rel_to_volume.max()) >= 0.10:
             symbol = allocation_error['symbols'][rel_to_volume.argmax()]
+            coin_name = self.trading_bot.analytics.get_coin_name(symbol)
             err = abs(rel_to_volume.max())
-            update.message.reply_text(f"The absolute allocation error of {symbol} is {err:.1%} of your order volume!")
+            update.message.reply_text(f"The absolute allocation error of {coin_name} is {err:.1%} of your order volume!")
             reply_keyboard = [[
                 "Yes",
                 "No"
@@ -332,14 +337,14 @@ class TelegramBot:
             "No"
         ]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
-        update.message.reply_text("Should I proceed with a overview of the planned buy order?", reply_markup=markup)
+        update.message.reply_text("Should I proceed with an overview of the planned buy order?", reply_markup=markup)
         return PLANNING
 
     @authorized_only
     def _savings_plan_execution(self, update: Update, context: CallbackContext):
         if update.message.text == 'Yes':
             update.message.reply_text(
-                f"Great! I am buying your crypto on {self.trading_bot.bot_config.exchange.values[1]}")
+                f"Great! I am buying your crypto on {self.trading_bot.bot_config.trading_bot_config.exchange.values[1]}")
             try:
                 context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
                 report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
@@ -368,6 +373,8 @@ class TelegramBot:
                 update.message.reply_text("See you")
                 return ConversationHandler.END
             else:
+                if 'adjusted_volume' in problems:
+                    update.message.reply_text("The order amount was adjusted by a small amount, as your available balance was slightly lower than needed!")
                 order_ids = report['order_ids']
                 placed_symbols = report['symbols']
                 update.message.reply_text("Done! I placed your orders")
@@ -412,7 +419,7 @@ class TelegramBot:
                 volume += order_report[symbol]['cost']
             msg += "\n---------------------------"
             base_currency_volume = self.trading_bot.analytics.base_symbol_to_base_currency(volume)
-            msg += f"\n-- Filled Volume: {base_currency_volume:<4.0f} {self.currency_string} --"
+            msg += f"\n-- Filled Volume: {base_currency_volume:<4.0f} {self.config.trading_bot_config.base_currency.values[1]} --"
             msg += "\n```"
             context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
 

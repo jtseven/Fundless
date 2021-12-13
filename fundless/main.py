@@ -46,6 +46,8 @@ if __name__ == '__main__':
     # telegram bot interacting with the user
     if telegram_bot:
         message_bot = TelegramBot(config, trading_bot)
+    else:
+        message_bot = None
 
     # dashboard as web application
     if config.dashboard_config.dashboard:
@@ -54,7 +56,7 @@ if __name__ == '__main__':
         webapp.start()
 
     # automated saving plan execution
-    if telegram_bot:
+    if telegram_bot is not None:
         interval = config.trading_bot_config.savings_plan_interval
         execution_time = config.trading_bot_config.savings_plan_execution_time
 

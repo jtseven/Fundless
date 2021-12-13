@@ -2,6 +2,7 @@ import pandas as pd
 from pathlib import Path
 import logging
 import requests.exceptions
+import schedule
 from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr, Optional
@@ -11,8 +12,15 @@ import numpy as np
 from time import time, sleep
 from redo import retrying
 from threading import Lock
+import datetime
+from collections import Counter
+from threading import Thread
+import logging
 
-from config import Config
+from config import Config, TradingBotConfig, WeightingEnum
+from utils import print_crypto_amount
+
+logger = logging.getLogger(__name__)
 
 date_time_regex = '(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})'
 
@@ -33,6 +41,7 @@ class PortfolioAnalytics:
     history_df: pd.DataFrame = None
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
+    running_updates = False
 
     last_market_update: float = 0  # seconds since epoch
     last_history_update_month: float = 0  # seconds since epoch
@@ -42,75 +51,134 @@ class PortfolioAnalytics:
 
     def __init__(self, file_path, config: Config):
         self.logger = logging.getLogger('AnalyticsLogger')
-        self.config = config.trading_bot_config
-        self.base_cost_row = f'cost_{self.config.base_currency.value.lower()}'
-        self.csv_dtypes = {'buy_symbol': 'object', 'sell_symbol': 'object', 'price': 'float64',
-                           'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'object',
-                           self.base_cost_row: 'float64'}
-        self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
-                            self.base_cost_row]
+        self.config = config
+        self.init_config_parameters()
         self.trades_file = Path(file_path)
         self.coingecko = CoinGeckoAPI()
-        self.update_markets()
-        if self.trades_file.exists():
-            self.update_trades_df()
-        else:
+        if not self.trades_file.exists():
             self.trades_df = pd.DataFrame(columns=self.trades_cols)
             self.trades_df.to_csv(self.trades_file, index=False)
             self.last_trades_update = time()
-        self.update_index_df()
+        self.update_data()
+        self.run_api_updates()
+
+    def run_api_updates(self):
+        if self.running_updates:
+            return
+        try:
+            schedule.every(5).seconds.do(self.update_data)
+
+            def run_updates():
+                while True:
+                    schedule.run_pending()
+                    sleep(1)
+            updates = Thread(target=run_updates)
+            updates.start()
+            self.running_updates = True
+        except Exception as e:
+            self.running_updates = False
+            raise e
+
+    def update_data(self):
+        self.update_trades_df()
+        self.update_markets()
+        self.update_portfolio_metrics()
         self.update_historical_prices()
 
-    def base_symbol_to_base_currency(self, base_symbol_amount: float):
-        base_symbol_id = self.get_coin_id(self.config.base_symbol)
-        with retrying(self.coingecko.get_price, sleeptime=30, sleepscale=1, jitter=0,
-                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency.value.lower())[
-                base_symbol_id][self.config.base_currency.value.lower()]
-        return base_symbol_amount * base_symbol_price
+    def init_config_parameters(self):
+        self.base_cost_row = f'cost_{self.config.trading_bot_config.base_currency.value.lower()}'
+        self.currency_symbol = self.config.trading_bot_config.base_currency.values[1]
+        self.csv_dtypes = {'buy_symbol': 'str', 'sell_symbol': 'str', 'price': 'float64',
+                           'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'str',
+                           self.base_cost_row: 'float64', 'date': 'str'}
+        self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
+                            self.base_cost_row]
 
-    def base_currency_to_base_symbol(self, base_currency_amount: float):
-        base_symbol_id = self.get_coin_id(self.config.base_symbol)
-        with retrying(self.coingecko.get_price, sleeptime=30, sleepscale=1, jitter=0,
-                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.base_currency.value.lower())[
-                base_symbol_id][self.config.base_currency.value.lower()]
-        return base_currency_amount / base_symbol_price
+    def update_config(self, base_currency_changed: bool = False, index_changed: bool = False):
+        self.init_config_parameters()
+        if base_currency_changed:
+            # update all market data again if base currency changed
+            self.last_market_update = 0
+            self.last_history_update_day = 0
+            self.last_history_update_month = 0
+        if index_changed:
+            self.update_index_df()
 
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
         coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
         return coin_id
 
-    def get_coin_name(self, symbol: str):
+    def get_coin_name(self, symbol: str, abbr=False):
         symbol = symbol.lower()
-        coin_name = self.markets.loc[self.markets['symbol'] == symbol, ['name']].values[0][0]
+        try:
+            coin_name = self.markets.loc[self.markets['symbol'] == symbol, ['name']].values[0][0]
+        except IndexError:
+            return symbol.upper()
+        if abbr:
+            coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
         return coin_name
+
+    def get_coin_image(self, symbol: str):
+        symbol = symbol.lower()
+        try:
+            image = self.markets.loc[self.markets['symbol'] == symbol, ['image']].values[0][0]
+        except IndexError:
+            logger.warn(f'No image found for coin {symbol}!')
+            return 'assets/coins-solid.png'
+        return image
+
+    def base_symbol_to_base_currency(self, base_symbol_amount: float):
+        if self.config.trading_bot_config.base_currency.value.lower() == self.config.trading_bot_config.base_symbol.lower():
+            return base_symbol_amount
+        base_symbol_id = self.get_coin_id(self.config.trading_bot_config.base_symbol)
+        with retrying(self.coingecko.get_price, sleeptime=20, sleepscale=1, jitter=0,
+                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.trading_bot_config.base_currency.value.lower())[
+                base_symbol_id][self.config.trading_bot_config.base_currency.value.lower()]
+        return base_symbol_amount * base_symbol_price
+
+    def base_currency_to_base_symbol(self, base_currency_amount: float):
+        if self.config.trading_bot_config.base_currency.value.lower() == self.config.trading_bot_config.base_symbol.lower():
+            return base_currency_amount
+        base_symbol_id = self.get_coin_id(self.config.trading_bot_config.base_symbol)
+        with retrying(self.coingecko.get_price, sleeptime=20, sleepscale=1, jitter=0,
+                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+            base_symbol_price = get_price(base_symbol_id, vs_currencies=self.config.trading_bot_config.base_currency.value.lower())[
+                base_symbol_id][self.config.trading_bot_config.base_currency.value.lower()]
+        return base_currency_amount / base_symbol_price
 
     def update_trades_df(self):
         if self.last_trades_update < time() - 60:
             trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=['date'])
+            trades_df.date = pd.to_datetime(trades_df.date, utc=True)
             if trades_df['date'].iloc[0].tzinfo is None:
-                trades_df['date'] = trades_df['date'].dt.tz_localize('UTC')
+                trades_df['date'] = trades_df['date'].dt.tz_localize('UTC', ambiguous='infer')
 
             update_file = False
-            if self.base_cost_row not in trades_df.columns:  # the cost denoted in base_currency rather than buy_symbol
-                # TODO fill nan values if any in base_cost column
+
+            # base_cost_row has the cost denoted in base_currency rather than buy_symbol
+            def compute_base_cost(row):
+                date = row.date.strftime('%d-%m-%Y')
+                coin_id = self.get_coin_id(row.sell_symbol)
+                func = lambda: self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
+                                   'market_data']['current_price'][
+                                   self.config.trading_bot_config.base_currency.value.lower()] * row.cost
+
+                with retrying(func, sleeptime=20, sleepscale=1, jitter=0,
+                              retry_exceptions=(requests.exceptions.HTTPError,)) as get_base_cost:
+                    base_cost = get_base_cost()
+
+                return base_cost
+
+            if self.base_cost_row in trades_df.columns:
+                if trades_df[self.base_cost_row].isnull().values.any():
+                    trades_df.loc[trades_df[self.base_cost_row].isnull(), self.base_cost_row] = \
+                        trades_df.loc[trades_df[self.base_cost_row].isnull()].apply(lambda row: compute_base_cost(row), axis=1)
+                    update_file = True
+            else:
                 print('Updating your trades file with historic cost in base currency, this will take a while '
                       'but is only performed once!')
-
-                def compute_base_cost(row):
-                    date = row.date.strftime('%d-%m-%Y')
-                    coin_id = self.get_coin_id(row.sell_symbol)
-                    func = lambda: self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
-                        'market_data']['current_price'][self.config.base_currency.value.lower()] * row.cost
-
-                    with retrying(func, sleeptime=60, sleepscale=1, jitter=0,
-                                  retry_exceptions=(requests.exceptions.HTTPError,)) as get_base_cost:
-                        base_cost = get_base_cost()
-
-                    return base_cost
-
                 trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
                 update_file = True
 
@@ -125,15 +193,16 @@ class PortfolioAnalytics:
 
     def update_markets(self, force=False):
         if not force:
-            # do not update, if last update less than 10 seconds ago
-            if self.last_market_update > time()-8:
+            # do not update, if last update 2 seconds ago
+            if self.last_market_update >= time()-2:
                 return
 
         # update market data from coingecko
         try:
-            markets = pd.DataFrame.from_records(self.coingecko.get_coins_markets(
-                vs_currency=self.config.base_currency.value, per_page=150))
-            markets['symbol'] = markets['symbol'].str.lower()
+            with retrying(self.coingecko.get_coins_markets, sleeptime=20, sleepscale=1, jitter=0,
+                          retry_exceptions=(requests.exceptions.HTTPError,)) as get_markets:
+                markets = pd.DataFrame.from_records(get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=200))
+                markets['symbol'] = markets['symbol'].str.lower()
         except requests.exceptions.HTTPError as e:
             print('Network error while updating market data from CoinGecko:')
             print(e)
@@ -147,7 +216,7 @@ class PortfolioAnalytics:
 
     def update_index_df(self):
         # update index portfolio value
-        other = pd.DataFrame(index=self.config.cherry_pick_symbols)
+        other = pd.DataFrame(index=self.config.trading_bot_config.cherry_pick_symbols)
         index_df = self.trades_df[['buy_symbol', 'amount', self.base_cost_row]].copy().groupby('buy_symbol').sum()
         index_df.index = index_df.index.str.lower()
         index_df = pd.merge(index_df, other, how='outer', left_index=True, right_index=True)
@@ -169,7 +238,10 @@ class PortfolioAnalytics:
             fee = 0
         if fee_symbol is None:
             fee_symbol = ''
-        date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
+        try:
+            date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
+        except pd.errors:
+            logger.error('Error when converting date for trades file!')
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
@@ -190,22 +262,35 @@ class PortfolioAnalytics:
         amounts = index['amount'].values
         return symbols, amounts, values, allocations
 
-    def performance(self, current_portfolio_value: float) -> float:
+    @property
+    def performance(self) -> float:
         amount_invested = self.trades_df[self.base_cost_row].sum()
-        return current_portfolio_value / amount_invested - 1
+        portfolio_value = self.index_df.value.sum()
+        return portfolio_value / amount_invested - 1
 
+    @property
     def invested(self) -> float:
         return self.trades_df[self.base_cost_row].sum()
 
+    @property
+    def net_worth(self) -> float:
+        return self.index_df.value.sum()
+
+    @property
+    def pretty_index_df(self):
+        df = pd.DataFrame()
+        self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
+        value_format = f'{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}'
+        df['Coin'] = self.index_df['symbol']
+        df['Currently in Index'] = self.index_df['symbol'].map(lambda sym: 'yes' if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else 'no')
+        df['Amount'] = self.index_df['amount'].map(print_crypto_amount)
+        df['Allocation'] = self.index_df['allocation'].map('{:.2%}'.format)
+        df['Value'] = self.index_df['value'].map(value_format.format)
+        df['Performance'] = self.index_df['performance'].fillna(0).map('{:.2%}'.format)
+        return df
+
     def allocation_pie(self, as_image=False, title=True):
-        try:
-            self.update_markets()
-        except requests.exceptions.HTTPError:
-            pass
-        if self.index_df is None:
-            return {}
         allocation_df = self.index_df.copy()
-        # allocation_df.loc[allocation_df['allocation'] < 0.03, 'symbol'] = 'Other'
 
         fig = px.pie(allocation_df, values='allocation', names='symbol',
                      color_discrete_sequence=px.colors.sequential.Viridis, hole=0.6)
@@ -213,7 +298,7 @@ class PortfolioAnalytics:
         fig.update_layout(showlegend=False, title={'xanchor': 'center', 'x': 0.5},
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide',
                           annotations=[
-                              dict(text=f"{allocation_df['value'].sum():,.2f} {self.config.base_currency.values[1]}",
+                              dict(text=f"{allocation_df['value'].sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}",
                                    x=0.5, y=0.5, font_size=text_size, showarrow=False)],
                           title_font=dict(size=title_size),
                           margin=dict(l=20, r=20, t=20, b=20))
@@ -253,9 +338,9 @@ class PortfolioAnalytics:
             for coin in self.index_df['symbol'].str.lower():
                 id = self.markets.loc[self.markets['symbol'] == coin, ['id']].values[0][0]
                 try:
-                    with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=1, sleepscale=1.5, jitter=0,
+                    with retrying(self.coingecko.get_coin_market_chart_range_by_id, sleeptime=30, sleepscale=1, jitter=0,
                                   retry_exceptions=(requests.exceptions.HTTPError, )) as get_history:
-                        data = get_history(id=id, vs_currency=self.config.base_currency.value,
+                        data = get_history(id=id, vs_currency=self.config.trading_bot_config.base_currency.value,
                                            from_timestamp=from_timestamp, to_timestamp=to_timestamp)
                 except requests.exceptions.HTTPError as e:
                     print('Error while updating historic prices from API')
@@ -299,10 +384,7 @@ class PortfolioAnalytics:
 
     def compute_value_history(self, from_timestamp=None):
         if self.history_df is None:
-            self.update_historical_prices()
-            if self.history_df is None:
-                return None, None
-
+            raise ValueError
         if from_timestamp is not None:
             start_time = pd.to_datetime(from_timestamp, unit='s', utc=True)
             price_history = self.history_df.copy().truncate(before=start_time)
@@ -318,7 +400,8 @@ class PortfolioAnalytics:
         else:
             freq = '5T'  # 5 minutes
 
-        price_history = price_history.asfreq(freq=freq, method='pad')
+        # price_history = price_history.asfreq(freq=freq, method='pad')
+        price_history = price_history.resample(freq, origin='end').pad()
         # add most recent prices for data consistency
         current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol
                           in list(price_history.columns)]
@@ -366,7 +449,7 @@ class PortfolioAnalytics:
                           uniformtext_minsize=min_font_size, uniformtext_mode='hide', title_font=dict(size=title_size),
                           plot_bgcolor='white', margin=dict(l=10, r=10, t=10, b=10))
         fig.update_xaxes(showgrid=False, title_text='', fixedrange=True)
-        fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.base_currency.values[1]}',
+        fig.update_yaxes(side='right', showgrid=True, ticksuffix=f' {self.config.trading_bot_config.base_currency.values[1]}',
                          title_text='', gridcolor='lightgray', gridwidth=0.15, fixedrange=True)
         if title:
             fig.update_layout(title='Portfolio value')
@@ -376,8 +459,9 @@ class PortfolioAnalytics:
             return fig
 
     def performance_chart(self, as_image=False, from_timestamp=None, title=True):
-        value, invested = self.compute_value_history(from_timestamp=from_timestamp)
-        if self.history_df is None:
+        try:
+            value, invested = self.compute_value_history(from_timestamp=from_timestamp)
+        except:
             return {}
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
@@ -405,3 +489,62 @@ class PortfolioAnalytics:
             return fig.to_image(format='png', width=1200, height=600)
         else:
             return fig
+
+    def update_portfolio_metrics(self):
+        top_gainers = self.index_df.nlargest(3, 'performance')
+        worst_gainers = self.index_df.nsmallest(3, 'performance')
+        # TODO could make these properties with @property decorator
+        self.top_symbols = top_gainers['symbol'].values
+        self.top_performances = top_gainers['performance'].values
+        self.top_growth = top_gainers['value'].values - top_gainers[self.base_cost_row].values
+        self.worst_symbols = worst_gainers['symbol'].values
+        self.worst_performances = worst_gainers['performance'].values
+        self.worst_growth = worst_gainers['value'].values - worst_gainers[self.base_cost_row].values
+
+    @staticmethod
+    def get_timestamp(value: str):
+        now = datetime.datetime.now()
+        if value == 'day':
+            timestamp = (now - datetime.timedelta(days=1)).timestamp()
+        elif value == 'week':
+            timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
+        elif value == 'month':
+            timestamp = (now - datetime.timedelta(days=30)).timestamp()
+        elif value == '6month':
+            timestamp = (now - datetime.timedelta(days=182)).timestamp()
+        elif value == 'year':
+            timestamp = (now - datetime.timedelta(days=365)).timestamp()
+        else:
+            timestamp = None
+        return timestamp
+
+        # Compute the weights by market cap, fetching data from coingecko
+        # Square root weights yield a less top heavy distribution of coin allocation (lower bitcoin weighting)
+    def fetch_index_weights(self, symbols: np.ndarray = None):
+        if symbols is not None:
+            symbols = np.asarray([symbol.lower() for symbol in symbols])
+        else:
+            symbols = np.asarray(self.config.trading_bot_config.cherry_pick_symbols)
+
+        if self.config.trading_bot_config.portfolio_weighting == WeightingEnum.equal:
+            weights = np.array([1 / len(
+                self.config.trading_bot_config.cherry_pick_symbols) if sym in self.config.trading_bot_config.cherry_pick_symbols else 0.0
+                                for sym in symbols])
+        elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.custom:
+            weights = np.zeros(len(symbols))
+            for k, symbol in enumerate(symbols):
+                if symbol in self.config.trading_bot_config.custom_weights:
+                    weights[k] = self.config.trading_bot_config.custom_weights[symbol]
+            weights = weights / weights.sum()
+        else:
+            weights = np.asarray([self.markets.loc[
+                                      self.markets.symbol == sym, 'market_cap'].item() if sym in self.config.trading_bot_config.cherry_pick_symbols else 0.0
+                                  for sym in symbols])
+            if self.config.trading_bot_config.portfolio_weighting == WeightingEnum.sqrt_market_cap:
+                weights = np.sqrt(weights)
+            elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.sqrt_sqrt_market_cap:
+                weights = np.sqrt(np.sqrt(weights))
+            elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.cbrt_market_cap:
+                weights = np.cbrt(weights)
+            weights = weights / weights.sum()
+        return symbols, weights

@@ -1,168 +1,37 @@
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
-import dash_bootstrap_components as dbc
-from dash.dependencies import Output, Input, State
-import secrets
-import flask
-from flask_login import login_user, LoginManager, UserMixin, logout_user, current_user
-import datetime
+import logging
 
+import dash
+from dash import dcc
+from dash import html
+import dash_bootstrap_components as dbc
+import flask
+from dash_extensions.enrich import NoOutputTransform, DashProxy, Input, Output, State, \
+    MultiplexerTransform, MATCH, ALL, ClientsideFunction
+from dash_extensions import DeferScript
+from gevent.pywsgi import WSGIServer
+from collections import Counter
+
+# imports for auth0
+from werkzeug.exceptions import HTTPException
+from flask import jsonify, render_template
+from flask import redirect
+from flask import session
+
+# local imports
 from config import Config
 from analytics import PortfolioAnalytics
+from utils import Constants
+import layouts
+from login import LoginProvider
 
-secret_key = secrets.token_hex(24)
-
-
-class User(UserMixin):
-    def __init__(self, username):
-        self.id = username
+APP_URL = '/app/'
 
 
-################################################################################################################
-#                                                  Layouts                                                     #
-################################################################################################################
-
-
-# Login screen
-def create_login_layout():
-    username_input = dbc.FormGroup(
-        [
-            dbc.Label("Username", html_for='username_input'),
-            dbc.Input(type='text', id='username_input', placeholder='Enter username', autoFocus=True),
-        ]
-    )
-    password_input = dbc.FormGroup(
-        [
-            dbc.Label('Password', html_for='password_input'),
-            dbc.Input(
-                type='password',
-                id='password_input',
-                placeholder='Enter password'
-            ),
-            dbc.FormText(
-                'Forgot your password? Too bad...', color='secondary'
-            )
-        ]
-    )
-
-    return html.Div(
-        [dcc.Location(id='url_login', refresh=True),
-         dbc.Container(dbc.Row(dbc.Col(dbc.Card(
-             [
-                 html.Div([
-                     html.H2('FundLess', className='card-title text-info'),
-                     html.H6('Please login', className='card-subtitle')
-                 ], style={'textAlign': 'center'}),
-                 dbc.Form([
-                     username_input,
-                     password_input,
-                     dbc.Button('Login', color='primary', id='login_button', block=True),
-                     dbc.Alert('Incorrect username or password', id='output-state', is_open=False, color='danger',
-                               style={'margin': '1rem'})
-                 ], id='login_form'),
-             ],
-             body=True,
-             style={'width': '22rem',
-                    # 'height': '26rem'
-                    }
-         ), align='center', width='auto', style={'height': '100%', 'padding-top': '15%'}),
-             justify='center'),
-         )
-         ],
-    )
-
-# Logout screen
-def create_logout_layout():
-    return html.Div(dbc.Row([
-        dbc.Card(
-            [html.Div(html.H4('You have been logged out')),
-             html.Div(html.H6('- Good Bye -')),
-             dbc.Button('Login', href='/login', color='primary')],
-            style={'padding': '2rem 2rem'}
-        )
-    ], justify='center', style={'padding-top': '15%'}), style=dict(textAlign='center'))  # end div
-
-
-# Sidebar
-def create_page_with_sidebar(content):
-    sidebar_header = dbc.Row(
-        [
-            dbc.Col(html.H2("Fundless", className="display-4")),
-            dbc.Col(
-                html.Button(
-                    # use the Bootstrap navbar-toggler classes to style the toggle
-                    html.Span(className="navbar-toggler-icon"),
-                    className="navbar-toggler",
-                    # the navbar-toggler classes don't set color, so we do it here
-                    style={
-                        "color": "rgba(0,0,0,.5)",
-                        "border-color": "rgba(0,0,0,.1)",
-                    },
-                    id="toggle",
-                ),
-                # the column containing the toggle will be only as wide as the
-                # toggle, resulting in the toggle being right aligned
-                width="auto",
-                # vertically align the toggle in the center
-                align="center",
-            ),
-        ], no_gutters=True
-    )
-
-    sidebar = html.Div(
-        [
-            sidebar_header,
-            # we wrap the horizontal rule and short blurb in a div that can be
-            # hidden on a small screen
-            html.Div(
-                [
-                    html.Hr(),
-                    html.P(
-                        "Passively invest into the world of crypto",
-                        className="lead",
-                    ),
-                ],
-                id="blurb",
-            ),
-            # use the Collapse component to animate hiding / revealing links
-            dbc.Collapse(
-                dbc.Nav(
-                    [
-                        dbc.NavLink(
-                            [html.I(className='fas fa-chart-line mr-2 nav-icon'), html.Span('Dashboard')],
-                            href="/dashboard", active="exact", className='navbar-element btn-outline-dark'
-                        ),
-                        dbc.NavLink(
-                            [html.I(className='fas fa-align-justify mr-2 nav-icon'), html.Span('Holdings', id='nav_holdings'),
-                             dbc.Tooltip('Coming soon ...', target='nav_holdings', placement='top')],
-                            href="/holdings", active="exact", disabled=False, className='navbar-element btn-outline-dark'
-                        ),
-                        dbc.NavLink(
-                            [html.I(className='fas fa-chess mr-2 nav-icon'), html.Span('Strategy', id='nav_strategy'),
-                             dbc.Tooltip('Coming soon ...', target='nav_strategy', placement='top')],
-                            href="/strategy", active="exact", disabled=False, className='navbar-element btn-outline-dark'
-                        ),
-
-
-                        dbc.Button(id='user-status-div', color='primary', block=True)
-                    ],
-                    vertical=True,
-                    pills=True,
-                    id='sidebar-nav'
-                ),
-                id="collapse",
-            ),
-        ],
-        id="sidebar",
-        className='sticky-top'
-    )
-
-    page = html.Div([
-        sidebar,
-        html.Div(children=content, id='sidebar-page-content')
-    ])
-    return html.Div([page])
+def app_path(page_name: str):
+    if len(page_name) > 0:
+        return APP_URL + page_name
+    else:
+        return APP_URL
 
 
 ################################################################################################################
@@ -175,59 +44,102 @@ class Dashboard:
 
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
+        server.secret_key = Constants.SECRET_KEY
         external_stylesheets = [
-            # "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/fontawesome.min.css",
             dbc.themes.LITERA,  # FLATLY, LITERA, YETI
-            'https://use.fontawesome.com/releases/v5.15.1/css/all.css',
-
+            dbc.icons.FONT_AWESOME,
+            'https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.css',
         ]
-        self.app = dash.Dash(name=__name__, external_stylesheets=external_stylesheets, server=server,
-                             title='Fundless', update_title='Fundless...', suppress_callback_exceptions=False,
-                             meta_tags=[
-                                 {"name": "viewport", "content": "width=device-width, initial-scale=1"},
-                             ]
-                             )
+        external_scripts = [
+            'https://code.jquery.com/jquery-3.6.0.slim.js',
+            'https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js',
+            'https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.js',
+        ]
+        self.server = server
         self.config = config
         self.analytics = analytics
+        self.login_provider = LoginProvider(config.dashboard_config, self.server, config.secrets)
 
         # Preload data heavy figures
         self.allocation_chart = self.analytics.allocation_pie(title=False)
         self.history_chart = self.analytics.value_history_chart(title=False)
         self.performance_chart = self.analytics.performance_chart(title=False)
-        self.update_portfolio_metrics()
 
-        # config flask login
-        server.config.update(SECRET_KEY=secret_key)
-        if config.dashboard_config.domain_name:
-            server.config.update(SERVER_NAME=f'{config.dashboard_config.domain_name}:{80}')
+        @server.errorhandler(Exception)
+        def handle_auth_error(ex):
+            response = jsonify(message=str(ex))
+            response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
+            return response
 
-        # Login manager object will be used to login / logout users
-        login_manager = LoginManager()
-        login_manager.init_app(server)
-        login_manager.login_view = '/login'
+        @server.route('/', strict_slashes=False)
+        @server.route('/home', strict_slashes=False)
+        def home():
+            return render_template('home.html')
+
+        @server.route('/callback')
+        def callback_handling():
+            # Handles response from token endpoint
+            return self.login_provider.auth0_callback()
+
+        @server.route('/login', methods=['POST', 'GET'])
+        def login():
+            return self.login_provider.login_page()
+
+        @server.route('/app/<subpath>', strict_slashes=False)
+        @self.login_provider.requires_auth
+        def view_dashboard_subpath(subpath):
+            return self.app.index()
+
+        @server.route('/app', strict_slashes=False)
+        @self.login_provider.requires_auth
+        def view_dashboard():
+            return self.app.index()
+
+        @server.route('/dashboard', strict_slashes=False)
+        @self.login_provider.requires_auth
+        def view_dashboard_again():
+            return redirect('/app')
+
+        @server.route('/logout')
+        @server.route('/app/logout')
+        @self.login_provider.requires_auth
+        def logout():
+            return self.login_provider.logout()
+
+        self.app = DashProxy(name=__name__, external_stylesheets=external_stylesheets, server=server,
+                             title='Fundless', update_title='Fundless...', suppress_callback_exceptions=False,
+                             meta_tags=[
+                                 {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                             ],
+                             external_scripts=external_scripts,
+                             url_base_pathname=APP_URL,
+                             transforms=[NoOutputTransform(), MultiplexerTransform()],
+                             )
+
+        if config.dashboard_config.domain_name != 'localhost':
+            server.config.update(SERVER_NAME=f'{config.dashboard_config.domain_name}')
 
         # Main Layout
         self.app.layout = html.Div([
             dcc.Location(id='url', refresh=False),
             dcc.Location(id='redirect', refresh=True),
             dcc.Store(id='login-status', storage_type='session'),
-            # html.Div(id='user-status-div', style=dict(textAlign='right')),
-            html.Div(id='page-content'),
-            # update UI charts and info cards
-            dcc.Interval(id='update-interval', interval=10 * 1000, n_intervals=0),
-            html.Div(id='dummy', style={'display': 'none'}),
-            html.Div(id='dummy2', style={'display': 'none'}),
+            layouts.create_page_with_sidebar(),
+            # html.Div(id='page-content'),
+            # DeferScript(src='https://code.jquery.com/jquery-3.6.0.slim.js'),
+            DeferScript(src='https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.js'),
+            DeferScript(src='assets/custom.js')
 
         ])
 
-        @login_manager.user_loader
-        def load_user(username):
-            """
-                This function loads the user by user id. Typically this looks up the user from a user database.
-                We won't be registering or looking up users in this example, since we'll just login using LDAP server.
-                So we'll simply return a User object with the passed in username.
-            """
-            return User(username)
+        self.app.validation_layout = html.Div([
+            layouts.create_dashboard(self.analytics, self.allocation_chart),
+            layouts.create_holdings_page(self.analytics),
+            layouts.create_strategy_page(self.analytics),
+            layouts.create_trades_page(self.analytics),
+            layouts.create_not_implemented(''),
+            layouts.create_404('')
+        ])
 
         # add callback for toggling the collapse of navbar on small screens
         @self.app.callback(
@@ -250,49 +162,26 @@ class Dashboard:
                 return not is_open
             return is_open
 
-        # Login callback
-        @self.app.callback(
-            [Output('url_login', 'pathname'), Output('output-state', 'is_open')],
-            [Input('login_form', 'n_submit')],
-            [State('username_input', 'value'), State('password_input', 'value')]
-        )
-        def login_button_click(n, username: str, password: str):
-            if username:
-                username = username.lower().strip()
-            if n:
-                if n > 0:
-                    if username == config.secrets.dashboard_user and password == config.secrets.dashboard_password:
-                        user = User(username)
-                        login_user(user)
-                        return '/dashboard', False
-                    else:
-                        return '/login', True
-            else:
-                return '/login', False
-
         # Update pie chart and info cards (quick)
         @self.app.callback(Output('allocation_chart', 'figure'), Output('info_cards', 'children'),
-                           Input('update-interval', 'n_intervals'),
-                           State('chart_time_range', 'value'), State('chart_tabs', 'active_tab'))
-        def update_charts_quick(_, chart_range, active_tab):
+                           Input('update-interval', 'n_intervals'))
+        def update_charts_quick(_):
             self.allocation_chart = analytics.allocation_pie(title=False)
-            info_cards = self.create_info_cards()
+            info_cards = layouts.create_info_cards(self.analytics)
+
             return self.allocation_chart, info_cards
 
-        # Update markets from API (quick)
-        @self.app.callback(Output('dummy2', 'children'),
-                           Input('update-interval', 'n_intervals'))
-        def update_data_quick(_):
-            self.analytics.update_trades_df()
-            self.analytics.update_markets()
-            return None
+        @self.app.callback(Output('holdings_table', 'children'),
+                           Input('holdings-update-interval', 'n_intervals'))
+        def update_holdings(_):
+            return layouts.create_holdings_table(self.analytics)
 
         # Update performance and history charts
         @self.app.callback(Output('chart', 'figure'),
                            Input('update-interval', 'n_intervals'),
                            Input('chart_time_range', 'value'), Input('chart_tabs', 'active_tab'))
         def update_charts_slow(_, chart_range, active_tab):
-            timestamp = self.get_timerange(chart_range)
+            timestamp = analytics.get_timestamp(chart_range)
             self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
             self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
             if active_tab == 'history_tab':
@@ -304,316 +193,136 @@ class Dashboard:
                 chart = None
             return chart
 
-        # Update price history from API (slow)
-        @self.app.callback(Output('dummy', 'children'),
-                           Input('update-interval', 'n_intervals'))
-        def update_data_slow(_):
-            self.analytics.update_historical_prices()
-            return None
-
-        # Check login status to show correct login/logout button
-        @self.app.callback(Output('user-status-div', 'children'), Output('user-status-div', 'href'),
-                           Output('login-status', 'data'),
-                           [Input('url', 'pathname')])
-        def login_status(url):
-            """ callback to display login/logout link in the header """
-            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated \
-                    and url != '/logout':  # If the URL is /logout, then the user is about to be logged out anyways
-                return 'Logout', '/logout', current_user.get_id()
-            elif url == '/login':
-                # do not show login button, if already on login screen
-                return None, None, 'loggedout'
+        @self.app.callback(Input('base_currency', 'value'))
+        def set_base_currency(value):
+            if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
+                print('Updating config!')
+                self.config.trading_bot_config.base_currency = value  # this also changes the config in analytics
+                self.analytics.update_config(base_currency_changed=True)
+                self.performance_chart = {}
+                self.history_chart = {}
             else:
-                return 'Login', '/login', 'loggedout'
+                print("Not updating config!")
 
-        def create_not_implemented(name: str):
-            return dbc.Jumbotron(
-                [
-                    html.H1(f"{name} not found", className="text-info"),
-                    html.Hr(),
-                    html.P(f"This page is not yet implemented"),
-                ],
-                className='mt-4'
-            )
+        def set_index(symbols):
+            current = self.config.trading_bot_config.cherry_pick_symbols
+            new = symbols
+            if Counter(current) == Counter(new):
+                return
+            print('Updating index')
+            self.config.trading_bot_config.cherry_pick_symbols = new
+            self.analytics.update_config(index_changed=True)
 
-        def create_404(pathname: str):
-            return dbc.Jumbotron(
-                [
-                    html.H1("404: Not found", className="text-danger"),
-                    html.Hr(),
-                    html.P(f"The pathname {pathname} was not recognised..."),
-                ]
-            )
+        @self.app.callback(Input('index-apply', 'n_clicks'),
+                           State('index_coins', 'value'))
+        def update_index(_, index_symbols):
+            set_index(index_symbols)
+
+        @self.app.callback(Input('index-reset', 'n_clicks'),
+                           Output('index_coins', 'value'))
+        def reset_index_coins(_):
+            coins = [sym for sym in self.analytics.config.trading_bot_config.cherry_pick_symbols]
+            # set_index(coins)
+            return coins
+
+        @self.app.callback(Input('index-holdings', 'n_clicks'),
+                           Output('index_coins', 'value'),
+                           State('index_coins', 'value'))
+        def add_holdings(_, current_select):
+            holdings = list(self.analytics.index_df.loc[self.analytics.index_df['amount'] != 0].symbol.str.lower())
+            union = holdings + [sym for sym in current_select if sym not in holdings]
+            set_index(union)
+            return union
+
+        @self.app.callback(Input('base_symbol', 'value'))
+        def set_base_symbol(sym):
+            self.config.trading_bot_config.base_symbol = sym
+
+        @self.app.callback(Input('volume', 'value'))
+        def set_volume(vol):
+            if vol is None:
+                return
+            self.config.trading_bot_config.savings_plan_cost = float(vol)
+
+        @self.app.callback(Input('weighting', 'value'), Output('custom-weighting-collapse', 'is_open'))
+        def show_custom_form(weighting):
+            self.config.trading_bot_config.portfolio_weighting = weighting
+            if weighting == 'custom':
+                return True
+            else:
+                return False
+
+        @self.app.callback(Input('custom-weighting-collapse', 'is_open'),
+                           Output('custom_form', 'children'))
+        def get_custom_weights(is_open):
+            if is_open:
+                return layouts.create_weighting_sliders(analytics)
+            else:
+                return dash.no_update
+
+        @self.app.callback(
+            Output({'type': 'card-collapse', 'index': MATCH}, 'is_open'),
+            Output({'type': 'card-toggle', 'index': MATCH}, 'children'),
+            Input({'type': 'card-toggle', 'index': MATCH}, 'n_clicks'),
+            State({'type': 'card-collapse', 'index': MATCH}, 'is_open')
+        )
+        def toggle_card(n_clicks, is_open):
+            if n_clicks is not None:
+                if n_clicks > 0:
+                    return not is_open, 'Show all' if is_open else 'Show less'
+            return dash.no_update, dash.no_update
+
+        self.app.clientside_callback(
+            # specify the callback with ClientsideFunction(<namespace>, <function name>)
+            ClientsideFunction('ui', 'recompute_masonry'),
+            # the Output, Input and State are passed in as with a regular callback
+            Input({'type': 'card-collapse', 'index': ALL}, 'is_open')
+        )
 
         # Page forward callback
-        @self.app.callback(Output('page-content', 'children'), Output('redirect', 'pathname'),
+        @self.login_provider.requires_auth
+        @self.app.callback(Output('page-content', 'children'), Output('redirect', 'href'),
                            [Input('url', 'pathname')])
         def display_page(pathname):
             """ callback to determine layout to return """
             view = None
-            url = dash.no_update
-            if pathname == '/login':
-                if current_user.is_authenticated:
-                    view = 'Already logged in, forwarding...'
-                    url = '/dashboard'
-                else:
-                    view = create_login_layout()
-            elif pathname == '/dashboard':
-                if current_user.is_authenticated:
-                    view = create_page_with_sidebar(self.create_dashboard())
-                else:
-                    view = create_login_layout()
-            elif pathname == '/holdings':
-                if current_user.is_authenticated:
-                    view = create_page_with_sidebar(create_not_implemented('Holdings'))
-                else:
-                    view = create_login_layout()
-            elif pathname == '/strategy':
-                if current_user.is_authenticated:
-                    view = create_page_with_sidebar(create_not_implemented('Strategy'))
-                else:
-                    view = create_login_layout()
-            elif pathname == '/logout':
-                if current_user.is_authenticated:
-                    logout_user()
-                    view = create_logout_layout()
-                else:
-                    view = create_login_layout()
-                    url = '/login'
-            else:  # You could also return a 404 "URL not found" page here
-                if current_user.is_authenticated:
-                    view = create_page_with_sidebar(self.create_dashboard())
-                else:
-                    view = 'Redirecting to login...'
-                    url = '/login'
-            return view, url
+            # pathname = pathname + '/' if not pathname.endswith('/') else pathname
+            forward = dash.no_update
+            if not self.login_provider.is_authenticated():
+                # Redirect to Login page here
+                view = html.Div(['Redirecting to login...', html.Meta(httpEquiv='refresh', content='1')])
+                forward = config.dashboard_config.domain_name
+                return view, forward
+            elif pathname == app_path(''):
+                view = layouts.create_dashboard(self.analytics, self.allocation_chart)
+                forward = 'dashboard'
+            elif pathname == '/app':
+                view = layouts.create_dashboard(self.analytics, self.allocation_chart)
+                forward = 'app/dashboard'
+            elif pathname == app_path('dashboard'):
+                view = layouts.create_dashboard(self.analytics, self.allocation_chart)
+            elif pathname == app_path('holdings'):
+                view = layouts.create_holdings_page(self.analytics)
+            elif pathname == app_path('strategy'):
+                view = layouts.create_strategy_page(self.analytics)
+            elif pathname == app_path('trades'):
+                view = layouts.create_trades_page(self.analytics)
+            elif pathname in ('/logout/', '/logout'):
+                forward = 'logout'
+                view = html.Div(['Logging out...', html.Meta(httpEquiv='refresh', content='1')])
+            else:
+                view = layouts.create_404(pathname)
+            return view, forward
 
     def run_dashboard(self):
-        host = '0.0.0.0'
-        self.app.run_server(host=host, port=80,
-                            debug=False)  # as the dashboard runs in a separate thread, debug mode is not supported
-
-    def update_portfolio_metrics(self):
-        symbols, amounts, values, allocations = self.analytics.index_balance()
-        self.net_worth = values.sum()
-        self.performance = self.analytics.performance(self.net_worth)
-        self.invested = self.analytics.invested()
-        top_gainers = self.analytics.index_df.sort_values('performance', ascending=False).head(3)
-        worst_gainers = self.analytics.index_df.sort_values('performance', ascending=True).head(3)
-        self.top_symbols = top_gainers['symbol'].values
-        self.top_performances = top_gainers['performance'].values
-        self.top_growth = top_gainers['value'].values - top_gainers[self.analytics.base_cost_row].values
-        self.worst_symbols = worst_gainers['symbol'].values
-        self.worst_performances = worst_gainers['performance'].values
-        self.worst_growth = worst_gainers['value'].values - worst_gainers[self.analytics.base_cost_row].values
-
-    def get_timerange(self, value: str):
-        now = datetime.datetime.now()
-        if value == 'day':
-            timestamp = (now - datetime.timedelta(days=1)).timestamp()
-        elif value == 'week':
-            timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
-        elif value == 'month':
-            timestamp = (now - datetime.timedelta(days=30)).timestamp()
-        elif value == '6month':
-            timestamp = (now - datetime.timedelta(days=182)).timestamp()
-        elif value == 'year':
-            timestamp = (now - datetime.timedelta(days=365)).timestamp()
+        if 'localhost' in self.config.dashboard_config.domain_name:
+            logging.info('Webapp is available on localhost:3000')
+            port = 3000
+            host = self.config.dashboard_config.domain_name
+            self.app.run_server(host=host, port=port, debug=False, use_reloader=False, dev_tools_hot_reload=False)
         else:
-            timestamp = None
-        return timestamp
-
-    ################################################################################################################
-    #                                                  Layouts                                                     #
-    ################################################################################################################
-
-    def create_info_cards(self):
-        self.update_portfolio_metrics()
-        currency_symbol = self.config.trading_bot_config.base_currency.values[1]
-        if self.performance > 0:
-            color = 'text-success'
-            prefix = '+ '
-            text = 'Profit'
-        else:
-            color = 'text-danger'
-            prefix = '',
-            text = 'Loss'
-
-        def get_color(val: float):
-            if val >= 0:
-                return 'success'
-            else:
-                return 'danger'
-        # Info Cards
-        card_row_1 = dbc.Row(
-            [
-                dbc.Col(
-                    dbc.Card([
-                        dbc.CardBody(
-                            [
-                                # html.I(className='fa-solid fa-up', style={'fontsize': '36'}),
-                                html.H1('Portfolio value', className='small text-secondary'),
-                                html.H5(f'{self.net_worth:,.2f} {currency_symbol}', className='card-text'),
-                                html.H6(f'{prefix}{self.performance:,.2%}', className=f'card-text {color}')
-                            ]
-                        )
-                    ], color='secondary', outline=True),
-                    xs=6, style={'margin': '1rem 0rem'}
-                ),
-                dbc.Col(
-                    dbc.Card([
-                        dbc.CardBody(
-                            [
-                                html.H1(f'{text}', className='small text-secondary'),
-                                html.H5(f'{prefix}{self.net_worth - self.invested:,.2f} {currency_symbol}',
-                                        className=f'card-text {color}'),
-                                html.H6(f'{self.invested:,.2f} {currency_symbol}',
-                                        className=f'card-text', id='invested'),
-                                dbc.Tooltip('Your invested amount', target='invested', placement='left')
-                            ]
-                        )
-                    ], color='secondary', outline=True),
-                    xs=6, style={'margin': '1rem 0rem'}
-                ),
-            ],
-            className='mb-6',
-        )
-        card_row_2 = dbc.Row(
-            [
-                dbc.Col(
-                    dbc.Card([
-                        dbc.CardBody(
-                            [
-                                html.H1(f'Winners', className='small text-secondary', id='winners'),
-                                dbc.Tooltip('The best performing coins', target='winners', placement='left')
-                            ] + [html.H6([f"{sym}",
-                                          dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
-                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
-                                                    color=get_color(pl),
-                                                    pill=True)
-                                          ])
-                                 for sym, perf, pl in zip(self.top_symbols, self.top_performances, self.top_growth)],
-                        )
-                    ], color='secondary', outline=True),
-                    xs=12, sm=6, style={'margin': '1rem 0rem'}
-                ),
-                dbc.Col(
-                    dbc.Card([
-                        dbc.CardBody(
-                            [
-                                html.H1(f'Losers', className='small text-secondary', id='losers'),
-                                dbc.Tooltip('The worst performing coins', target='losers', placement='left')
-                            ] + [html.H6([f"{sym}",
-                                          dbc.Badge(f"{perf:.2%}", className="ml-1", color=get_color(perf), pill=True),
-                                          dbc.Badge(f"{pl:,.2f} {currency_symbol}", className="ml-1",
-                                                    color=get_color(pl), pill=True)
-                                          ])
-                                 for sym, perf, pl in
-                                 zip(self.worst_symbols, self.worst_performances, self.worst_growth)]
-                        )
-                    ], color='secondary', outline=True),
-                    xs=12, sm=6, style={'margin': '1rem 0rem'}
-                )
-            ],
-            className='mb-6',
-        )
-
-        info_cards = [card_row_1, card_row_2]
-        return info_cards
-
-    def create_chart_tabs(self):
-        card = html.Div(
-            [
-                dbc.Row(
-                    [dbc.Col(
-                        dbc.Tabs(
-                            [
-                                dbc.Tab(
-                                    # [html.I(className='fas fa-chart-line mr-2'), html.Span('History')],
-                                    label='History',
-                                    tab_id='history_tab'
-                                ),
-                                dbc.Tab(label='Performance', tab_id='performance_tab'),
-                            ],
-                            id='chart_tabs',
-                            card=True,
-                            active_tab='history_tab',
-                            className='m-1'
-                        ),
-                        xs=12,
-                        sm=6,
-                        # className='col-auto me-auto'
-                    ), dbc.Col(
-                        dbc.Select(
-                            id='chart_time_range',
-                            options=[
-                                {'label': 'Today', 'value': 'day'},
-                                {'label': 'Last week', 'value': 'week'},
-                                {'label': 'Last month', 'value': 'month'},
-                                {'label': '6 Month', 'value': '6month'},
-                                {'label': 'Last Year', 'value': 'year'},
-                                {'label': 'Since Buy', 'value': 'buy'}
-                            ],
-                            value='buy',
-                            placeholder='Chart range',
-                            bs_size='sm',
-                            className='w-auto m-1'
-                        ),
-                        className='col-auto ml-auto',
-                    )],
-                    justify='between'
-                ),
-                html.Div(
-                dbc.Card(
-                    [
-                        dcc.Graph(
-                            id='chart',
-                            config={
-                                'displayModeBar': False,
-                                'staticPlot': True
-                            },
-                            className='chart'
-                        ),
-                    ],
-                    body=True,
-                ), )
-            ],
-            # color='secondary', outline=True,
-        )
-        return card
-
-    # Main Dashboard
-    def create_dashboard(self):
-        return html.Div(children=[
-            # update performance chart every 5 minutes
-            # dcc.Interval(id='performance-interval', interval=5 * 60 * 1000, n_intervals=0),
-            dbc.Container([
-                dbc.Row([
-                    dbc.Col([
-                        dcc.Graph(
-                            id='allocation_chart',
-                            figure=self.allocation_chart,
-                            config={
-                                'displayModeBar': False,
-                                'staticPlot': True,
-                            }
-                        ),
-
-                    ],
-                        xl=5, lg=12
-                    ),
-                    dbc.Col(
-                        id='info_cards',
-                        children=self.create_info_cards(),
-                        xl=7, lg=12
-                    )
-                ], justify='center', no_gutters=False, align='center'),
-
-                dbc.Row(
-                    [
-                        dbc.Col([self.create_chart_tabs()], xs=12,)
-                    ],
-                    justify='center', no_gutters=False
-                )],
-                fluid=False,),
-        ])
+            port = 80
+            host = '0.0.0.0'
+            logging.info('Webapp is available on port 80')
+            http_server = WSGIServer((host, port), self.server, )
+            http_server.serve_forever()

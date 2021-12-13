@@ -1,9 +1,19 @@
+dashboard:
+  dashboard: on
+  domain_name: localhost
+  login_provider:
+    options:
+      - custom  # basic implemented login screen (recommended) -> give email and password in secrets.yaml
+      - auth0   # external login provider -> create an auth0 api account and put the api data in a .env file
+    selected: custom
+
 trading_bot:
-  test_mode: yes  # use exchanges testnet api
+  test_mode: no  # use exchanges testnet api
   exchange:
     options:
       - binance
       - kraken
+      - coinbasepro
     selected: binance
   base_currency:
     options:
@@ -11,18 +21,16 @@ trading_bot:
       - usd
       - btc
       - eth
-    selected: usd
+    selected: eur
   base_symbol:  # symbol used to buy the index
     options:
       - busd
       - usdc
       - usdt
       - usd
-      - eur
-      - btc
-    selected: busd
+    selected: btc
   savings_plan:
-    cost: 500  # denoted in base_currency
+    cost: 50  # denoted in base_currency
     interval:
       options:
         - daily
@@ -30,7 +38,7 @@ trading_bot:
         - biweekly
         - array of day numbers  # e.g. [5, 20] for execution on 5th and 20th of every month
       selected: [5, 20]
-    execution_time: '12:30'  # HH:MM
+    execution_time: '12:30'
   portfolio:
     mode:
       options:
@@ -38,42 +46,22 @@ trading_bot:
         - index  # not yet implemented
       selected: cherry_pick
     cherry_pick:
-      symbols:  # as defined by coingecko
-        - btc
-        - eth
-#          - ada
-#          - dot
-#          - link
-#          - vet
-#          - sol
-#          - neo
-#          - matic
-#          - atom
-#          # - theta # not available on binance
-#          - avax
-#          - iota
-#          # - xch
-#          - algo
-#          - one
-#          - qtum
-#          - nano
+        symbols:
+          - btc
+          - eth
     index:
-      top_n: 10
-      exclude_symbols: [xrp]    # probably a good idea to exclude stable coins
+      top_n: 15
+      exclude_symbols: [xrp, usdc, dai, usdt, busd]
     weighting:
       options:
         - equal
-        - custom
         - market_cap
         - sqrt_market_cap       # square root of market cap
         - cbrt_market_cap       # cubic root
         - sqrt_sqrt_market_cap  # fourth root
-      selected: cbrt_market_cap
+      selected: market_cap
       custom:
-        btc: 0.1
-        eth: 0.9
+        btc: 50
+        eth: 50
 
-dashboard:
-  dashboard: on
-  domain_name: no
-
+telegram_bot:
