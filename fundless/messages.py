@@ -239,16 +239,29 @@ class TelegramBot:
             "Alright! I am computing the optimal buy order..."
         )
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-        time.sleep(2)
+        time.sleep(1)
+        available_symbols = self.trading_bot.filter_available(self.config.trading_bot_config.cherry_pick_symbols)
+        if len(available_symbols) < len(self.config.trading_bot_config.cherry_pick_symbols):
+            update.message.reply_text(f"The following coins are not available to buy on your exchange "
+                                      f"with {self.config.trading_bot_config.base_symbol.upper()}:")
+            update.message.reply_text(f"{[coin.upper() for coin in self.config.trading_bot_config.cherry_pick_symbols if coin not in available_symbols]}")
+
         if self.rebalance:
             symbols, weights = self.trading_bot.rebalancing_weights()
+            # filter out symbols that are not available on the exchange
+            symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
+                                     symbol in available_symbols])
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered, reason = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered, reasons = self.trading_bot.volume_corrected_weights(symbols, weights)
         else:
             symbols, weights = self.trading_bot.analytics.fetch_index_weights()
+            # filter out symbols that are not available on the exchange
+            symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
+                                     symbol in available_symbols])
             # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered, reason = self.trading_bot.volume_corrected_weights(symbols, weights)
+            symbols_filtered, weights_filtered, reasons = self.trading_bot.volume_corrected_weights(symbols, weights)
         if len(symbols_filtered) == 0:
+            reason = reasons[0]
             update.message.reply_text('Your order is not executable!')
             if 'too low' in reason:
                 update.message.reply_text("Your order volume is too low!")
@@ -259,7 +272,7 @@ class TelegramBot:
                 update.message.reply_text("Either your order volume is too low or the tickers you want"
                                           " to trade are not available on the exchange!")
             return ConversationHandler.END
-        vol_problems = [symbol for symbol in symbols if symbol not in symbols_filtered and symbol in self.config.trading_bot_config.cherry_pick_symbols]
+        vol_problems = [symbol.upper() for symbol in symbols if symbol not in symbols_filtered and symbol in self.config.trading_bot_config.cherry_pick_symbols]
         if len(vol_problems) > 0:
             update.message.reply_text("The order volume is too low, to buy the following coins:")
             update.message.reply_text(f"{vol_problems}")

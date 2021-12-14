@@ -20,6 +20,7 @@ else:
 class ExchangeEnum(str, MultiValueEnum):
     binance = 'binance', 'Binance'
     kraken = 'kraken', 'Kraken'
+    coinbasepro = 'coinbasepro', 'Coinbase Pro', 'coinbase_pro'
 
 
 class LoginProviderEnum(str, MultiValueEnum):
@@ -59,9 +60,10 @@ class PortfolioModeEnum(str, MultiValueEnum):
     index = 'index', 'Index'
 
 
-class ExchangeToken(TypedDict):
+class ExchangeToken(TypedDict, total=False):
     api_key: str
     secret: str
+    passphrase: Optional[str]
 
 
 class TelegramToken(TypedDict):
@@ -134,6 +136,9 @@ class TradingBotConfig(BaseConfig):
     custom_weights: Optional[Dict[constr(to_lower=True), float]]
     index_top_n: Optional[conint(gt=0, le=100)]
     index_exclude_symbols: Optional[List[constr(to_lower=True)]]
+    # base_fiat_symbols: List[str]  # TODO define fiat symbols here instead of in trading.py
+    # usd_symbols = ['usd', 'usdt', 'busd', 'usdc', 'dai']
+    # eur_symbols = ['eur', 'eurt']
 
     @validator('base_currency')
     def check_if_currency_supported(cls, v):
@@ -208,6 +213,7 @@ class SecretsStore(BaseConfig):
     kraken_test: ExchangeToken
     binance: ExchangeToken
     kraken: ExchangeToken
+    coinbasepro: ExchangeToken
     telegram: TelegramToken
     dashboard_user: str
     dashboard_password: str
@@ -243,6 +249,11 @@ class SecretsStore(BaseConfig):
             kraken=ExchangeToken(
                 api_key=dictionary['exchanges']['mainnet']['kraken']['api_key'],
                 secret=dictionary['exchanges']['mainnet']['kraken']['secret']
+            ),
+            coinbasepro=ExchangeToken(
+                api_key=dictionary['exchanges']['mainnet']['coinbasepro']['api_key'],
+                secret=dictionary['exchanges']['mainnet']['coinbasepro']['secret'],
+                passphrase=dictionary['exchanges']['mainnet']['coinbasepro']['passphrase']
             ),
             telegram=TelegramToken(
                 token=dictionary['telegram']['token'],
