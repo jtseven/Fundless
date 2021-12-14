@@ -46,7 +46,7 @@ trading_bot:
         - index  # not yet implemented
       selected: cherry_pick
     cherry_pick:
-        symbols:
+        symbols:  # as defined by coingecko
           - btc
           - eth
     index:

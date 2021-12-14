@@ -1,7 +1,6 @@
-import math
 import ccxt
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from datetime import datetime
 from redo import retrying
 import logging
@@ -9,10 +8,10 @@ import logging
 from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
-from constants import USD_SYMBOLS
+from constants import USD_SYMBOLS, FIAT_SYMBOLS
+
 
 logger = logging.getLogger(__name__)
-
 
 
 def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
@@ -51,17 +50,32 @@ class TradingBot:
             else:
                 self.exchange.apiKey = self.secrets.kraken['api_key']
                 self.exchange.secret = self.secrets.kraken['secret']
+        elif self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbasepro:
+            self.exchange = ccxt.coinbasepro()
+            if self.bot_config.trading_bot_config.test_mode:
+                raise NotImplementedError('Coinbase Pro does not support test mode right now')
+            else:
+                self.exchange.apiKey = self.secrets.coinbasepro['api_key']
+                self.exchange.secret = self.secrets.coinbasepro['secret']
+                self.exchange.password = self.secrets.coinbasepro['passphrase']
         else:
             raise ValueError('Invalid Exchange given!')
 
         self.exchange.set_sandbox_mode(self.bot_config.trading_bot_config.test_mode)
+        self.exchange.check_required_credentials()
         self.exchange.load_markets()
 
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module
         try:
             data = self.exchange.fetch_total_balance()
-            markets = self.exchange.fetch_tickers()
+
+            if self.exchange.has['fetchTickers']:
+                markets = self.exchange.fetch_tickers()
+            else:
+                markets = False
+                # # TODO pull market data in an alternative way
+                # raise NotImplementedError("Exchange does not support fetching tickers!")
         except Exception as e:
             print(f"Error while getting balance from exchange:")
             print(e)
@@ -69,13 +83,21 @@ class TradingBot:
         symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
         base = self.bot_config.trading_bot_config.base_symbol.upper()
-        try:
+        if markets:
+            # use exchange market data
+            try:
+                values = np.array([float(
+                    markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in USD_SYMBOLS else amount
+                                for key, amount in zip(symbols, amounts)])
+            except KeyError as e:
+                print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
+                raise
+        else:
+            # use coingecko market data from analytics module
             values = np.array([float(
-                markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in USD_SYMBOLS else amount
-                               for key, amount in zip(symbols, amounts)])
-        except KeyError as e:
-            print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
-            raise
+                self.analytics.markets.loc[self.analytics.markets['symbol'] == symbol, ['current_price']].values[0][0]
+            ) for symbol in symbols])
+
         allocations = values/values.sum()*100
         sorted = values.argsort()
         symbols = symbols[sorted[::-1]]
@@ -117,8 +139,12 @@ class TradingBot:
         return allocation_error['symbols'], weights
 
     def volume_corrected_weights(self, symbols: np.ndarray, weights: np.ndarray, base_currency_volume: float = None):
+        symbols = np.asarray(symbols)
+        weights = np.asarray(weights)
         volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
         volume = self.analytics.base_currency_to_base_symbol(volume)
+        weights = weights/weights.sum()
+
         volume_fail, reason = self.check_order_limits(symbols, weights, volume, fail_fast=True)
         if len(volume_fail) > 0:
             sorter = weights.argsort()
@@ -134,7 +160,7 @@ class TradingBot:
                     sorter = check_weights.argsort()
                     return check_symbols[sorter[::-1]], check_weights[::-1], None
             return [], [], reason  # the volume is too low even when buying just one coin -> no order executable
-        return symbols, weights, None
+        return symbols, weights, []
 
     def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float):
         # Pull latest market data
@@ -154,9 +180,9 @@ class TradingBot:
         if problems['occurred']:
             return problems
 
-        volume_fail, reason = self.check_order_limits(symbols, weights, base_symbol_volume)
+        volume_fail, reasons = self.check_order_limits(symbols, weights, base_symbol_volume)
         if len(volume_fail) > 0:
-            for symbol in volume_fail:
+            for symbol, reason in zip(volume_fail, reasons):
                 print(f"Order of {symbol.upper()} not possible: {reason}. Skipping...")
                 problems['occurred'] = True
                 problems['description'] = f'{symbol.upper()}: {reason}'
@@ -170,9 +196,17 @@ class TradingBot:
         insufficient = False
         if balance < base_symbol_volume:
             insufficient = True
+            base_symbol = self.bot_config.trading_bot_config.base_symbol.upper()
+            if base_symbol.upper() in FIAT_SYMBOLS:
+                print_balance = f'{balance:.2f}'
+                print_volume = f'{base_symbol_volume:.2f}'
+            else:
+                print_balance = print_crypto_amount(balance)
+                print_volume = print_crypto_amount(base_symbol_volume)
+
             problems['description'] = \
-                f'Insufficient funds to execute savings plan, you have {balance:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}' + \
-                f'\nYou need {base_symbol_volume:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}'
+                f'Insufficient funds to execute savings plan, you have {print_balance} {base_symbol}' + \
+                f'\nYou need {print_volume} {self.bot_config.trading_bot_config.base_symbol.upper()}'
         if self.bot_config.trading_bot_config.base_symbol.upper() in symbols:
             index_symbols, index_amounts, _, _ = self.analytics.index_balance()
             index = index_symbols.tolist().index(self.bot_config.trading_bot_config.base_symbol.upper())
@@ -202,9 +236,23 @@ class TradingBot:
                 problems['fail'] = True
         return problems
 
+    # filter only tickers that are available on the exchange
+    def filter_available(self, symbols: Union[np.ndarray, List]):
+        available = [symbol for symbol in symbols if self.is_available(symbol)]
+        print(available)
+        return available
+
+    def is_available(self, base_currency: str, quote_currency: str = None):
+        if quote_currency is None:
+            quote_currency = self.bot_config.trading_bot_config.base_symbol.upper()
+        if base_currency.upper() == quote_currency.upper():
+            return True
+        return f'{base_currency.upper()}/{quote_currency}' in self.exchange.markets
+
+
     def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
         volume_fail = []
-        reason = ''
+        reason = []
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 continue
@@ -214,8 +262,9 @@ class TradingBot:
             except ccxt.errors.BadSymbol:
                 logger.warning(f"Ticker {ticker} is not available on the exchange!")
                 volume_fail.append(symbol)
+                reason.append('Ticker not available')
                 if fail_fast:
-                    return volume_fail, f'Ticker not available'
+                    return volume_fail, reason
                 continue
             cost = weight * base_symbol_volume
             amount = weight * base_symbol_volume / price
@@ -223,14 +272,16 @@ class TradingBot:
             if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
                 logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
                 volume_fail.append(symbol)
+                reason.append('Order amount too low')
                 if fail_fast:
-                    return volume_fail, f'Order amount too low'
+                    return volume_fail, reason
             elif cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
                 logger.warning(f"The cost of {cost} {self.bot_config.trading_bot_config.base_symbol.upper()}"
                                f" is too low to place an order!")
                 volume_fail.append(symbol)
+                reason.append('Order cost too low')
                 if fail_fast:
-                    return volume_fail, 'Order cost too low'
+                    return volume_fail, reason
 
         return volume_fail, reason
 
