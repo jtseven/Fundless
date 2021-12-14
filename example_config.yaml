@@ -1,3 +1,4 @@
+# rename: example_config.yaml -> config.yaml
 dashboard:
   dashboard: on
   domain_name: localhost
