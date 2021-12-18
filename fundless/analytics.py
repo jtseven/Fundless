@@ -15,10 +15,12 @@ import datetime
 from threading import Thread
 import logging
 from currency_converter import CurrencyConverter
+import ccxt
 
-from config import Config, TradingBotConfig, WeightingEnum
+from config import Config, WeightingEnum, ExchangeEnum
 from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS
+from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,6 @@ class PortfolioAnalytics:
     last_trades_update: float = 0
 
     def __init__(self, file_path, config: Config):
-        self.logger = logging.getLogger('AnalyticsLogger')
         self.config = config
         self.init_config_parameters()
         self.trades_file = Path(file_path)
@@ -62,6 +63,17 @@ class PortfolioAnalytics:
         self.update_data()
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
+
+        if config.trading_bot_config.exchange == ExchangeEnum.binance:
+            self.exchange = ccxt.binance()
+        elif config.trading_bot_config.exchange == ExchangeEnum.kraken:
+            self.exchange = ccxt.kraken()
+        elif config.trading_bot_config.exchange == ExchangeEnum.coinbasepro:
+            self.exchange = ccxt.coinbasepro()
+        else:
+            raise ValueError('Invalid exchange given in config!')
+        self.exchange.load_markets()
+
 
     def run_api_updates(self):
         if self.running_updates:
@@ -81,8 +93,9 @@ class PortfolioAnalytics:
             raise e
 
     def update_data(self):
-        self.update_trades_df()
         self.update_markets()
+        self.update_trades_df()
+        self.update_index_df()
         self.update_portfolio_metrics()
         self.update_historical_prices()
 
@@ -93,7 +106,7 @@ class PortfolioAnalytics:
                            'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'str',
                            self.base_cost_row: 'float64', 'date': 'str'}
         self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
-                            self.base_cost_row]
+                            self.base_cost_row, 'exchange']
 
     def update_config(self, base_currency_changed: bool = False, index_changed: bool = False):
         self.init_config_parameters()
@@ -104,6 +117,11 @@ class PortfolioAnalytics:
             self.last_history_update_month = 0
         if index_changed:
             self.update_index_df()
+
+    def coin_available_on_exchange(self, coin: str):
+        if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
+            return True
+        return f'{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}' in self.exchange.symbols
 
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
@@ -129,7 +147,7 @@ class PortfolioAnalytics:
         try:
             image = self.markets.loc[self.markets['symbol'] == symbol, ['image']].values[0][0]
         except IndexError:
-            logger.warn(f'No image found for coin {symbol}!')
+            logger.warning(f'No image found for coin {symbol}!')
             return 'assets/coins-solid.png'
         return image
 
@@ -191,16 +209,34 @@ class PortfolioAnalytics:
 
                 return base_cost
 
+            # add cost of trades in currently selected currency, it it's not there yet
             if self.base_cost_row in trades_df.columns:
                 if trades_df[self.base_cost_row].isnull().values.any():
                     trades_df.loc[trades_df[self.base_cost_row].isnull(), self.base_cost_row] = \
                         trades_df.loc[trades_df[self.base_cost_row].isnull()].apply(lambda row: compute_base_cost(row), axis=1)
                     update_file = True
             else:
-                print('Updating your trades file with historic cost in base currency, this will take a while '
+                logger.info('Updating your trades file with historic cost in base currency, this will take a while '
                       'but is only performed once!')
                 trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
                 update_file = True
+
+            # add column for used exchange, if it's not there yet
+            if 'exchange' in trades_df.columns:
+                if trades_df['exchange'].isnull().values.any():
+                    trades_df.loc[trades_df['exchange'].isnull(), 'exchange'] = \
+                        self.config.trading_bot_config.exchange.value
+                    update_file = True
+            else:
+                trades_df['exchange'] = self.config.trading_bot_config.exchange.value
+                update_file = True
+
+            # check if a coin has been rebranded and the old name is still used in the file
+            if trades_df['buy_symbol'].isin(pd.Series(COIN_REBRANDING.keys())).any():
+                trades_df['buy_symbol'].replace(COIN_REBRANDING, inplace=True)
+                trades_df['sell_symbol'].replace(COIN_REBRANDING, inplace=True)
+                update_file = True
+
 
             self.trades_df = trades_df
             self.last_trades_update = time()
@@ -224,15 +260,12 @@ class PortfolioAnalytics:
                 markets = pd.DataFrame.from_records(get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=200))
                 markets['symbol'] = markets['symbol'].str.lower()
         except requests.exceptions.HTTPError as e:
-            print('Network error while updating market data from CoinGecko:')
-            print(e)
+            logger.error('Network error while updating market data from CoinGecko:')
+            logger.error(e)
             return
         markets.replace(coingecko_symbol_dict, inplace=True)
         self.markets = markets
         self.last_market_update = time()
-
-        if self.last_trades_update > 0:
-            self.update_index_df()
 
     def update_index_df(self):
         # update index portfolio value
@@ -251,13 +284,16 @@ class PortfolioAnalytics:
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
-                  cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None):
+                  cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None,
+                  exchange: Optional[constr(to_lower=True, regex=EXCHANGE_REGEX)] = None):
         if base_cost is None:
             base_cost = self.base_symbol_to_base_currency(cost)
         if fee is None:
             fee = 0
         if fee_symbol is None:
             fee_symbol = ''
+        if exchange is None:
+            exchange = self.config.trading_bot_config.exchange.value
         try:
             date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
         except pd.errors:
@@ -265,7 +301,8 @@ class PortfolioAnalytics:
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
-                      self.base_cost_row: [base_cost]
+                      self.base_cost_row: [base_cost],
+                      'exchange': exchange
                       }
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
@@ -302,7 +339,10 @@ class PortfolioAnalytics:
         self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
         value_format = f'{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}'
         df['Coin'] = self.index_df['symbol']
-        df['Currently in Index'] = self.index_df['symbol'].map(lambda sym: 'yes' if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else 'no')
+        df['Currently in Index'] = self.index_df['symbol'].map(
+            lambda sym: 'yes' if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else 'no')
+        df[f'Available'] = self.index_df['symbol'].map(
+            lambda sym: 'yes' if self.coin_available_on_exchange(sym) else 'no')
         df['Amount'] = self.index_df['amount'].map(print_crypto_amount)
         df['Allocation'] = self.index_df['allocation'].map('{:.2%}'.format)
         df['Value'] = self.index_df['value'].map(value_format.format)
@@ -363,8 +403,8 @@ class PortfolioAnalytics:
                         data = get_history(id=id, vs_currency=self.config.trading_bot_config.base_currency.value,
                                            from_timestamp=from_timestamp, to_timestamp=to_timestamp)
                 except requests.exceptions.HTTPError as e:
-                    print('Error while updating historic prices from API')
-                    print(e)
+                    logger.error('Error while updating historic prices from API')
+                    logger.error(e)
                     return
                 data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
                 data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms', utc=True)

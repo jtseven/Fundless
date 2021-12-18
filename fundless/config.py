@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
 from pydantic import validator, root_validator
 from aenum import MultiValueEnum
+import logging
 
 if sys.version_info >= (3, 8):
     from typing import TypedDict
@@ -13,8 +14,11 @@ else:
     from typing_extensions import TypedDict
 
 
+logger = logging.getLogger(__name__)
+
+
 # Convention for multi value enums:
-#   - value: used in config and code
+#   - value: used in config and code (string as defined by ccxt)
 #   - values[1]: beautiful name for printing
 #   - values[2:]: alternative names (might be used by user in config and interaction)
 class ExchangeEnum(str, MultiValueEnum):

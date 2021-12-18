@@ -8,6 +8,7 @@ import logging
 from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
+import logging
 from constants import USD_SYMBOLS, FIAT_SYMBOLS
 
 
@@ -64,6 +65,12 @@ class TradingBot:
         self.exchange.set_sandbox_mode(self.bot_config.trading_bot_config.test_mode)
         self.exchange.check_required_credentials()
         self.exchange.load_markets()
+        not_available = [symbol.upper() for symbol in self.bot_config.trading_bot_config.cherry_pick_symbols if
+                         f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}' not in
+                         self.exchange.symbols and symbol != self.bot_config.trading_bot_config.base_symbol]
+        if len(not_available) > 0:
+            logger.warning(f'Some of your cherry picked coins are not available on {self.exchange.name}:')
+            logger.warning(not_available)
 
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module
@@ -360,6 +367,7 @@ class TradingBot:
                 buy_symbol = symbol.upper()
                 sell_symbol = symbol.upper()
                 fee = 0
+                fee_symbol = ''
             else:
                 logger.info(f'Getting status of {symbol} order...')
                 with retrying(self.exchange.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
@@ -379,7 +387,12 @@ class TradingBot:
                     date = datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S')
                     buy_symbol = order['symbol'].split('/')[0]
                     sell_symbol = order['symbol'].split('/')[1]
-                    fee = order['fee']
+                    if order['fee'] is None:
+                        fee = 0
+                        fee_symbol = ''
+                    else:
+                        fee = order['fee']['cost']
+                        fee_symbol = order['fee']['currency']
                 except KeyError:
                     logger.error(f"KeyError while checking {symbol} order status!")
                     order_report['symbol'] = 'open'
@@ -389,14 +402,20 @@ class TradingBot:
             order_report[symbol]['cost'] = cost
             closed_orders.append(symbol)
             logger.info(f"Adding {symbol} order to the trades file")
-            self.analytics.add_trade(date=date,
-                                     buy_symbol=buy_symbol,
-                                     sell_symbol=sell_symbol,
-                                     price=price,
-                                     amount=amount,
-                                     cost=cost,
-                                     fee=fee,
-                                     fee_symbol='')
+            try:
+                self.analytics.add_trade(date=date,
+                                         buy_symbol=buy_symbol,
+                                         sell_symbol=sell_symbol,
+                                         price=price,
+                                         amount=amount,
+                                         cost=cost,
+                                         fee=fee,
+                                         fee_symbol=fee_symbol,
+                                         exchange=self.exchange.name)
+            except Exception as e:
+                logger.error(f"Error while logging trade to trades.csv:")
+                logger.error(e)
+                raise e
         order_report['closed'] = closed_orders
         order_report['open'] = open_orders
         return order_report

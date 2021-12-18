@@ -1,4 +1,3 @@
-import logging
 import dash
 from dash import dcc
 from dash import html
@@ -10,6 +9,7 @@ from dash_extensions import DeferScript
 from gevent.pywsgi import WSGIServer
 from collections import Counter
 from flask import render_template, redirect
+import logging
 
 # local imports
 from config import Config
@@ -17,6 +17,10 @@ from analytics import PortfolioAnalytics
 from utils import Constants
 import layouts
 from login import LoginProvider
+
+
+logger = logging.getLogger(__name__)
+
 
 APP_URL = '/app/'
 
@@ -161,27 +165,27 @@ class Dashboard:
             elif active_tab == 'performance_tab':
                 chart = self.performance_chart
             else:
-                print('Invalid tab selected!')
+                logger.warning('Invalid tab selected!')
                 chart = None
             return chart
 
         @self.app.callback(Input('base_currency', 'value'))
         def set_base_currency(value):
             if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
-                print('Updating config!')
+                logger.debug('Updating config!')
                 self.config.trading_bot_config.base_currency = value  # this also changes the config in analytics
                 self.analytics.update_config(base_currency_changed=True)
                 self.performance_chart = {}
                 self.history_chart = {}
             else:
-                print("Not updating config!")
+                logger.debug("Not updating config!")
 
         def set_index(symbols):
             current = self.config.trading_bot_config.cherry_pick_symbols
             new = symbols
             if Counter(current) == Counter(new):
                 return
-            print('Updating index')
+            logger.debug('Updating index')
             self.config.trading_bot_config.cherry_pick_symbols = new
             self.analytics.update_config(index_changed=True)
 
@@ -205,9 +209,13 @@ class Dashboard:
             set_index(union)
             return union
 
-        @self.app.callback(Input('base_symbol', 'value'))
+        @self.app.callback(Input('base_symbol', 'value'),
+                           Output('index_coins', 'options'))
         def set_base_symbol(sym):
             self.config.trading_bot_config.base_symbol = sym
+            return [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                                          analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
+                                          or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
 
         @self.app.callback(Input('volume', 'value'))
         def set_volume(vol):
@@ -287,13 +295,13 @@ class Dashboard:
 
     def run_dashboard(self):
         if 'localhost' in self.config.dashboard_config.domain_name:
-            logging.info('Webapp is available on localhost:3000')
+            logger.info('Webapp is available on localhost:3000')
             port = 3000
             host = self.config.dashboard_config.domain_name
             self.app.run_server(host=host, port=port, debug=False, use_reloader=False, dev_tools_hot_reload=False)
         else:
             port = 80
             host = '0.0.0.0'
-            logging.info('Webapp is available on port 80')
+            logger.info('Webapp is available on port 80')
             http_server = WSGIServer((host, port), self.server, )
             http_server.serve_forever()

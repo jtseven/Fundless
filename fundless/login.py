@@ -7,9 +7,13 @@ from flask import session, redirect, Flask, render_template, url_for, request, j
 from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.parse import urlencode
 from werkzeug.exceptions import HTTPException
+import logging
 
 from config import DashboardConfig, LoginProviderEnum, SecretsStore
 from utils import Constants
+
+
+logger = logging.getLogger(__name__)
 
 
 class User(UserMixin):
@@ -105,12 +109,8 @@ class LoginProvider:
         if self.provider == LoginProviderEnum.auth0:
             return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
         elif self.provider == LoginProviderEnum.custom:
-            print("using custom login provider")
             email = request.form.get('email')
             password = request.form.get('password')
-            print(request)
-            print(email)
-            print(password)
 
             if email == self.secrets_store.dashboard_user and password == self.secrets_store.dashboard_password:
                 user = User(email)
