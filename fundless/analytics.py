@@ -216,7 +216,7 @@ class PortfolioAnalytics:
                         trades_df.loc[trades_df[self.base_cost_row].isnull()].apply(lambda row: compute_base_cost(row), axis=1)
                     update_file = True
             else:
-                print('Updating your trades file with historic cost in base currency, this will take a while '
+                logger.info('Updating your trades file with historic cost in base currency, this will take a while '
                       'but is only performed once!')
                 trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
                 update_file = True
@@ -260,8 +260,8 @@ class PortfolioAnalytics:
                 markets = pd.DataFrame.from_records(get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=200))
                 markets['symbol'] = markets['symbol'].str.lower()
         except requests.exceptions.HTTPError as e:
-            print('Network error while updating market data from CoinGecko:')
-            print(e)
+            logger.error('Network error while updating market data from CoinGecko:')
+            logger.error(e)
             return
         markets.replace(coingecko_symbol_dict, inplace=True)
         self.markets = markets
@@ -403,8 +403,8 @@ class PortfolioAnalytics:
                         data = get_history(id=id, vs_currency=self.config.trading_bot_config.base_currency.value,
                                            from_timestamp=from_timestamp, to_timestamp=to_timestamp)
                 except requests.exceptions.HTTPError as e:
-                    print('Error while updating historic prices from API')
-                    print(e)
+                    logger.error('Error while updating historic prices from API')
+                    logger.error(e)
                     return
                 data_df = pd.DataFrame.from_records(data['prices'], columns=['timestamp', f'{coin}'])
                 data_df['timestamp'] = pd.to_datetime(data_df['timestamp'], unit='ms', utc=True)

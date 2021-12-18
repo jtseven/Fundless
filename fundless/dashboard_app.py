@@ -165,27 +165,27 @@ class Dashboard:
             elif active_tab == 'performance_tab':
                 chart = self.performance_chart
             else:
-                print('Invalid tab selected!')
+                logger.warning('Invalid tab selected!')
                 chart = None
             return chart
 
         @self.app.callback(Input('base_currency', 'value'))
         def set_base_currency(value):
             if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
-                print('Updating config!')
+                logger.debug('Updating config!')
                 self.config.trading_bot_config.base_currency = value  # this also changes the config in analytics
                 self.analytics.update_config(base_currency_changed=True)
                 self.performance_chart = {}
                 self.history_chart = {}
             else:
-                print("Not updating config!")
+                logger.debug("Not updating config!")
 
         def set_index(symbols):
             current = self.config.trading_bot_config.cherry_pick_symbols
             new = symbols
             if Counter(current) == Counter(new):
                 return
-            print('Updating index')
+            logger.debug('Updating index')
             self.config.trading_bot_config.cherry_pick_symbols = new
             self.analytics.update_config(index_changed=True)
 
