@@ -16,9 +16,9 @@ from threading import Thread
 import logging
 from currency_converter import CurrencyConverter
 
-from config import Config, TradingBotConfig, WeightingEnum
+from config import Config, WeightingEnum
 from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS
+from constants import FIAT_SYMBOLS, EXCHANGE_REGEX
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +81,9 @@ class PortfolioAnalytics:
             raise e
 
     def update_data(self):
-        self.update_trades_df()
         self.update_markets()
+        self.update_trades_df()
+        self.update_index_df()
         self.update_portfolio_metrics()
         self.update_historical_prices()
 
@@ -191,6 +192,7 @@ class PortfolioAnalytics:
 
                 return base_cost
 
+            # add cost of trades in currently selected currency, it it's not there yet
             if self.base_cost_row in trades_df.columns:
                 if trades_df[self.base_cost_row].isnull().values.any():
                     trades_df.loc[trades_df[self.base_cost_row].isnull(), self.base_cost_row] = \
@@ -200,6 +202,16 @@ class PortfolioAnalytics:
                 print('Updating your trades file with historic cost in base currency, this will take a while '
                       'but is only performed once!')
                 trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
+                update_file = True
+
+            # add column for used exchange, if it's not there yet
+            if 'exchange' in trades_df.columns:
+                if trades_df['exchange'].isnull().values.any():
+                    trades_df.loc[trades_df['exchange'].isnull(), 'exchange'] = \
+                        self.config.trading_bot_config.exchange.value
+                    update_file = True
+            else:
+                trades_df['exchange'] = self.config.trading_bot_config.exchange.value
                 update_file = True
 
             self.trades_df = trades_df
@@ -231,9 +243,6 @@ class PortfolioAnalytics:
         self.markets = markets
         self.last_market_update = time()
 
-        if self.last_trades_update > 0:
-            self.update_index_df()
-
     def update_index_df(self):
         # update index portfolio value
         other = pd.DataFrame(index=self.config.trading_bot_config.cherry_pick_symbols)
@@ -251,13 +260,16 @@ class PortfolioAnalytics:
     @validate_arguments
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
-                  cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None):
+                  cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None,
+                  exchange: Optional[constr(to_lower=True, regex=EXCHANGE_REGEX)] = None):
         if base_cost is None:
             base_cost = self.base_symbol_to_base_currency(cost)
         if fee is None:
             fee = 0
         if fee_symbol is None:
             fee_symbol = ''
+        if exchange is None:
+            exchange = self.config.trading_bot_config.exchange.value
         try:
             date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
         except pd.errors:
@@ -265,7 +277,8 @@ class PortfolioAnalytics:
         trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
-                      self.base_cost_row: [base_cost]
+                      self.base_cost_row: [base_cost],
+                      'exchange': exchange
                       }
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)

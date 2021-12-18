@@ -14,7 +14,7 @@ else:
 
 
 # Convention for multi value enums:
-#   - value: used in config and code
+#   - value: used in config and code (string as defined by ccxt)
 #   - values[1]: beautiful name for printing
 #   - values[2:]: alternative names (might be used by user in config and interaction)
 class ExchangeEnum(str, MultiValueEnum):

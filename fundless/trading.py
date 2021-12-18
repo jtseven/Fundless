@@ -389,14 +389,20 @@ class TradingBot:
             order_report[symbol]['cost'] = cost
             closed_orders.append(symbol)
             logger.info(f"Adding {symbol} order to the trades file")
-            self.analytics.add_trade(date=date,
-                                     buy_symbol=buy_symbol,
-                                     sell_symbol=sell_symbol,
-                                     price=price,
-                                     amount=amount,
-                                     cost=cost,
-                                     fee=fee,
-                                     fee_symbol='')
+            try:
+                self.analytics.add_trade(date=date,
+                                         buy_symbol=buy_symbol,
+                                         sell_symbol=sell_symbol,
+                                         price=price,
+                                         amount=amount,
+                                         cost=cost,
+                                         fee=fee,
+                                         fee_symbol='',
+                                         exchange=self.exchange.name)
+            except Exception as e:
+                logger.error(f"Error while logging trade to trades.csv:")
+                logger.error(e)
+                raise e
         order_report['closed'] = closed_orders
         order_report['open'] = open_orders
         return order_report
