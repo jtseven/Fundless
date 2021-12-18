@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.9.5-slim
+FROM python:3.9-bullseye
 
 RUN apt-get update -y && apt-get install -y \
     build-essential tzdata make gcc
