@@ -105,12 +105,8 @@ class LoginProvider:
         if self.provider == LoginProviderEnum.auth0:
             return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
         elif self.provider == LoginProviderEnum.custom:
-            print("using custom login provider")
             email = request.form.get('email')
             password = request.form.get('password')
-            print(request)
-            print(email)
-            print(password)
 
             if email == self.secrets_store.dashboard_user and password == self.secrets_store.dashboard_password:
                 user = User(email)

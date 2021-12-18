@@ -360,6 +360,7 @@ class TradingBot:
                 buy_symbol = symbol.upper()
                 sell_symbol = symbol.upper()
                 fee = 0
+                fee_symbol = ''
             else:
                 logger.info(f'Getting status of {symbol} order...')
                 with retrying(self.exchange.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
@@ -379,7 +380,12 @@ class TradingBot:
                     date = datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S')
                     buy_symbol = order['symbol'].split('/')[0]
                     sell_symbol = order['symbol'].split('/')[1]
-                    fee = order['fee']
+                    if order['fee'] is None:
+                        fee = 0
+                        fee_symbol = ''
+                    else:
+                        fee = order['fee']['cost']
+                        fee_symbol = order['fee']['currency']
                 except KeyError:
                     logger.error(f"KeyError while checking {symbol} order status!")
                     order_report['symbol'] = 'open'
@@ -397,7 +403,7 @@ class TradingBot:
                                          amount=amount,
                                          cost=cost,
                                          fee=fee,
-                                         fee_symbol='',
+                                         fee_symbol=fee_symbol,
                                          exchange=self.exchange.name)
             except Exception as e:
                 logger.error(f"Error while logging trade to trades.csv:")
