@@ -2,18 +2,15 @@
 FROM python:3.9-bullseye
 
 RUN apt-get update -y && apt-get install -y \
-    build-essential tzdata make gcc
+    build-essential tzdata
 ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY requirements.txt requirements.txt
-RUN python -m pip install numpy cython --no-binary numpy,cython && \
+RUN python -m pip install --upgrade pip && \
     python -m pip install -r requirements.txt && \
-    python -m pip uninstall -y cython && \
     rm -r /root/.cache/pip && \
-    apt-get remove -y --purge make gcc build-essential && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get autoremove -y
 
 WORKDIR /code
-CMD ["python", "/code/fundless/main.py"]
+CMD ["python", "/code/fundless/__main__.py"]
