@@ -6,11 +6,15 @@ from pydantic import BaseModel
 from pydantic.types import confloat, conint, constr
 from pydantic import validator, root_validator
 from aenum import MultiValueEnum
+import logging
 
 if sys.version_info >= (3, 8):
     from typing import TypedDict
 else:
     from typing_extensions import TypedDict
+
+
+logger = logging.getLogger(__name__)
 
 
 # Convention for multi value enums:

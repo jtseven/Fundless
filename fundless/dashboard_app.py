@@ -1,4 +1,3 @@
-import logging
 import dash
 from dash import dcc
 from dash import html
@@ -10,6 +9,7 @@ from dash_extensions import DeferScript
 from gevent.pywsgi import WSGIServer
 from collections import Counter
 from flask import render_template, redirect
+import logging
 
 # local imports
 from config import Config
@@ -17,6 +17,10 @@ from analytics import PortfolioAnalytics
 from utils import Constants
 import layouts
 from login import LoginProvider
+
+
+logger = logging.getLogger(__name__)
+
 
 APP_URL = '/app/'
 
@@ -287,13 +291,13 @@ class Dashboard:
 
     def run_dashboard(self):
         if 'localhost' in self.config.dashboard_config.domain_name:
-            logging.info('Webapp is available on localhost:3000')
+            logger.info('Webapp is available on localhost:3000')
             port = 3000
             host = self.config.dashboard_config.domain_name
             self.app.run_server(host=host, port=port, debug=False, use_reloader=False, dev_tools_hot_reload=False)
         else:
             port = 80
             host = '0.0.0.0'
-            logging.info('Webapp is available on port 80')
+            logger.info('Webapp is available on port 80')
             http_server = WSGIServer((host, port), self.server, )
             http_server.serve_forever()

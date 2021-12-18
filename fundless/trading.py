@@ -8,6 +8,7 @@ import logging
 from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
+import logging
 from constants import USD_SYMBOLS, FIAT_SYMBOLS
 
 
@@ -64,6 +65,12 @@ class TradingBot:
         self.exchange.set_sandbox_mode(self.bot_config.trading_bot_config.test_mode)
         self.exchange.check_required_credentials()
         self.exchange.load_markets()
+        not_available = [symbol.upper() for symbol in self.bot_config.trading_bot_config.cherry_pick_symbols if
+                         f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}' not in
+                         self.exchange.symbols and symbol != self.bot_config.trading_bot_config.base_symbol]
+        if len(not_available) > 0:
+            logger.warning(f'Some of your cherry picked coins are not available on {self.exchange.name}:')
+            logger.warning(not_available)
 
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module

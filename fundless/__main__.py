@@ -2,6 +2,7 @@ import schedule
 import time
 from datetime import date
 from typing import List
+import coloredlogs
 import logging
 import threading
 
@@ -24,11 +25,14 @@ config_yaml = 'config.yaml'
 trades_csv = 'fundless/data/trades.csv'
 trades_csv_test = 'fundless/data/test_trades.csv'
 
-logging.basicConfig(format='\033[92m %(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 
 if __name__ == '__main__':
+    logging_format = '%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s'
+    coloredlogs.install(level='INFO', fmt=logging_format)
+    logger = logging.getLogger()
+
     logger.info("Hi, I will just buy and HODL!")
 
     # parse all settings from yaml files

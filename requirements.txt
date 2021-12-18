@@ -25,3 +25,4 @@ gevent
 dash_extensions~=0.0.65
 dash_defer_js_import
 currencyconverter~=0.16.5
+coloredlogs~=15.0.1

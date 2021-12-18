@@ -7,9 +7,13 @@ from flask import session, redirect, Flask, render_template, url_for, request, j
 from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.parse import urlencode
 from werkzeug.exceptions import HTTPException
+import logging
 
 from config import DashboardConfig, LoginProviderEnum, SecretsStore
 from utils import Constants
+
+
+logger = logging.getLogger(__name__)
 
 
 class User(UserMixin):
