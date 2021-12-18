@@ -332,8 +332,9 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                 children=[
                     html.Th(
                         header_values[level][pos],
+                        id=f'{header_values[level][pos]}_header',
                         colSpan=span,
-                        style={'text-align': 'left'} if header_values[level][pos] == 'Coin' else {'text-align': 'center'} if header_values[level][pos] == 'Currently in Index' else {'text-align': 'right'}
+                        style={'text-align': 'left'} if header_values[level][pos] == 'Coin' else {'text-align': 'center'} if header_values[level][pos] in ['Currently in Index', 'Available'] else {'text-align': 'right'}
                     )
                     for pos, span in zip(
                         header_breaks[level], header_spans[level]
@@ -342,11 +343,14 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
             )
             for level in range(n_levels)
         ]
-    ), html.Tbody(
+    ),
+        dbc.Tooltip(f"On {analytics.config.trading_bot_config.exchange.values[1]}",
+                    target='Available_header'),
+        html.Tbody(
         [
             html.Tr([
                 html.Td(
-                    children=df.loc[i, col] if col not in ('Coin', 'Currently in Index') else [
+                    children=df.loc[i, col] if col not in ('Coin', 'Currently in Index', f'Available') else [
                             html.Div(html.Img(src=analytics.get_coin_image(df.loc[i, col])), className='crypto-icon'),
                             html.Div(f'{analytics.get_coin_name(df.loc[i, col])}', className='crypto-text')
                     ] if col == 'Coin' else [
@@ -356,7 +360,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                             '-' in df.loc[i, col]) else 'text-success table-cell' if ((col == 'Performance') and
                                                                                       df.loc[
                                                                                           i, col] != '0.00%') else 'table-cell',
-                    style={'text-align': 'left'} if col == 'Coin' else {'text-align': 'center'} if col == 'Currently in Index' else {'text-align': 'right'}
+                    style={'text-align': 'left'} if col == 'Coin' else {'text-align': 'center'} if col in ['Currently in Index', f'Available'] else {'text-align': 'right'}
                 ) for col in df.columns
             ]) for i in df.index
         ]
@@ -384,7 +388,8 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                     dcc.Dropdown(id='index_coins', multi=True, className='mb-2', style={'height': '100%'},
                                  value=[sym for sym in analytics.config.trading_bot_config.cherry_pick_symbols],
                                  options=[{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                                          analytics.markets.symbol.values]
+                                          analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
+                                          or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
                                  ),
                     xl=10, xs=12
                 ),

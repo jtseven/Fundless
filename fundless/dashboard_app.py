@@ -209,9 +209,13 @@ class Dashboard:
             set_index(union)
             return union
 
-        @self.app.callback(Input('base_symbol', 'value'))
+        @self.app.callback(Input('base_symbol', 'value'),
+                           Output('index_coins', 'options'))
         def set_base_symbol(sym):
             self.config.trading_bot_config.base_symbol = sym
+            return [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                                          analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
+                                          or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
 
         @self.app.callback(Input('volume', 'value'))
         def set_volume(vol):

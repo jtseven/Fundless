@@ -15,8 +15,9 @@ import datetime
 from threading import Thread
 import logging
 from currency_converter import CurrencyConverter
+import ccxt
 
-from config import Config, WeightingEnum
+from config import Config, WeightingEnum, ExchangeEnum
 from utils import print_crypto_amount
 from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING
 
@@ -63,6 +64,17 @@ class PortfolioAnalytics:
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
 
+        if config.trading_bot_config.exchange == ExchangeEnum.binance:
+            self.exchange = ccxt.binance()
+        elif config.trading_bot_config.exchange == ExchangeEnum.kraken:
+            self.exchange = ccxt.kraken()
+        elif config.trading_bot_config.exchange == ExchangeEnum.coinbasepro:
+            self.exchange = ccxt.coinbasepro()
+        else:
+            raise ValueError('Invalid exchange given in config!')
+        self.exchange.load_markets()
+
+
     def run_api_updates(self):
         if self.running_updates:
             return
@@ -105,6 +117,11 @@ class PortfolioAnalytics:
             self.last_history_update_month = 0
         if index_changed:
             self.update_index_df()
+
+    def coin_available_on_exchange(self, coin: str):
+        if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
+            return True
+        return f'{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}' in self.exchange.symbols
 
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
@@ -322,7 +339,10 @@ class PortfolioAnalytics:
         self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
         value_format = f'{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}'
         df['Coin'] = self.index_df['symbol']
-        df['Currently in Index'] = self.index_df['symbol'].map(lambda sym: 'yes' if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else 'no')
+        df['Currently in Index'] = self.index_df['symbol'].map(
+            lambda sym: 'yes' if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else 'no')
+        df[f'Available'] = self.index_df['symbol'].map(
+            lambda sym: 'yes' if self.coin_available_on_exchange(sym) else 'no')
         df['Amount'] = self.index_df['amount'].map(print_crypto_amount)
         df['Allocation'] = self.index_df['allocation'].map('{:.2%}'.format)
         df['Value'] = self.index_df['value'].map(value_format.format)
