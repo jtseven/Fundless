@@ -391,18 +391,18 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                           analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
                                           or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
                                  ),
-                    xl=10, xs=12
+                    lg=10, md=12
                 ),
                 dbc.Col(
-                    sm=12, xl=2,
-                    children=dbc.Row(html.Div([
-                        dbc.Col(dbc.Button('Apply', outline=True, color='success', id='index-apply',
-                                           className='my-1'), xs=12, sm=6, xl=12),
-                        dbc.Col(dbc.Button('Reset', outline=True, color='danger', id='index-reset',
-                                           className='my-1'), xs=12, sm=6, xl=12),
-                        dbc.Col(dbc.Button('Add Holdings', outline=True, color='info', id='index-holdings',
-                                           className='my-1'), xs=12),
-                    ], className='d-grid gap-2')),
+                    md=12, lg=2,
+                    children=html.Div([
+                        dbc.Button('Apply', outline=True, color='success', id='index-apply',
+                                   className='my-1'),
+                        dbc.Button('Reset', outline=True, color='danger', id='index-reset',
+                                   className='my-1'),
+                        dbc.Button('Add Holdings', outline=True, color='info', id='index-holdings',
+                                   className='my-1'),
+                    ], className='d-grid gap-2'),
                 ),
             ]),
             html.Hr(),
