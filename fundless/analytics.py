@@ -18,7 +18,8 @@ from currency_converter import CurrencyConverter
 
 from config import Config, WeightingEnum
 from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS, EXCHANGE_REGEX
+from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,6 @@ class PortfolioAnalytics:
     last_trades_update: float = 0
 
     def __init__(self, file_path, config: Config):
-        self.logger = logging.getLogger('AnalyticsLogger')
         self.config = config
         self.init_config_parameters()
         self.trades_file = Path(file_path)
@@ -94,7 +94,7 @@ class PortfolioAnalytics:
                            'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'str',
                            self.base_cost_row: 'float64', 'date': 'str'}
         self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
-                            self.base_cost_row]
+                            self.base_cost_row, 'exchange']
 
     def update_config(self, base_currency_changed: bool = False, index_changed: bool = False):
         self.init_config_parameters()
@@ -130,7 +130,7 @@ class PortfolioAnalytics:
         try:
             image = self.markets.loc[self.markets['symbol'] == symbol, ['image']].values[0][0]
         except IndexError:
-            logger.warn(f'No image found for coin {symbol}!')
+            logger.warning(f'No image found for coin {symbol}!')
             return 'assets/coins-solid.png'
         return image
 
@@ -213,6 +213,13 @@ class PortfolioAnalytics:
             else:
                 trades_df['exchange'] = self.config.trading_bot_config.exchange.value
                 update_file = True
+
+            # check if a coin has been rebranded and the old name is still used in the file
+            if trades_df['buy_symbol'].isin(pd.Series(COIN_REBRANDING.keys())).any():
+                trades_df['buy_symbol'].replace(COIN_REBRANDING, inplace=True)
+                trades_df['sell_symbol'].replace(COIN_REBRANDING, inplace=True)
+                update_file = True
+
 
             self.trades_df = trades_df
             self.last_trades_update = time()
