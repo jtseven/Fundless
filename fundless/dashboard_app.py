@@ -243,7 +243,9 @@ class Dashboard:
         @self.app.callback(Input('quote_select', 'value'),
                            Output('index_coins', 'options'),
                            Output('savings_plan_info', 'children'))
-        def set_base_symbol(sym):
+        def set_base_symbol(sym: str):
+            if sym.lower() == self.config.trading_bot_config.base_symbol.lower():
+                return dash.no_update, dash.no_update
             self.config.trading_bot_config.base_symbol = sym
             coins_select = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
                                           analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
@@ -255,6 +257,8 @@ class Dashboard:
                            Output('index_coins', 'options'),
                            Output('savings_plan_info', 'children'))
         def set_exchange(exchange: str):
+            if exchange == self.config.trading_bot_config.exchange.value:
+                return dash.no_update, dash.no_update
             self.config.trading_bot_config.exchange = exchange
             self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
             logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
@@ -269,6 +273,8 @@ class Dashboard:
                            Output('savings_plan_info', 'children'))
         def set_volume(vol):
             if vol is not None:
+                if vol == self.config.trading_bot_config.savings_plan_cost:
+                    return dash.no_update
                 self.config.trading_bot_config.savings_plan_cost = float(vol)
             return layouts.savings_plan_info(analytics)
 
