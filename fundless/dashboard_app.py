@@ -106,7 +106,8 @@ class Dashboard:
                              title='Fundless', update_title='Fundless...', suppress_callback_exceptions=False,
                              meta_tags=[
                                  {"name": "viewport", "content": "width=device-width, initial-scale=1",
-                                  "apple-mobile-web-app-capable": "yes"},
+                                  "apple-mobile-web-app-capable": "yes",
+                                  "apple-mobile-web-app-status-bar-style": "default"},
                              ],
                              external_scripts=external_scripts,
                              url_base_pathname=APP_URL,
@@ -124,6 +125,8 @@ class Dashboard:
             <head>
                 {%metas%}
                 <link rel="manifest" href=''' + manifest_url + '''>
+                <link rel="shortcut icon" href="/app/assets/icons/128.png">
+                <link rel="apple-touch-icon" href="/app/assets/icons/128.png">
                 <title>{%title%}</title>
                 {%favicon%}
                 {%css%}
