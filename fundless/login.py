@@ -10,8 +10,7 @@ from werkzeug.exceptions import HTTPException
 import logging
 
 from config import DashboardConfig, LoginProviderEnum, SecretsStore
-from utils import Constants
-
+from constants import Auth0EnvNames
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +50,12 @@ class LoginProvider:
             if env_file:
                 load_dotenv(env_file)
 
-            self.AUTH0_CALLBACK_URL = env.get(Constants.AUTH0_CALLBACK_URL)
-            self.AUTH0_CLIENT_ID = env.get(Constants.AUTH0_CLIENT_ID)
-            self.AUTH0_CLIENT_SECRET = env.get(Constants.AUTH0_CLIENT_SECRET)
-            self.AUTH0_DOMAIN = env.get(Constants.AUTH0_DOMAIN)
+            self.AUTH0_CALLBACK_URL = env.get(Auth0EnvNames.AUTH0_CALLBACK_URL)
+            self.AUTH0_CLIENT_ID = env.get(Auth0EnvNames.AUTH0_CLIENT_ID)
+            self.AUTH0_CLIENT_SECRET = env.get(Auth0EnvNames.AUTH0_CLIENT_SECRET)
+            self.AUTH0_DOMAIN = env.get(Auth0EnvNames.AUTH0_DOMAIN)
             self.AUTH0_BASE_URL = 'https://' + self.AUTH0_DOMAIN
-            self.AUTH0_AUDIENCE = env.get(Constants.AUTH0_AUDIENCE)
+            self.AUTH0_AUDIENCE = env.get(Auth0EnvNames.AUTH0_AUDIENCE)
 
             # auth0 setup
             oauth = OAuth(server)
@@ -126,7 +125,7 @@ class LoginProvider:
             else:
                 return False
         elif self.provider == LoginProviderEnum.auth0:
-            if Constants.PROFILE_KEY in session:
+            if Auth0EnvNames.PROFILE_KEY in session:
                 return True
             else:
                 return False
@@ -142,8 +141,8 @@ class LoginProvider:
             resp = self.auth0.get('userinfo')
             userinfo = resp.json()
 
-            session[Constants.JWT_PAYLOAD] = userinfo
-            session[Constants.PROFILE_KEY] = {
+            session[Auth0EnvNames.JWT_PAYLOAD] = userinfo
+            session[Auth0EnvNames.PROFILE_KEY] = {
                 'user_id': userinfo['sub'],
                 'name': userinfo['name'],
                 'picture': userinfo['picture']
@@ -158,7 +157,7 @@ class LoginProvider:
         if self.provider == LoginProviderEnum.auth0:
             @wraps(f)
             def decorated(*args, **kwargs):
-                if Constants.PROFILE_KEY not in session:
+                if Auth0EnvNames.PROFILE_KEY not in session:
                     # Redirect to Login page here
                     return redirect('/login')
                 return f(*args, **kwargs)

@@ -14,9 +14,9 @@ import logging
 # local imports
 from config import Config
 from analytics import PortfolioAnalytics
-from utils import Constants
 import layouts
 from login import LoginProvider
+from constants import Auth0EnvNames
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class Dashboard:
 
     def __init__(self, config: Config, analytics: PortfolioAnalytics):
         server = flask.Flask(__name__)
-        server.secret_key = Constants.SECRET_KEY
+        server.secret_key = Auth0EnvNames.SECRET_KEY
         external_stylesheets = [
             dbc.themes.LITERA,  # FLATLY, LITERA, YETI
             dbc.icons.FONT_AWESOME,

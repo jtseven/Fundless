@@ -1,6 +1,5 @@
 from pathlib import Path
 import yaml
-import secrets
 import math
 import ast
 from dash import dcc
@@ -48,19 +47,6 @@ def parse_secrets(file_path):
             print(exc)
             raise exc
     return data
-
-
-class Constants:
-    """ Constants for Auth0
-    """
-    AUTH0_CLIENT_ID = 'AUTH0_CLIENT_ID'
-    AUTH0_CLIENT_SECRET = 'AUTH0_CLIENT_SECRET'
-    AUTH0_CALLBACK_URL = 'AUTH0_CALLBACK_URL'
-    AUTH0_DOMAIN = 'AUTH0_DOMAIN'
-    AUTH0_AUDIENCE = 'AUTH0_AUDIENCE'
-    PROFILE_KEY = 'profile'
-    SECRET_KEY = secrets.token_hex(24)
-    JWT_PAYLOAD = 'jwt_payload'
 
 
 def convert_html_to_dash(html_code):
