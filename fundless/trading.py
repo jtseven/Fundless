@@ -10,6 +10,7 @@ from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
 import logging
 from constants import USD_SYMBOLS, FIAT_SYMBOLS
+from exchanges import Exchanges
 
 
 logger = logging.getLogger(__name__)
@@ -28,82 +29,58 @@ class TradingBot:
     secrets: SecretsStore
     exchange: ccxt.Exchange
 
-    def __init__(self, bot_config: Config, analytics: PortfolioAnalytics):
+    def __init__(self, bot_config: Config, analytics: PortfolioAnalytics, exchanges: Exchanges):
         self.bot_config = bot_config
         self.secrets = bot_config.secrets
         self.analytics = analytics
-        self.init_exchange()
+        self.exchanges = exchanges
 
-    def init_exchange(self):
-        if self.bot_config.trading_bot_config.exchange == ExchangeEnum.binance:
-            self.exchange = ccxt.binance()
-            if self.bot_config.trading_bot_config.test_mode:
-                self.exchange.apiKey = self.secrets.binance_test['api_key']
-                self.exchange.secret = self.secrets.binance_test['secret']
-            else:
-                self.exchange.apiKey = self.secrets.binance['api_key']
-                self.exchange.secret = self.secrets.binance['secret']
-        elif self.bot_config.trading_bot_config.exchange == ExchangeEnum.kraken:
-            self.exchange = ccxt.kraken()
-            if self.bot_config.trading_bot_config.test_mode:
-                self.exchange.apiKey = self.secrets.kraken_test['api_key']
-                self.exchange.secret = self.secrets.kraken_test['secret']
-            else:
-                self.exchange.apiKey = self.secrets.kraken['api_key']
-                self.exchange.secret = self.secrets.kraken['secret']
-        elif self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbasepro:
-            self.exchange = ccxt.coinbasepro()
-            if self.bot_config.trading_bot_config.test_mode:
-                raise NotImplementedError('Coinbase Pro does not support test mode right now')
-            else:
-                self.exchange.apiKey = self.secrets.coinbasepro['api_key']
-                self.exchange.secret = self.secrets.coinbasepro['secret']
-                self.exchange.password = self.secrets.coinbasepro['passphrase']
-        else:
-            raise ValueError('Invalid Exchange given!')
-
-        self.exchange.set_sandbox_mode(self.bot_config.trading_bot_config.test_mode)
-        self.exchange.check_required_credentials()
-        self.exchange.load_markets()
         not_available = [symbol.upper() for symbol in self.bot_config.trading_bot_config.cherry_pick_symbols if
                          f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}' not in
-                         self.exchange.symbols and symbol != self.bot_config.trading_bot_config.base_symbol]
+                         self.exchanges.active.symbols and symbol != self.bot_config.trading_bot_config.base_symbol]
         if len(not_available) > 0:
-            logger.warning(f'Some of your cherry picked coins are not available on {self.exchange.name}:')
+            logger.warning(f'Some of your cherry picked coins are not available on {self.exchanges.active.name}:')
             logger.warning(not_available)
 
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module
         try:
-            data = self.exchange.fetch_total_balance()
+            data = self.exchanges.active.fetch_total_balance()
 
-            if self.exchange.has['fetchTickers']:
-                markets = self.exchange.fetch_tickers()
-            else:
-                markets = False
-                # # TODO pull market data in an alternative way
-                # raise NotImplementedError("Exchange does not support fetching tickers!")
+            # if self.exchanges.active.has['fetchTickers']:
+            #     markets = self.exchanges.active.fetch_tickers()
+            # else:
+            #     markets = None
+            #     # # TODO pull market data in an alternative way
+            #     # raise NotImplementedError("Exchange does not support fetching tickers!")
         except Exception as e:
             print(f"Error while getting balance from exchange:")
             print(e)
             raise e
         symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
-        base = self.bot_config.trading_bot_config.base_symbol.upper()
-        if markets:
-            # use exchange market data
-            try:
-                values = np.array([float(
-                    markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in USD_SYMBOLS else amount
-                                for key, amount in zip(symbols, amounts)])
-            except KeyError as e:
-                print(f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
-                raise
-        else:
-            # use coingecko market data from analytics module
-            values = np.array([float(
-                self.analytics.markets.loc[self.analytics.markets['symbol'] == symbol, ['current_price']].values[0][0]
-            ) for symbol in symbols])
+        # base = self.bot_config.trading_bot_config.base_symbol.upper()
+        # if markets is not None:
+        #     # use exchange market data
+        #     try:
+        #         values = np.array([float(
+        #             markets[f'{key.upper()}/{base}']['last']) * amount if key.upper() not in FIAT_SYMBOLS
+        #                                                                   and key.upper != base else
+        #                            self.analytics.convert(amount, key, base)
+        #                            for key, amount in zip(symbols, amounts)])
+        #     except KeyError as e:
+        #         print(
+        #             f"Error: The symbol {e.args[0]} is not in the {self.bot_config.trading_bot_config.exchange.value} market data!")
+        #         raise
+        # else:
+        #     # use coingecko market data from analytics module
+        #     values = np.array([float(
+        #         self.analytics.markets.loc[self.analytics.markets['symbol'] == symbol, ['current_price']].values[0][0]
+        #     ) for symbol in symbols])
+        base_currency = self.bot_config.trading_bot_config.base_currency
+        values = np.asarray([self.analytics.convert(amount, symbol, base_currency)
+                             for amount, symbol in zip(amounts, symbols)])
+        # TODO: Take exchange prices if possible
 
         allocations = values/values.sum()*100
         sorted = values.argsort()
@@ -171,14 +148,14 @@ class TradingBot:
 
     def check_order_executable(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float):
         # Pull latest market data
-        self.exchange.fetch_markets()
+        self.exchanges.active.fetch_markets()
         # Check for any complications
         problems = {'symbols': {}, 'fail': False, 'occurred': False, 'description': '', 'skip_coins': []}
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
-            if ticker not in self.exchange.symbols:
+            if ticker not in self.exchanges.active.symbols:
                 print(f"Warning: {ticker} not available, skipping...")
                 problems['occurred'] = True
                 problems['fail'] = True
@@ -195,7 +172,7 @@ class TradingBot:
                 problems['description'] = f'{symbol.upper()}: {reason}'
                 problems['symbols'][symbol] = reason
                 problems['skip_coins'].append(symbol)
-        balance = self.exchange.fetch_balance()
+        balance = self.exchanges.active.fetch_balance()
         if balance['free'][self.bot_config.trading_bot_config.base_symbol.upper()] is not None:
             balance = balance['free'][self.bot_config.trading_bot_config.base_symbol.upper()]
         else:
@@ -254,7 +231,7 @@ class TradingBot:
             quote_currency = self.bot_config.trading_bot_config.base_symbol.upper()
         if base_currency.upper() == quote_currency.upper():
             return True
-        return f'{base_currency.upper()}/{quote_currency}' in self.exchange.markets
+        return f'{base_currency.upper()}/{quote_currency}' in self.exchanges.active.markets
 
 
     def check_order_limits(self, symbols: np.ndarray, weights: np.ndarray, base_symbol_volume: float, fail_fast=False):
@@ -265,7 +242,7 @@ class TradingBot:
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             try:
-                price = self.exchange.fetch_ticker(ticker).get('last')
+                price = self.exchanges.active.fetch_ticker(ticker).get('last')
             except ccxt.errors.BadSymbol:
                 logger.warning(f"Ticker {ticker} is not available on the exchange!")
                 volume_fail.append(symbol)
@@ -276,13 +253,13 @@ class TradingBot:
             cost = weight * base_symbol_volume
             amount = weight * base_symbol_volume / price
 
-            if amount <= self.exchange.markets[ticker]['limits']['amount']['min']:
+            if amount <= self.exchanges.active.markets[ticker]['limits']['amount']['min']:
                 logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
                 volume_fail.append(symbol)
                 reason.append('Order amount too low')
                 if fail_fast:
                     return volume_fail, reason
-            elif cost <= self.exchange.markets[ticker]['limits']['cost']['min']:
+            elif cost <= self.exchanges.active.markets[ticker]['limits']['cost']['min']:
                 logger.warning(f"The cost of {cost} {self.bot_config.trading_bot_config.base_symbol.upper()}"
                                f" is too low to place an order!")
                 volume_fail.append(symbol)
@@ -298,7 +275,7 @@ class TradingBot:
         volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost  # order volume denoted in base currency
         volume = self.analytics.base_currency_to_base_symbol(volume)
         print_order_allocation(symbols, weights)
-        self.exchange.load_markets()
+        self.exchanges.active.load_markets()
         report = {'problems': self.check_order_executable(symbols, weights, volume), 'order_ids': []}
         if report['problems']['fail']:
             return report
@@ -311,7 +288,7 @@ class TradingBot:
         placed_symbols = []
 
         # Start buying
-        # before = self.exchange.fetch_total_balance()
+        # before = self.exchanges.active.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 print(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
@@ -319,14 +296,14 @@ class TradingBot:
                 placed_ids.append(-weight*volume)  # storing the imagined cost of this order as a negative id as suboptimal workaround
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
-            price = self.exchange.fetch_ticker(ticker).get('last')
+            price = self.exchanges.active.fetch_ticker(ticker).get('last')
             limit_price = 0.998*price
             amount = weight * volume / price
             try:
                 if order_type == OrderTypeEnum.limit:
-                    order = self.exchange.create_limit_buy_order(ticker, amount, price=limit_price)
+                    order = self.exchanges.active.create_limit_buy_order(ticker, amount, price=limit_price)
                 elif order_type == OrderTypeEnum.market:
-                    order = self.exchange.create_market_buy_order(ticker, amount)
+                    order = self.exchanges.active.create_market_buy_order(ticker, amount)
                 else:
                     raise ValueError(f"Invalid order type: {order_type}")
             except ccxt.InvalidOrder as e:
@@ -347,7 +324,7 @@ class TradingBot:
         report['symbols'] = placed_symbols
         report['invalid_symbols'] = invalid
         # # Report state of portfolio before and after buy orders
-        # after = self.exchange.fetch_total_balance()
+        # after = self.exchanges.active.fetch_total_balance()
         return report
 
     def check_orders(self, order_ids: List, symbols: List) -> dict:
@@ -370,7 +347,7 @@ class TradingBot:
                 fee_symbol = ''
             else:
                 logger.info(f'Getting status of {symbol} order...')
-                with retrying(self.exchange.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
+                with retrying(self.exchanges.active.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
                               retry_exceptions=(ccxt.errors.BaseError,)) as fetch_order:
                     order = fetch_order(id, symbol)
                 if order['status'] == 'open':
@@ -411,7 +388,7 @@ class TradingBot:
                                          cost=cost,
                                          fee=fee,
                                          fee_symbol=fee_symbol,
-                                         exchange=self.exchange.name)
+                                         exchange=self.exchanges.active.name)
             except Exception as e:
                 logger.error(f"Error while logging trade to trades.csv:")
                 logger.error(e)

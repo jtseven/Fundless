@@ -11,6 +11,7 @@ from messages import TelegramBot
 from analytics import PortfolioAnalytics
 from config import Config, IntervalEnum
 from dashboard_app import Dashboard
+from exchanges import Exchanges
 """
 
 FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
@@ -38,14 +39,17 @@ if __name__ == '__main__':
     # parse all settings from yaml files
     config = Config.from_yaml_files(config_yaml=config_yaml, secrets_yaml=secrets_yaml)
 
+    # initialize exchanges with api credentials from secrets file
+    exchanges = Exchanges(config)
+
     # the analytics module for portfolio performance analysis
     if config.trading_bot_config.test_mode:
-        analytics = PortfolioAnalytics(trades_csv_test, config)
+        analytics = PortfolioAnalytics(trades_csv_test, config, exchanges)
     else:
-        analytics = PortfolioAnalytics(trades_csv, config)
+        analytics = PortfolioAnalytics(trades_csv, config, exchanges)
 
     # the bot interacting with exchanges
-    trading_bot = TradingBot(config, analytics)
+    trading_bot = TradingBot(config, analytics, exchanges)
 
     # telegram bot interacting with the user
     if telegram_bot:

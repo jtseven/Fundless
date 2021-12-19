@@ -65,6 +65,7 @@ class PortfolioModeEnum(str, MultiValueEnum):
 
 
 class ExchangeToken(TypedDict, total=False):
+    exchange: ExchangeEnum
     api_key: str
     secret: str
     passphrase: Optional[str]
@@ -239,22 +240,27 @@ class SecretsStore(BaseConfig):
     def from_dict(cls, dictionary):
         self = cls(
             binance_test=ExchangeToken(
+                exchange=ExchangeEnum.binance,
                 api_key=dictionary['exchanges']['testnet']['binance']['api_key'],
                 secret=dictionary['exchanges']['testnet']['binance']['secret']
             ),
             kraken_test=ExchangeToken(
+                exchange=ExchangeEnum.kraken,
                 api_key=dictionary['exchanges']['testnet']['kraken']['api_key'],
                 secret=dictionary['exchanges']['testnet']['kraken']['secret']
             ),
             binance=ExchangeToken(
+                exchange=ExchangeEnum.binance,
                 api_key=dictionary['exchanges']['mainnet']['binance']['api_key'],
                 secret=dictionary['exchanges']['mainnet']['binance']['secret']
             ),
             kraken=ExchangeToken(
+                exchange=ExchangeEnum.kraken,
                 api_key=dictionary['exchanges']['mainnet']['kraken']['api_key'],
                 secret=dictionary['exchanges']['mainnet']['kraken']['secret']
             ),
             coinbasepro=ExchangeToken(
+                exchange=ExchangeEnum.coinbasepro,
                 api_key=dictionary['exchanges']['mainnet']['coinbasepro']['api_key'],
                 secret=dictionary['exchanges']['mainnet']['coinbasepro']['secret'],
                 passphrase=dictionary['exchanges']['mainnet']['coinbasepro']['passphrase']
@@ -267,6 +273,12 @@ class SecretsStore(BaseConfig):
             dashboard_password=dictionary['dashboard']['password']
         )
         return self
+
+    def get_exchange_tokens(self, test_mode: bool) -> [ExchangeToken]:
+        if test_mode:
+            return [self.binance_test, self.kraken_test]
+        else:
+            return [self.binance, self.kraken, self.coinbasepro]
 
 
 class Config(BaseModel):

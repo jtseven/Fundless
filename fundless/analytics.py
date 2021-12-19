@@ -52,7 +52,7 @@ class PortfolioAnalytics:
     history_update_lock = Lock()
     last_trades_update: float = 0
 
-    def __init__(self, file_path, config: Config):
+    def __init__(self, file_path, config: Config, exchanges: Exchanges):
         self.config = config
         self.init_config_parameters()
         self.trades_file = Path(file_path)
@@ -65,16 +65,7 @@ class PortfolioAnalytics:
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
 
-        if config.trading_bot_config.exchange == ExchangeEnum.binance:
-            self.exchange = ccxt.binance()
-        elif config.trading_bot_config.exchange == ExchangeEnum.kraken:
-            self.exchange = ccxt.kraken()
-        elif config.trading_bot_config.exchange == ExchangeEnum.coinbasepro:
-            self.exchange = ccxt.coinbasepro()
-        else:
-            raise ValueError('Invalid exchange given in config!')
-        self.exchange.load_markets()
-
+        self.exchanges = exchanges
 
     def run_api_updates(self):
         if self.running_updates:
