@@ -105,7 +105,8 @@ class Dashboard:
         self.app = DashProxy(name=__name__, external_stylesheets=external_stylesheets, server=server,
                              title='Fundless', update_title='Fundless...', suppress_callback_exceptions=False,
                              meta_tags=[
-                                 {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                                 {"name": "viewport", "content": "width=device-width, initial-scale=1",
+                                  "apple-mobile-web-app-capable": "yes"},
                              ],
                              external_scripts=external_scripts,
                              url_base_pathname=APP_URL,
@@ -114,6 +115,29 @@ class Dashboard:
 
         if config.dashboard_config.domain_name != 'localhost':
             server.config.update(SERVER_NAME=f'{config.dashboard_config.domain_name}')
+
+        manifest_url = self.app.get_asset_url('manifest.json')
+        print(manifest_url)
+        self.app.index_string = '''
+        <!DOCTYPE html>
+        <html>
+            <head>
+                {%metas%}
+                <link rel="manifest" href=''' + manifest_url + '''>
+                <title>{%title%}</title>
+                {%favicon%}
+                {%css%}
+            </head>
+            <body>
+                {%app_entry%}
+                <footer>
+                    {%config%}
+                    {%scripts%}
+                    {%renderer%}
+                </footer>
+            </body>
+        </html>
+        '''
 
         # Main Layout
         self.app.layout = html.Div([

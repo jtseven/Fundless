@@ -1,0 +1,17 @@
+{
+  "name": "Fundless",
+  "short_name": "Fundless",
+  "theme_color": "#3e21f3",
+  "background_color": "#2196f3",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/dashboard",
+  "icons": [{
+      "src": "assets/icons/192.png",
+      "sizes": "192x192"},
+   {
+      "src": "assets/icons/512.png",
+      "sizes": "512x512"}
+   ]
+}
