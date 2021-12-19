@@ -10,6 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def pretty_print_date(datetime):
     day = datetime.day
     if day in (1, 21, 31):

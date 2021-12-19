@@ -57,6 +57,9 @@ class PortfolioAnalytics:
         self.init_config_parameters()
         self.trades_file = Path(file_path)
         self.coingecko = CoinGeckoAPI()
+        self.exchanges = exchanges
+        self.exchange_balance = None
+
         if not self.trades_file.exists():
             self.trades_df = pd.DataFrame(columns=self.trades_cols)
             self.trades_df.to_csv(self.trades_file, index=False)
@@ -64,8 +67,6 @@ class PortfolioAnalytics:
         self.update_data()
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
-
-        self.exchanges = exchanges
 
     def run_api_updates(self):
         if self.running_updates:
@@ -90,6 +91,7 @@ class PortfolioAnalytics:
         self.update_index_df()
         self.update_portfolio_metrics()
         self.update_historical_prices()
+        self.update_exchange_balance()
 
     def init_config_parameters(self):
         self.base_cost_row = f'cost_{self.config.trading_bot_config.base_currency.value.lower()}'
@@ -115,8 +117,31 @@ class PortfolioAnalytics:
             return True
         return f'{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}' in self.exchanges.active.symbols
 
+    def available_index_coins(self):
+        return [coin for coin in self.config.trading_bot_config.cherry_pick_symbols
+                if self.coin_available_on_exchange(coin)]
+
+    def available_quote_currency(self, convert_to_accounting_currency=True, force_update=False) -> float:
+        if self.exchange_balance is None or force_update:
+            self.update_exchange_balance()
+        if convert_to_accounting_currency:
+            return self.exchange_balance['converted'].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
+        else:
+            return self.exchange_balance['amount'].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
+
+    def update_exchange_balance(self):
+        balance = {'amount': {}, 'converted': {}}  # amount: amount of coin, converted: amount in accounting currency
+        balances = self.exchanges.active.fetch_total_balance()
+        symbols = np.fromiter([key for key in balances.keys() if balances[key] > 0.0], dtype='U10')
+        amounts = np.fromiter([balances.get(symbol, 0.0) for symbol in symbols], dtype=float)
+        balance['amount'] = {symbol.upper(): amount for symbol, amount in zip(symbols, amounts)}
+        balances['converted'] = {symbol.upper(): self.convert(amount, symbol, self.config.trading_bot_config.base_currency)
+                                 for symbol, amount in zip(symbols, amounts)}
+        self.exchange_balance = balances
+
     # for cryptos that might have rebranded and changed their ticker some time
     def get_alternative_crypto_symbols(self, symbol: str) -> [str]:
+        # TODO: Bug always finds alternative, even if symbol name is not in synonyms list
         symbol = symbol.upper()
         alternative = np.where(symbol in synonyms for synonyms in COIN_SYNONYMS)[0]
         if len(alternative) > 0:
@@ -198,9 +223,12 @@ class PortfolioAnalytics:
 
     def get_crypto_price(self, crypto: str, vs_currency: str):
         crypto_id = self.get_coin_id(crypto)
-        with retrying(self.coingecko.get_price, sleeptime=1, sleepscale=2, jitter=0,
-                      retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
-            price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][vs_currency.lower()]
+        if vs_currency.lower() == self.config.trading_bot_config.base_currency.lower():
+            price = self.markets.loc[self.markets['id'] == crypto_id, ['current_price']].values[0][0]
+        else:
+            with retrying(self.coingecko.get_price, sleeptime=1, sleepscale=2, jitter=0,
+                          retry_exceptions=(requests.exceptions.HTTPError,)) as get_price:
+                price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][vs_currency.lower()]
         return price
 
     def base_symbol_to_base_currency(self, base_symbol_amount: float):

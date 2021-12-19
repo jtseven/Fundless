@@ -195,7 +195,7 @@ class Dashboard:
                 chart = None
             return chart
 
-        @self.app.callback(Input('base_currency', 'value'))
+        @self.app.callback(Input('accounting_currency_select', 'value'))
         def set_base_currency(value):
             if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
                 logger.debug('Updating config!')
@@ -216,48 +216,61 @@ class Dashboard:
             self.analytics.update_config(index_changed=True)
 
         @self.app.callback(Input('index-apply', 'n_clicks'),
-                           State('index_coins', 'value'))
+                           State('index_coins', 'value'),
+                           Output('savings_plan_info', 'children'))
         def update_index(_, index_symbols):
             set_index(index_symbols)
+            return layouts.savings_plan_info(analytics)
 
         @self.app.callback(Input('index-reset', 'n_clicks'),
-                           Output('index_coins', 'value'))
+                           Output('index_coins', 'value'),
+                           Output('savings_plan_info', 'children'))
         def reset_index_coins(_):
             coins = [sym for sym in self.analytics.config.trading_bot_config.cherry_pick_symbols]
-            return coins
+            info = layouts.savings_plan_info(analytics)
+            return coins, info
 
         @self.app.callback(Input('index-holdings', 'n_clicks'),
                            Output('index_coins', 'value'),
+                           Output('savings_plan_info', 'children'),
                            State('index_coins', 'value'))
         def add_holdings(_, current_select):
             holdings = list(self.analytics.index_df.loc[self.analytics.index_df['amount'] != 0].symbol.str.lower())
             union = holdings + [sym for sym in current_select if sym not in holdings]
             set_index(union)
-            return union
+            return union, layouts.savings_plan_info(analytics)
 
-        @self.app.callback(Input('base_symbol', 'value'),
-                           Output('index_coins', 'options'))
+        @self.app.callback(Input('quote_select', 'value'),
+                           Output('index_coins', 'options'),
+                           Output('savings_plan_info', 'children'))
         def set_base_symbol(sym):
             self.config.trading_bot_config.base_symbol = sym
-            return [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+            coins_select = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
                                           analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
                                           or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
 
+            return coins_select, layouts.savings_plan_info(analytics)
+
         @self.app.callback(Input('exchange_select', 'value'),
-                           Output('index_coins', 'options'))
+                           Output('index_coins', 'options'),
+                           Output('savings_plan_info', 'children'))
         def set_exchange(exchange: str):
             self.config.trading_bot_config.exchange = exchange
             self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
             logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
-            return [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                    analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
-                    or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
+            coins_select = [
+                {'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
+                or sym in analytics.config.trading_bot_config.cherry_pick_symbols
+            ]
+            return coins_select, layouts.savings_plan_info(analytics, force_update=True)
 
-        @self.app.callback(Input('volume', 'value'))
+        @self.app.callback(Input('volume', 'value'),
+                           Output('savings_plan_info', 'children'))
         def set_volume(vol):
-            if vol is None:
-                return
-            self.config.trading_bot_config.savings_plan_cost = float(vol)
+            if vol is not None:
+                self.config.trading_bot_config.savings_plan_cost = float(vol)
+            return layouts.savings_plan_info(analytics)
 
         @self.app.callback(Input('weighting', 'value'), Output('custom-weighting-collapse', 'is_open'))
         def show_custom_form(weighting):

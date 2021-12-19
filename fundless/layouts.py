@@ -379,24 +379,74 @@ def create_holdings_page(analytics: PortfolioAnalytics):
     ], style={'margin-top': '2rem'})
 
 
+def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
+    available_coins = analytics.available_index_coins()
+    index_coins = analytics.config.trading_bot_config.cherry_pick_symbols
+    quote_currency = analytics.config.trading_bot_config.base_symbol.upper()
+    accounting_currency = analytics.config.trading_bot_config.base_currency.value
+    exchange = analytics.exchanges.active.name
+    if len(available_coins) == len(index_coins):
+        info_available = f"All selected coins available to buy with {quote_currency} on {exchange}."
+        color_available = 'success'
+    elif len(available_coins)/len(index_coins) > 0.5:
+        info_available = f"{len(available_coins)} of {len(index_coins)} selected coins available to " \
+                         f"buy with {quote_currency} on {exchange}."
+        color_available = 'warning'
+    else:
+        info_available = f"Only {len(available_coins)} of {len(index_coins)} selected coins available to buy " \
+                         f"with {quote_currency} on {exchange}."
+        color_available = 'danger'
+
+    available_balance = analytics.available_quote_currency(force_update=force_update)
+    if available_balance >= analytics.config.trading_bot_config.savings_plan_cost:
+        color_balance = 'success'
+    else:
+        color_balance = 'warning'
+    if quote_currency == accounting_currency:
+        text_balance = f"{accounting_currency} {available_balance:.2f} available on {analytics.exchanges.active.name}"
+    else:
+        text_balance = f"{accounting_currency} {available_balance:.2f} available in {quote_currency} on {analytics.exchanges.active.name}"
+
+    infos = [
+        dbc.ListGroupItem(
+            info_available,
+            color=color_available
+        ),
+        dbc.ListGroupItem(
+            text_balance,
+            color=color_balance
+        )
+    ]
+    return infos
+
+
 def create_strategy_page(analytics: PortfolioAnalytics):
-    def create_exchange_selection():
+    def create_selection(id: str, labels: [str], values: [str], value: str):
         button_group = html.Div(
             dbc.RadioItems(
-                id="exchange_select",
+                id=id,
                 className="btn-group",
                 inputClassName="btn-check",
                 labelClassName="btn btn-outline-primary",
                 labelCheckedClassName="active",
                 options=[
-                    {"label": exchange.values[1], "value": exchange.value}
-                    for exchange in analytics.exchanges.authorized_exchanges.keys()
+                    {"label": label, "value": value}
+                    for label, value in zip(labels, values)
                 ],
-                value=analytics.config.trading_bot_config.exchange.value,
+                value=value,
             ),
             className="radio-group",
         )
         return button_group
+
+    def create_savings_plan_info():
+
+        info_list = dbc.ListGroup(
+            id='savings_plan_info',
+            horizontal=False,
+            children=savings_plan_info(analytics)
+        )
+        return info_list
 
     settings = html.Div(dbc.Card(className='settings-card', children=[
         dbc.Form([
@@ -425,36 +475,42 @@ def create_strategy_page(analytics: PortfolioAnalytics):
             ]),
             html.Hr(),
 
-            dbc.Label("Currency", html_for='base_currency', style={'font-weight': 'bold'}),
+            dbc.Label("Savings Plan Info", html_for='savings_plan_info', style={'font-weight': 'bold'}),
+            html.Br(),
+            create_savings_plan_info(),
+            html.Hr(),
+
+            dbc.Label("Accounting Currency", html_for='accounting_currency_select', style={'font-weight': 'bold'}),
             html.Br(),
             dbc.FormText("Used in analytics and config", className='text-muted'),
-            dbc.RadioItems(id='base_currency',
-                           options=[
-                               {'label': 'Euro', 'value': 'eur'},
-                               {'label': 'US Dollar', 'value': 'usd'},
-                           ],
-                           value=analytics.config.trading_bot_config.base_currency.value.lower()),
+            create_selection(
+                id='accounting_currency_select',
+                labels=['Euro', 'US Dollar'],
+                values=['eur', 'usd'],
+                value=analytics.config.trading_bot_config.base_currency.value.lower()
+            ),
             html.Hr(),
 
             dbc.Label("Exchange", html_for='exchange_select', style={'font-weight': 'bold'}),
             html.Br(),
             dbc.FormText("Choose the exchange where your savings plan is executed", className='text-muted'),
-            create_exchange_selection(),
+            create_selection(
+                id='exchange_select',
+                labels=[exchange.values[1] for exchange in analytics.exchanges.authorized_exchanges.keys()],
+                values=[exchange.value for exchange in analytics.exchanges.authorized_exchanges.keys()],
+                value=analytics.config.trading_bot_config.exchange.value
+            ),
             html.Hr(),
 
-            dbc.Label("Savings Plan Base Coin", html_for='base_symbol', style={'font-weight': 'bold'}),
+            dbc.Label("Savings Plan Quote Currency", html_for='quote_select', style={'font-weight': 'bold'}),
             html.Br(),
-            dbc.FormText("Used to buy all coins", className='text-muted'),
-            dbc.RadioItems(id='base_symbol',
-                           options=[
-                               {'label': 'Euro', 'value': 'eur'},
-                               {'label': 'US Dollar', 'value': 'usd'},
-                               {'label': 'Bitcoin', 'value': 'btc'},
-                               {'label': 'BUSD', 'value': 'busd'},
-                               {'label': 'USDC', 'value': 'usdc'},
-                               {'label': 'USDT', 'value': 'usdt'},
-                           ],
-                           value=analytics.config.trading_bot_config.base_symbol.lower()),
+            dbc.FormText("Choose the currency used to buy all coins", className='text-muted'),
+            create_selection(
+                id='quote_select',
+                labels=['Euro', 'US Dollar', 'Bitcoin', 'BUSD', 'USDC', 'USDT'],
+                values=['eur', 'usd', 'btc', 'busd', 'usdc', 'usdt'],
+                value=analytics.config.trading_bot_config.base_symbol.lower()
+            ),
             html.Hr(),
 
             dbc.Label(f"Savings Plan Volume ({analytics.config.trading_bot_config.base_currency.value})", html_for='volume', style={'font-weight': 'bold'}),
