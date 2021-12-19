@@ -19,7 +19,8 @@ import ccxt
 
 from config import Config, WeightingEnum, ExchangeEnum
 from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING
+from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING, COIN_SYNONYMS
+from exchanges import Exchanges
 
 
 logger = logging.getLogger(__name__)
@@ -121,23 +122,60 @@ class PortfolioAnalytics:
     def coin_available_on_exchange(self, coin: str):
         if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
             return True
-        return f'{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}' in self.exchange.symbols
+        return f'{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}' in self.exchanges.active.symbols
+
+    # for cryptos that might have rebranded and changed their ticker some time
+    def get_alternative_crypto_symbols(self, symbol: str) -> [str]:
+        symbol = symbol.upper()
+        alternative = np.where(symbol in synonyms for synonyms in COIN_SYNONYMS)[0]
+        print(alternative)
+        if len(alternative) > 0:
+            print(COIN_SYNONYMS[alternative[0]])
+            alternatives = [syn for syn in COIN_SYNONYMS[alternative[0]] if syn != symbol]
+            logger.info(f"Found alternatives for {symbol}:")
+            logger.info(alternatives)
+            return alternatives
+        else:
+            return []
 
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
         try:
             coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
-        except IndexError:
+        except IndexError as e:
             logger.warning(f"No coin ID found in Coingecko market data for {symbol.upper()}!")
-            return symbol.upper()
+            alternatives = self.get_alternative_crypto_symbols(symbol)
+            if len(alternatives) > 0:
+                for alt in alternatives:
+                    try:
+                        coin_id = self.markets.loc[self.markets['symbol'] == alt.lower(), ['id']].values[0][0]
+                    except IndexError:
+                        continue
+                    else:
+                        return coin_id
+            logger.error(f'Could not find market data for {e.args[0]}')
+            raise e
         return coin_id
 
     def get_coin_name(self, symbol: str, abbr=False):
         symbol = symbol.lower()
         try:
             coin_name = self.markets.loc[self.markets['symbol'] == symbol, ['name']].values[0][0]
-        except IndexError:
-            return symbol.upper()
+        except IndexError as e:
+            logger.warning(f"No coin name found in Coingecko market data for {symbol.upper()}!")
+            alternatives = self.get_alternative_crypto_symbols(symbol)
+            if len(alternatives) > 0:
+                for alt in alternatives:
+                    try:
+                        coin_name = self.markets.loc[self.markets['symbol'] == alt.lower(), ['name']].values[0][0]
+                    except IndexError:
+                        continue
+                    else:
+                        if abbr:
+                            coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
+                        return coin_name
+            logger.error(f'Could not find market data for {e.args[0]}')
+            raise e
         if abbr:
             coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
         return coin_name

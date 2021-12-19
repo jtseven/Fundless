@@ -6,6 +6,12 @@ USD_SYMBOLS: Final = ['USD', 'TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
 
 EXCHANGE_REGEX: Final = '^(kraken|binance|coinbasepro)$'
 
+# key: old symbol
+# value: new symbol
 COIN_REBRANDING: Final = {
     'NANO': 'XNO'
 }
+
+COIN_SYNONYMS: Final = [
+    ['NANO', 'XNO']
+]
