@@ -1,4 +1,7 @@
 import time
+
+import requests.exceptions
+
 from utils import print_crypto_amount
 import ccxt
 import telegram.error
@@ -181,9 +184,12 @@ class TelegramBot:
                                      text='Uh ohhh, I had a problem while computing your balances')
             context.bot.send_message(chat_id=self.chat_id,
                                      text=f'Could not find {e.args[0]} in market data of {self.trading_bot.bot_config.trading_bot_config.exchange.value}')
+        except requests.exceptions.HTTPError:
+            context.bot.send_message(chat_id=self.chat_id, text='I had network problems while computing your balance!')
+            context.bot.send_message(chat_id=self.chat_id, text='The coingecko API limit might be reached.')
         else:
             msg = "```\n"
-            msg += "--- Your current portfolio: ---\n"
+            msg += f"--- Your current balance on {self.trading_bot.exchanges.active.name}: ---\n"
             for symbol, allocation, value in zip(symbols, allocations, values):
                 if value < 1.0:
                     continue

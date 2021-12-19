@@ -8,6 +8,7 @@ from dash import html
 import dash_bootstrap_components as dbc
 from xml.etree import ElementTree
 
+
 def pretty_print_date(datetime):
     day = datetime.day
     if day in (1, 21, 31):
@@ -35,6 +36,7 @@ def print_crypto_amount(amount: float):
     else:
         precision = 0
     return f'{amount:,.{precision}f}'
+
 
 def parse_secrets(file_path):
     file = Path(file_path)
