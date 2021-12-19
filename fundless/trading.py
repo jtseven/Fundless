@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 def print_order_allocation(symbols: np.ndarray, weights:np.ndarray):
-    print(f" ------ Order Allocation: ------ ")
+    logger.info(f" ------ Order Allocation: ------ ")
     for symbol, weight in zip(symbols, weights):
         ticker = f'{symbol.upper()}'
-        print(f"\t- {ticker}:\t{(weight*100):5.2f} %")
+        logger.info(f"\t- {ticker}:\t{(weight*100):5.2f} %")
 
 
 class TradingBot:
@@ -54,8 +54,8 @@ class TradingBot:
             #     # # TODO pull market data in an alternative way
             #     # raise NotImplementedError("Exchange does not support fetching tickers!")
         except Exception as e:
-            print(f"Error while getting balance from exchange:")
-            print(e)
+            logger.error(f"Error while getting balance from exchange:")
+            logger.error(e)
             raise e
         symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype='U10')
         amounts = np.fromiter([data.get(symbol, 0.0) for symbol in symbols], dtype=float)
@@ -156,7 +156,7 @@ class TradingBot:
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             if ticker not in self.exchanges.active.symbols:
-                print(f"Warning: {ticker} not available, skipping...")
+                logger.warning(f"Warning: {ticker} not available, skipping...")
                 problems['occurred'] = True
                 problems['fail'] = True
                 problems['description'] = f'Symbol {ticker} not available'
@@ -167,7 +167,7 @@ class TradingBot:
         volume_fail, reasons = self.check_order_limits(symbols, weights, base_symbol_volume)
         if len(volume_fail) > 0:
             for symbol, reason in zip(volume_fail, reasons):
-                print(f"Order of {symbol.upper()} not possible: {reason}. Skipping...")
+                logger.warning(f"Order of {symbol.upper()} not possible: {reason}. Skipping...")
                 problems['occurred'] = True
                 problems['description'] = f'{symbol.upper()}: {reason}'
                 problems['symbols'][symbol] = reason
@@ -211,8 +211,9 @@ class TradingBot:
                     f'Insufficient funds to execute savings plan, you have {balance_string} ({balance_base_curr:.2f} {self.bot_config.trading_bot_config.base_currency.values[1]})' + \
                     f' available over the ones in your portfolio.\nYou need {volume_string} ({volume_base_curr:.0f} {self.bot_config.trading_bot_config.base_currency.values[1]})'
         if insufficient:
-            print(
-                f"Warning: Insufficient funds to execute savings plan! You have {balance:.2f} {self.bot_config.trading_bot_config.base_symbol.upper()}")
+            logger.warning(
+                f"Insufficient funds to execute savings plan! You have {balance:.2f}" +
+                f" {self.bot_config.trading_bot_config.base_symbol.upper()}")
             problems['occurred'] = True
             if problems.get('adjusted_volume', False):
                 problems['fail'] = False
@@ -223,7 +224,6 @@ class TradingBot:
     # filter only tickers that are available on the exchange
     def filter_available(self, symbols: Union[np.ndarray, List]):
         available = [symbol for symbol in symbols if self.is_available(symbol)]
-        print(available)
         return available
 
     def is_available(self, base_currency: str, quote_currency: str = None):
@@ -291,7 +291,7 @@ class TradingBot:
         # before = self.exchanges.active.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
-                print(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
+                logger.info(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
                 placed_symbols.append(symbol.upper())
                 placed_ids.append(-weight*volume)  # storing the imagined cost of this order as a negative id as suboptimal workaround
                 continue
@@ -307,16 +307,16 @@ class TradingBot:
                 else:
                     raise ValueError(f"Invalid order type: {order_type}")
             except ccxt.InvalidOrder as e:
-                print(f"Buy order for {amount} {ticker} is invalid!")
-                print(e)
+                logger.error(f"Buy order for {amount} {ticker} is invalid!")
+                logger.error(e)
                 invalid.append(symbol)
                 continue
             except ccxt.BaseError as e:
-                print(f"Error during order for {amount} {ticker}!")
-                print(e)
+                logger.error(f"Error during order for {amount} {ticker}!")
+                logger.error(e)
                 continue
             else:
-                print(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+                logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 placed_symbols.append(ticker)
                 placed_ids.append(int(order['id']))
 

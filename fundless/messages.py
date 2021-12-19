@@ -293,7 +293,7 @@ class TelegramBot:
         msg += "\n---------------------------"
         msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
         msg += "\n```"
-        print(msg)
+        logger.info(msg)
         update.message.reply_text(msg, parse_mode='MarkdownV2')
         base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(self.config.trading_bot_config.savings_plan_cost)
         base_amount = print_crypto_amount(base_amount)

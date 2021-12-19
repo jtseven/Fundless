@@ -118,7 +118,6 @@ class Dashboard:
             server.config.update(SERVER_NAME=f'{config.dashboard_config.domain_name}')
 
         manifest_url = self.app.get_asset_url('manifest.json')
-        print(manifest_url)
         self.app.index_string = '''
         <!DOCTYPE html>
         <html>

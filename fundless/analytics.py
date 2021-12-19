@@ -119,9 +119,7 @@ class PortfolioAnalytics:
     def get_alternative_crypto_symbols(self, symbol: str) -> [str]:
         symbol = symbol.upper()
         alternative = np.where(symbol in synonyms for synonyms in COIN_SYNONYMS)[0]
-        print(alternative)
         if len(alternative) > 0:
-            print(COIN_SYNONYMS[alternative[0]])
             alternatives = [syn for syn in COIN_SYNONYMS[alternative[0]] if syn != symbol]
             logger.info(f"Found alternatives for {symbol}:")
             logger.info(alternatives)

@@ -110,8 +110,8 @@ class DashboardConfig(BaseConfig):
             try:
                 data = yaml.safe_load(f)
             except yaml.YAMLError as exc:
-                print("Error while parsing config file:")
-                print(exc)
+                logger.error("Error while parsing config file:")
+                logger.error(exc)
                 raise exc
         config = data['dashboard']
         self = cls.from_dict(config)
@@ -177,8 +177,8 @@ class TradingBotConfig(BaseConfig):
             try:
                 data = yaml.safe_load(f)
             except yaml.YAMLError as exc:
-                print("Error while parsing config file:")
-                print(exc)
+                logger.error("Error while parsing config file:")
+                logger.error(exc)
                 raise exc
         config = data['trading_bot']
         self = cls.from_dict(config)
@@ -230,8 +230,8 @@ class SecretsStore(BaseConfig):
             try:
                 data = yaml.safe_load(f)
             except yaml.YAMLError as exc:
-                print("Error while parsing secrets file:")
-                print(exc)
+                logger.error("Error while parsing secrets file:")
+                logger.error(exc)
                 raise exc
         self = cls.from_dict(data)
         return self

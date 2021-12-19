@@ -6,7 +6,9 @@ from dash import dcc
 from dash import html
 import dash_bootstrap_components as dbc
 from xml.etree import ElementTree
+import logging
 
+logger = logging.getLogger(__name__)
 
 def pretty_print_date(datetime):
     day = datetime.day
@@ -43,8 +45,8 @@ def parse_secrets(file_path):
         try:
             data = yaml.safe_load(f)
         except yaml.YAMLError as exc:
-            print("Error while parsing secrets file:")
-            print(exc)
+            logger.error("Error while parsing secrets file:")
+            logger.error(exc)
             raise exc
     return data
 
