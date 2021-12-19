@@ -380,6 +380,24 @@ def create_holdings_page(analytics: PortfolioAnalytics):
 
 
 def create_strategy_page(analytics: PortfolioAnalytics):
+    def create_exchange_selection():
+        button_group = html.Div(
+            dbc.RadioItems(
+                id="exchange_select",
+                className="btn-group",
+                inputClassName="btn-check",
+                labelClassName="btn btn-outline-primary",
+                labelCheckedClassName="active",
+                options=[
+                    {"label": exchange.values[1], "value": exchange.value}
+                    for exchange in analytics.exchanges.authorized_exchanges.keys()
+                ],
+                value=analytics.config.trading_bot_config.exchange.value,
+            ),
+            className="radio-group",
+        )
+        return button_group
+
     settings = html.Div(dbc.Card(className='settings-card', children=[
         dbc.Form([
             dbc.Label('Index Coins', html_for='index_coins', style={'font-weight': 'bold'}),
@@ -416,6 +434,12 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                {'label': 'US Dollar', 'value': 'usd'},
                            ],
                            value=analytics.config.trading_bot_config.base_currency.value.lower()),
+            html.Hr(),
+
+            dbc.Label("Exchange", html_for='exchange_select', style={'font-weight': 'bold'}),
+            html.Br(),
+            dbc.FormText("Choose the exchange where your savings plan is executed", className='text-muted'),
+            create_exchange_selection(),
             html.Hr(),
 
             dbc.Label("Savings Plan Base Coin", html_for='base_symbol', style={'font-weight': 'bold'}),

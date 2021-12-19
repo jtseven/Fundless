@@ -244,6 +244,16 @@ class Dashboard:
                                           analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
                                           or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
 
+        @self.app.callback(Input('exchange_select', 'value'),
+                           Output('index_coins', 'options'))
+        def set_exchange(exchange: str):
+            self.config.trading_bot_config.exchange = exchange
+            self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
+            logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
+            return [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                    analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
+                    or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
+
         @self.app.callback(Input('volume', 'value'))
         def set_volume(vol):
             if vol is None:
