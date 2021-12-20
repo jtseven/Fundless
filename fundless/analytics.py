@@ -342,7 +342,7 @@ class PortfolioAnalytics:
     def add_trade(self, date: constr(regex=date_time_regex),
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
                   cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None,
-                  exchange: Optional[constr(to_lower=True, regex=EXCHANGE_REGEX)] = None):
+                  exchange: Optional[ExchangeEnum] = None):
         if base_cost is None:
             base_cost = self.base_symbol_to_base_currency(cost)
         if fee is None:
@@ -350,7 +350,7 @@ class PortfolioAnalytics:
         if fee_symbol is None:
             fee_symbol = ''
         if exchange is None:
-            exchange = self.config.trading_bot_config.exchange.value
+            exchange = self.config.trading_bot_config.exchange
         try:
             date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
         except pd.errors:
@@ -359,7 +359,7 @@ class PortfolioAnalytics:
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
                       self.base_cost_row: [base_cost],
-                      'exchange': exchange
+                      'exchange': exchange.value
                       }
         self.update_trades_df()
         self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)

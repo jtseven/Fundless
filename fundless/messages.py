@@ -421,67 +421,75 @@ class TelegramBot:
     def check_orders(self, context: CallbackContext):
         job = context.job
         order_ids, symbols, n_retry, update = job.context
-        context.bot.send_message(self.chat_id, text='I am checking your orders now!')
-        context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
-        order_report = self.trading_bot.check_orders(order_ids, symbols)
-        open_orders = order_report['open']
-        closed_orders = order_report['closed']
-        missing = [symbol for symbol in symbols if symbol not in closed_orders + open_orders]
-        if len(missing) > 0:
-            context.bot.send_message(self.chat_id, text='Oh ohh, I did not find all the orders I placed :0')
-            context.bot.send_message(self.chat_id, text='Orders for those coins are missing:')
-            msg = "```\n"
-            for missing_symbol in missing:
-                msg += f"  - {missing_symbol.upper()}\n"
-            msg += "```"
-            context.bot.send_message(self.chat_id, text=msg)
+        try:  # everything in try block, to correctly end conversation state in case of exception
+            context.bot.send_message(self.chat_id, text='I am checking your orders now!')
+            context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
+            order_report = self.trading_bot.check_orders(order_ids, symbols)
+            open_orders = order_report['open']
+            closed_orders = order_report['closed']
+            missing = [symbol for symbol in symbols if symbol not in closed_orders + open_orders]
+            if len(missing) > 0:
+                context.bot.send_message(self.chat_id, text='Oh ohh, I did not find all the orders I placed :0')
+                context.bot.send_message(self.chat_id, text='Orders for those coins are missing:')
+                msg = "```\n"
+                for missing_symbol in missing:
+                    msg += f"  - {missing_symbol.upper()}\n"
+                msg += "```"
+                context.bot.send_message(self.chat_id, text=msg)
 
-        if len(closed_orders) > 0:
-            volume = 0.
-            msg = "```\n"
-            msg += "----- Completed Coins -----"
-            for symbol in closed_orders:
-                msg += f"\n  - {symbol.split('/')[0].upper()}"
-                volume += order_report[symbol]['cost']
-            msg += "\n---------------------------"
-            base_currency_volume = self.trading_bot.analytics.base_symbol_to_base_currency(volume)
-            msg += f"\n-- Filled Volume: {base_currency_volume:<4.0f} {self.config.trading_bot_config.base_currency.values[1]} --"
-            msg += "\n```"
-            context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
+            if len(closed_orders) > 0:
+                volume = 0.
+                msg = "```\n"
+                msg += "----- Completed Coins -----"
+                for symbol in closed_orders:
+                    msg += f"\n  - {symbol.split('/')[0].upper()}"
+                    volume += order_report[symbol]['cost']
+                msg += "\n---------------------------"
+                base_currency_volume = self.trading_bot.analytics.base_symbol_to_base_currency(volume)
+                msg += f"\n-- Filled Volume: {base_currency_volume:<4.0f} {self.config.trading_bot_config.base_currency.values[1]} --"
+                msg += "\n```"
+                context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
 
-        if len(closed_orders) == len(order_ids):
-            context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
-            context.bot.send_message(self.chat_id, text='See you :)')
-            state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
-            state_update._effective_user = update.effective_user
-            state_update._effective_chat = update.effective_chat
-            context.update_queue.put(state_update)
-        else:
-            context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
-            msg = "```\n"
-            for symbol in open_orders:
-                msg += f"  - {symbol.upper()}\n"
-            msg += "```"
-            context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
-            if n_retry > 10:
-                logger.warning("Not all orders where filled, check manually and add filled orders to trades.csv!")
-                context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
-                                                            "still open manually..")
+            if len(closed_orders) == len(order_ids):
+                context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
+                context.bot.send_message(self.chat_id, text='See you :)')
                 state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
                 state_update._effective_user = update.effective_user
                 state_update._effective_chat = update.effective_chat
                 context.update_queue.put(state_update)
             else:
-                wait_time = 60 * n_retry * n_retry  # have an exponentially increasing wait time
-                logger.warning(f"Orders will be checked again in {wait_time} seconds!")
-                context.bot.send_message(self.chat_id,
-                                         text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
-                context.job_queue.run_once(self.check_orders, when=wait_time,
-                                           context=(order_ids, symbols, n_retry + 1, update))
-                state_update = StateChangeUpdate(randint(0, 999999999), next_state=CHECKING)
-                state_update._effective_user = update.effective_user
-                state_update._effective_chat = update.effective_chat
-                context.update_queue.put(state_update)
+                context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
+                msg = "```\n"
+                for symbol in open_orders:
+                    msg += f"  - {symbol.upper()}\n"
+                msg += "```"
+                context.bot.send_message(self.chat_id, text=msg, parse_mode='MarkdownV2')
+                if n_retry > 10:
+                    logger.warning("Not all orders where filled, check manually and add filled orders to trades.csv!")
+                    context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
+                                                                "still open manually..")
+                    state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
+                    state_update._effective_user = update.effective_user
+                    state_update._effective_chat = update.effective_chat
+                    context.update_queue.put(state_update)
+                else:
+                    wait_time = 60 * n_retry * n_retry  # have an exponentially increasing wait time
+                    logger.warning(f"Orders will be checked again in {wait_time} seconds!")
+                    context.bot.send_message(self.chat_id,
+                                             text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
+                    context.job_queue.run_once(self.check_orders, when=wait_time,
+                                               context=(order_ids, symbols, n_retry + 1, update))
+                    state_update = StateChangeUpdate(randint(0, 999999999), next_state=CHECKING)
+                    state_update._effective_user = update.effective_user
+                    state_update._effective_chat = update.effective_chat
+                    context.update_queue.put(state_update)
+        except Exception as e:
+            state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
+            state_update._effective_user = update.effective_user
+            state_update._effective_chat = update.effective_chat
+            logger.error(f"Uncaught error when checking order status!")
+            logger.error(e)
+            raise e
 
     def _change_conversation_state(self, update: StateChangeUpdate, __: CallbackContext):
         if update.next_state == ConversationHandler.END:

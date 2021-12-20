@@ -370,11 +370,17 @@ class TradingBot:
                     buy_symbol = order['symbol'].split('/')[0]
                     sell_symbol = order['symbol'].split('/')[1]
                     if order['fee'] is None:
+                        logger.warning(f"No fee for order {id}")
                         fee = 0
                         fee_symbol = ''
                     else:
-                        fee = order['fee']['cost']
-                        fee_symbol = order['fee']['currency']
+                        try:
+                            fee = order['fee']['cost']
+                            fee_symbol = order['fee']['currency']
+                        except KeyError:
+                            logger.warning(f"No fee for order {id}")
+                            fee = 0
+                            fee_symbol = ''
                 except KeyError:
                     logger.error(f"KeyError while checking {symbol} order status!")
                     order_report['symbol'] = 'open'
@@ -393,7 +399,7 @@ class TradingBot:
                                          cost=cost,
                                          fee=fee,
                                          fee_symbol=fee_symbol,
-                                         exchange=self.exchanges.active.name)
+                                         exchange=self.bot_config.trading_bot_config.exchange)
             except Exception as e:
                 logger.error(f"Error while logging trade to trades.csv:")
                 logger.error(e)

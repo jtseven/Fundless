@@ -516,7 +516,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
             dbc.Label(f"Savings Plan Volume ({analytics.config.trading_bot_config.base_currency.value})", html_for='volume', style={'font-weight': 'bold'}),
             html.Br(),
             dbc.FormText("How much you want to spent each time?", className='text-muted'),
-            dbc.Input(className="volume-input", type="number", min=10, step=1, id='volume', value=analytics.config.trading_bot_config.savings_plan_cost),
+            dbc.Input(className="volume-input", type="number", min=1, step=1, id='volume', value=analytics.config.trading_bot_config.savings_plan_cost),
             html.Hr(),
 
             dbc.Label("Index Weighting", html_for='weighting', style={'font-weight': 'bold'}),
