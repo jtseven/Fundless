@@ -141,15 +141,16 @@ class PortfolioAnalytics:
 
     # for cryptos that might have rebranded and changed their ticker some time
     def get_alternative_crypto_symbols(self, symbol: str) -> [str]:
-        # TODO: Bug always finds alternative, even if symbol name is not in synonyms list
         symbol = symbol.upper()
-        alternative = np.where(symbol in synonyms for synonyms in COIN_SYNONYMS)[0]
-        if len(alternative) > 0:
-            alternatives = [syn for syn in COIN_SYNONYMS[alternative[0]] if syn != symbol]
-            logger.info(f"Found alternatives for {symbol}:")
-            logger.info(alternatives)
+        found = [symbol in synonyms for synonyms in COIN_SYNONYMS]
+        if any(found):
+            found_index = np.where(found)[0]
+            alternatives = [syn for syn in COIN_SYNONYMS[found_index[0]] if syn != symbol]
+            logger.debug(f"Found alternatives for {symbol}:")
+            logger.debug(alternatives)
             return alternatives
         else:
+            logger.debug(f"Found no alternatives for {symbol}:")
             return []
 
     def get_coin_id(self, symbol: str):
@@ -157,7 +158,6 @@ class PortfolioAnalytics:
         try:
             coin_id = self.markets.loc[self.markets['symbol'] == symbol, ['id']].values[0][0]
         except IndexError as e:
-            logger.warning(f"No coin ID found in Coingecko market data for {symbol.upper()}!")
             alternatives = self.get_alternative_crypto_symbols(symbol)
             if len(alternatives) > 0:
                 for alt in alternatives:
@@ -167,11 +167,13 @@ class PortfolioAnalytics:
                         continue
                     else:
                         return coin_id
-            logger.error(f'Could not find market data for {e.args[0]}')
+            logger.error(f'Could not find market data for {symbol.upper()}')
             raise e
         return coin_id
 
     def get_coin_name(self, symbol: str, abbr=False):
+        if symbol.upper() in FIAT_SYMBOLS:
+            return symbol
         symbol = symbol.lower()
         try:
             coin_name = self.markets.loc[self.markets['symbol'] == symbol, ['name']].values[0][0]
@@ -188,7 +190,7 @@ class PortfolioAnalytics:
                         if abbr:
                             coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
                         return coin_name
-            logger.error(f'Could not find market data for {e.args[0]}')
+            logger.error(f'Could not find market data for {symbol.upper()}')
             raise e
         if abbr:
             coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
@@ -199,7 +201,7 @@ class PortfolioAnalytics:
         try:
             image = self.markets.loc[self.markets['symbol'] == symbol, ['image']].values[0][0]
         except IndexError:
-            logger.warning(f'No image found for coin {symbol}!')
+            logger.warning(f'No image found for coin {symbol.upper()}!')
             return 'assets/coins-solid.png'
         return image
 
