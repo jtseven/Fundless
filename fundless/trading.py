@@ -323,7 +323,7 @@ class TradingBot:
                 except TypeError:
                     logger.warning("Order amount or price was not included in order report returned from exchange!")
                 placed_symbols.append(ticker)
-                placed_ids.append(int(order['id']))
+                placed_ids.append(str(order['id']))
 
         report['order_ids'] = placed_ids
         report['symbols'] = placed_symbols
@@ -332,13 +332,13 @@ class TradingBot:
         # after = self.exchanges.active.fetch_total_balance()
         return report
 
-    def check_orders(self, order_ids: List, symbols: List) -> dict:
+    def check_orders(self, order_ids: List[Union[str, int]], symbols: List[Union[str, int]]) -> dict:
         logger.info("Checking order status...")
         closed_orders = []
         open_orders = []
         order_report = {symbol: {} for symbol in symbols}
         for id, symbol in zip(order_ids, symbols):
-            if id < 0:
+            if id < 0 if isinstance(id, int) else False:
                 # this is a 'fake' order, when buying coin equals the base symbol we are using to buy the index
                 logger.info("Checking dummy order")
                 order_report[symbol]['status'] = 'closed'
