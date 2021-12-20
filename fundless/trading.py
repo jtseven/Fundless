@@ -316,7 +316,12 @@ class TradingBot:
                 logger.error(e)
                 continue
             else:
-                logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+                logger.info("Order:")
+                logger.info(order)
+                try:
+                    logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
+                except TypeError:
+                    logger.warning("Order amount or price was not included in order report returned from exchange!")
                 placed_symbols.append(ticker)
                 placed_ids.append(int(order['id']))
 
