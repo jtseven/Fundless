@@ -293,7 +293,7 @@ class TradingBot:
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
                 logger.info(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
                 placed_symbols.append(symbol.upper())
-                placed_ids.append(-weight*volume)  # storing the imagined cost of this order as a negative id as suboptimal workaround
+                placed_ids.append(float(-weight*volume))  # storing the imagined cost of this order as a negative id as suboptimal workaround
                 continue
             ticker = f'{symbol.upper()}/{self.bot_config.trading_bot_config.base_symbol.upper()}'
             price = self.exchanges.active.fetch_ticker(ticker).get('last')
@@ -339,7 +339,7 @@ class TradingBot:
         open_orders = []
         order_report = {symbol: {} for symbol in symbols}
         for id, symbol in zip(order_ids, symbols):
-            if id < 0 if isinstance(id, int) else False:
+            if id < 0 if isinstance(id, float) else False:
                 # this is a 'fake' order, when buying coin equals the base symbol we are using to buy the index
                 logger.info("Checking dummy order")
                 order_report[symbol]['status'] = 'closed'
