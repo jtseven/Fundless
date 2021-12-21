@@ -6,7 +6,7 @@ from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr, Optional
 import plotly.express as px
-from typing import Tuple
+from typing import Tuple, Union
 import numpy as np
 from time import time, sleep
 from redo import retrying
@@ -40,6 +40,8 @@ min_font_size = 10
 class PortfolioAnalytics:
     trades_df: pd.DataFrame
     trades_file: Path
+    order_ids: pd.DataFrame
+    order_ids_file: Path
     index_df: pd.DataFrame = None
     history_df: pd.DataFrame = None
     coingecko: CoinGeckoAPI
@@ -52,10 +54,15 @@ class PortfolioAnalytics:
     history_update_lock = Lock()
     last_trades_update: float = 0
 
-    def __init__(self, file_path, config: Config, exchanges: Exchanges):
+    def __init__(self,
+                 trades_file: Union[str, Path],
+                 order_ids_file: Union[str, Path],
+                 config: Config,
+                 exchanges: Exchanges):
         self.config = config
         self.init_config_parameters()
-        self.trades_file = Path(file_path)
+        self.trades_file = Path(trades_file)
+        self.order_ids_file = Path(order_ids_file)
         self.coingecko = CoinGeckoAPI()
         self.exchanges = exchanges
         self.exchange_balance = None
@@ -64,6 +71,9 @@ class PortfolioAnalytics:
             self.trades_df = pd.DataFrame(columns=self.trades_cols)
             self.trades_df.to_csv(self.trades_file, index=False)
             self.last_trades_update = time()
+        if not self.order_ids_file.exists():
+            self.order_ids = pd.DataFrame(columns=['id', 'symbol', 'date'])
+            self.order_ids.to_csv(self.order_ids_file, index=False)
         self.update_data()
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
@@ -87,6 +97,7 @@ class PortfolioAnalytics:
 
     def update_data(self):
         self.update_markets()
+        self.update_order_ids()
         self.update_trades_df()
         self.update_index_df()
         self.update_portfolio_metrics()
@@ -96,11 +107,11 @@ class PortfolioAnalytics:
     def init_config_parameters(self):
         self.base_cost_row = f'cost_{self.config.trading_bot_config.base_currency.value.lower()}'
         self.currency_symbol = self.config.trading_bot_config.base_currency.values[1]
-        self.csv_dtypes = {'buy_symbol': 'str', 'sell_symbol': 'str', 'price': 'float64',
+        self.csv_dtypes = {'id': 'str', 'buy_symbol': 'str', 'sell_symbol': 'str', 'price': 'float64',
                            'amount': 'float64', 'cost': 'float64', 'fee': 'float64', 'fee_symbol': 'str',
-                           self.base_cost_row: 'float64', 'date': 'str'}
-        self.trades_cols = ['date', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
-                            self.base_cost_row, 'exchange']
+                           self.base_cost_row: 'float64', 'date': 'str', 'cost_total': 'float64'}
+        self.trades_cols = ['date', 'id', 'buy_symbol', 'sell_symbol', 'price', 'amount', 'cost', 'fee', 'fee_symbol',
+                            'cost_total', self.base_cost_row, 'exchange']
 
     def update_config(self, base_currency_changed: bool = False, index_changed: bool = False):
         self.init_config_parameters()
@@ -247,20 +258,70 @@ class PortfolioAnalytics:
         if self.last_trades_update < time() - 60:
             trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=['date'])
             trades_df.date = pd.to_datetime(trades_df.date, utc=True)
-            if trades_df['date'].iloc[0].tzinfo is None:
-                trades_df['date'] = trades_df['date'].dt.tz_localize('UTC', ambiguous='infer')
+
+            if len(trades_df) > 0:
+                if trades_df['date'].iloc[0].tzinfo is None:
+                    trades_df['date'] = trades_df['date'].dt.tz_localize('UTC', ambiguous='infer')
 
             update_file = False
 
+            for col in self.trades_cols:
+                if col not in trades_df.columns:
+                    logger.warning(f"Column: {col} not in trades.csv, adding it.")
+                    trades_df.insert(loc=self.trades_cols.index(col), column=col, value=np.nan)
+                    update_file = True
+
+            # check for missing orders (that are in order_ids.csv but not in trades.csv)
+            missing_ids = self.order_ids.loc[~self.order_ids['id'].isin(trades_df['id'])]
+            if len(missing_ids) > 0:
+                logger.warning("Found orders in orders.csv that are not in trades.csv!")
+                logger.warning("Adding them to trades.csv")
+                for id, symbol in zip(missing_ids['id'].values, missing_ids['symbol'].values):
+                    with retrying(self.exchanges.active.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
+                                  retry_exceptions=(ccxt.errors.BaseError,)) as fetch_order:
+                        order = fetch_order(id, symbol)
+                        if order['status'] == 'open':
+                            logger.info(f"Order {id} is not yet closed!")
+                            continue
+                        else:
+                            logger.info(f"Order {id} closed, adding to trades.csv")
+                            trades_df = self.add_trade(trades_df=trades_df,
+                                                       date=datetime.datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
+                                                       id=id,
+                                                       buy_symbol=order['symbol'].split('/')[0],
+                                                       sell_symbol=order['symbol'].split('/')[1],
+                                                       price=order['price'],
+                                                       amount=order['amount'],
+                                                       cost=order['cost'],
+                                                       fee=order['fee']['cost'] if order['fee'] is not None else 0.0,
+                                                       fee_symbol=order['fee']['currency'] if order[
+                                                                                                  'fee'] is not None else '',
+                                                       exchange=self.config.trading_bot_config.exchange)
+                            update_file = True
+
+            # compute total cost if missing
+            trades_df['fee'].fillna(0.0, inplace=True)
+            if any(trades_df['cost_total'].isna()):
+                trades_df['cost_total'] = trades_df['cost'] + trades_df['fee']
+
             # base_cost_row has the cost denoted in base_currency rather than buy_symbol
             def compute_base_cost(row):
+                accounting_currency = self.config.trading_bot_config.base_currency.value.lower()
                 date = row.date.strftime('%d-%m-%Y')
-                coin_id = self.get_coin_id(row.sell_symbol)
-                func = lambda: self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
-                                   'market_data']['current_price'][
-                                   self.config.trading_bot_config.base_currency.value.lower()] * row.cost
+                if row.sell_symbol not in FIAT_SYMBOLS:
+                    coin_id = self.get_coin_id(row.sell_symbol)  # TODO support for fiat as sell_symbol
+                else:
+                    coin_id = row.sell_symbol
 
-                with retrying(func, sleeptime=20, sleepscale=1, jitter=0,
+                def convert_cost():
+                    if row.sell_symbol.lower() != accounting_currency:
+                        # TODO use convert method (implement historic prices in convert method)
+                        return self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
+                            'market_data']['current_price'][accounting_currency] * row.cost_total
+                    else:
+                        return row.cost_total
+
+                with retrying(convert_cost, sleeptime=20, sleepscale=1, jitter=0,
                               retry_exceptions=(requests.exceptions.HTTPError,)) as get_base_cost:
                     base_cost = get_base_cost()
 
@@ -294,15 +355,37 @@ class PortfolioAnalytics:
                 trades_df['sell_symbol'].replace(COIN_REBRANDING, inplace=True)
                 update_file = True
 
-
+            trades_df.date = pd.to_datetime(trades_df.date, utc=True)
             self.trades_df = trades_df
             self.last_trades_update = time()
             if update_file:
-                self.update_file()
+                self.update_trades_file()
 
-    def update_file(self):
+    def update_trades_file(self):
         self.trades_df.sort_values('date', inplace=True)
         self.trades_df.to_csv(self.trades_file, index=False)
+
+    def add_order_id(self, id: str, symbol: str, date: Union[str, datetime.datetime]):
+        date = pd.to_datetime(date, infer_datetime_format=True)
+        if date.tzinfo is None:
+            date = date.tz_localize('Europe/Berlin')
+        else:
+            date = date.tz_convert('Europe/Berlin')
+        id_dict = {'id': [id], 'symbol': [symbol], 'date': [date]}
+
+        self.order_ids = self.order_ids.append(pd.DataFrame.from_dict(id_dict), ignore_index=True)
+        self.update_order_ids_file()
+
+    def update_order_ids(self):
+        self.order_ids = pd.read_csv(self.order_ids_file, index_col=False, parse_dates=['date'])
+        self.order_ids.date = pd.to_datetime(self.order_ids.date, utc=True)
+        if len(self.order_ids) > 0:
+            if self.order_ids['date'].iloc[0].tzinfo is None:
+                self.order_ids['date'] = self.order_ids['date'].dt.tz_localize('UTC', ambiguous='infer')
+
+    def update_order_ids_file(self):
+        self.order_ids.sort_values('date', inplace=True)
+        self.order_ids.to_csv(self.order_ids_file, index=False)
 
     def update_markets(self, force=False):
         if not force:
@@ -339,10 +422,10 @@ class PortfolioAnalytics:
         self.index_df = index_df
 
     @validate_arguments
-    def add_trade(self, date: constr(regex=date_time_regex),
+    def add_trade(self, date: Union[constr(regex=date_time_regex), datetime.datetime], id: str,
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
                   cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None,
-                  exchange: Optional[ExchangeEnum] = None):
+                  exchange: Optional[ExchangeEnum] = None, trades_df=None):
         if base_cost is None:
             base_cost = self.base_symbol_to_base_currency(cost)
         if fee is None:
@@ -351,19 +434,24 @@ class PortfolioAnalytics:
             fee_symbol = ''
         if exchange is None:
             exchange = self.config.trading_bot_config.exchange
-        try:
-            date = pd.to_datetime(date, infer_datetime_format=True).tz_localize('Europe/Berlin')
-        except pd.errors:
-            logger.error('Error when converting date for trades file!')
-        trade_dict = {'date': [date], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
+        date = pd.to_datetime(date, infer_datetime_format=True)
+        if date.tzinfo is None:
+            date = date.tz_localize('Europe/Berlin')
+        else:
+            date = date.tz_convert('Europe/Berlin')
+
+        trade_dict = {'date': [date], 'id': [id], 'buy_symbol': [buy_symbol.upper()], 'sell_symbol': [sell_symbol.upper()],
                       'price': [price], 'amount': [amount], 'cost': [cost], 'fee': [fee],
                       'fee_symbol': [fee_symbol.upper()],
                       self.base_cost_row: [base_cost],
                       'exchange': exchange.value
                       }
-        self.update_trades_df()
-        self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
-        self.update_file()
+        if trades_df is not None:
+            trades_df = trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
+            return trades_df
+        else:
+            self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
+            self.update_trades_file()
 
     def index_balance(self) -> Tuple:
         self.update_markets()

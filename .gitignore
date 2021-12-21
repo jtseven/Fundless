@@ -3,6 +3,7 @@ secrets.yaml
 config.yaml
 trades.csv
 trades_backup.csv
+order_ids.csv
 
 ### Data CSV Files
 trades_backup*

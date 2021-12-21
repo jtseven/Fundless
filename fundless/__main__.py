@@ -25,6 +25,8 @@ secrets_yaml = 'secrets.yaml'
 config_yaml = 'config.yaml'
 trades_csv = 'fundless/data/trades.csv'
 trades_csv_test = 'fundless/data/test_trades.csv'
+order_ids_csv = 'fundless/data/order_ids.csv'
+order_ids_csv_test = 'fundless/data/ids_test.csv'
 
 # logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -44,9 +46,9 @@ if __name__ == '__main__':
 
     # the analytics module for portfolio performance analysis
     if config.trading_bot_config.test_mode:
-        analytics = PortfolioAnalytics(trades_csv_test, config, exchanges)
+        analytics = PortfolioAnalytics(trades_csv_test, order_ids_csv_test, config, exchanges)
     else:
-        analytics = PortfolioAnalytics(trades_csv, config, exchanges)
+        analytics = PortfolioAnalytics(trades_csv, order_ids_csv, config, exchanges)
 
     # the bot interacting with exchanges
     trading_bot = TradingBot(config, analytics, exchanges)

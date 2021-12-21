@@ -316,6 +316,7 @@ class TradingBot:
                 logger.error(e)
                 continue
             else:
+                self.analytics.add_order_id(id=order['id'], symbol=ticker, date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 logger.info("Order:")
                 logger.info(order)
                 try:
@@ -392,6 +393,7 @@ class TradingBot:
             logger.info(f"Adding {symbol} order to the trades file")
             try:
                 self.analytics.add_trade(date=date,
+                                         id=str(id),
                                          buy_symbol=buy_symbol,
                                          sell_symbol=sell_symbol,
                                          price=price,
