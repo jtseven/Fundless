@@ -277,9 +277,9 @@ class PortfolioAnalytics:
                 logger.warning("Found orders in orders.csv that are not in trades.csv!")
                 logger.warning("Adding them to trades.csv")
                 for id, symbol, date in zip(missing_ids['id'].values, missing_ids['symbol'].values, missing_ids['date'].values):
-                    print(f'Date: {date}')
-                    print(f'Delta: {datetime.now() - pd.Timedelta(minutes=10)}')
-                    if date.timestamp() > (datetime.now() - pd.Timedelta(minutes=10)).timestamp():
+                    print(f'Date: {date.astype(np.int64) // 10 ** 9}')
+                    print(f'Delta: {pd.Timestamp.now() - pd.Timedelta(minutes=10)}')
+                    if date.astype(np.int64) // 10 ** 9 > pd.Timestamp.now() - pd.Timedelta(minutes=10):
                         logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
                         # skip orders, that are new, as they are still pending to be added regularly
                         continue
