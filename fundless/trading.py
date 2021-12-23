@@ -253,13 +253,20 @@ class TradingBot:
             cost = weight * base_symbol_volume
             amount = weight * base_symbol_volume / price
 
-            if amount <= self.exchanges.active.markets[ticker]['limits']['amount']['min']:
+            min_amount = self.exchanges.active.markets[ticker]['limits']['amount']['min']
+            min_price = self.exchanges.active.markets[ticker]['limits']['price']['min']
+            min_cost = self.exchanges.active.markets[ticker]['limits']['cost']['min']
+
+            if min_cost is None:
+                min_cost = min_amount * min_price
+
+            if amount <= min_amount:
                 logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
                 volume_fail.append(symbol)
                 reason.append('Order amount too low')
                 if fail_fast:
                     return volume_fail, reason
-            elif cost <= self.exchanges.active.markets[ticker]['limits']['cost']['min']:
+            elif cost <= min_cost:
                 logger.warning(f"The cost of {cost} {self.bot_config.trading_bot_config.base_symbol.upper()}"
                                f" is too low to place an order!")
                 volume_fail.append(symbol)
