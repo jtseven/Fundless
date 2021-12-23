@@ -19,7 +19,7 @@ To be inline with german tax legislation it is not rebalancing on a monthly basi
 orders and will possibly be able to rebalance after the one year waiting period required for tax free trades.
 
 """
-telegram_bot = True
+telegram_bot = False
 
 secrets_yaml = 'secrets.yaml'
 config_yaml = 'config.yaml'
