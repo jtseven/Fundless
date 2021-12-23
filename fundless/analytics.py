@@ -11,7 +11,7 @@ import numpy as np
 from time import time, sleep
 from redo import retrying
 from threading import Lock
-import datetime
+from datetime import datetime, timedelta
 from threading import Thread
 import logging
 from currency_converter import CurrencyConverter
@@ -276,7 +276,11 @@ class PortfolioAnalytics:
             if len(missing_ids) > 0:
                 logger.warning("Found orders in orders.csv that are not in trades.csv!")
                 logger.warning("Adding them to trades.csv")
-                for id, symbol in zip(missing_ids['id'].values, missing_ids['symbol'].values):
+                for id, symbol, date in zip(missing_ids['id'].values, missing_ids['symbol'].values, missing_ids['date'].values):
+                    if date > datetime.now() - pd.Timedelta(minutes=10):
+                        logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
+                        # skip orders, that are new, as they are still pending to be added regularly
+                        continue
                     with retrying(self.exchanges.active.fetch_order, sleeptime=30, sleepscale=1, jitter=0,
                                   retry_exceptions=(ccxt.errors.BaseError,)) as fetch_order:
                         order = fetch_order(id, symbol)
@@ -286,7 +290,7 @@ class PortfolioAnalytics:
                         else:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(trades_df=trades_df,
-                                                       date=datetime.datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
+                                                       date=datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
                                                        id=id,
                                                        buy_symbol=order['symbol'].split('/')[0],
                                                        sell_symbol=order['symbol'].split('/')[1],
@@ -365,7 +369,7 @@ class PortfolioAnalytics:
         self.trades_df.sort_values('date', inplace=True)
         self.trades_df.to_csv(self.trades_file, index=False)
 
-    def add_order_id(self, id: str, symbol: str, date: Union[str, datetime.datetime]):
+    def add_order_id(self, id: str, symbol: str, date: Union[str, datetime]):
         date = pd.to_datetime(date, infer_datetime_format=True)
         if date.tzinfo is None:
             date = date.tz_localize('Europe/Berlin')
@@ -422,7 +426,7 @@ class PortfolioAnalytics:
         self.index_df = index_df
 
     @validate_arguments
-    def add_trade(self, date: Union[constr(regex=date_time_regex), datetime.datetime], id: str,
+    def add_trade(self, date: Union[constr(regex=date_time_regex), datetime], id: str,
                   buy_symbol: str, sell_symbol: str, price: float, amount: float,
                   cost: float, fee: Optional[float], fee_symbol: Optional[str], base_cost: Optional[float] = None,
                   exchange: Optional[ExchangeEnum] = None, trades_df=None):
@@ -708,17 +712,17 @@ class PortfolioAnalytics:
 
     @staticmethod
     def get_timestamp(value: str):
-        now = datetime.datetime.now()
+        now = datetime.now()
         if value == 'day':
-            timestamp = (now - datetime.timedelta(days=1)).timestamp()
+            timestamp = (now - timedelta(days=1)).timestamp()
         elif value == 'week':
-            timestamp = (now - datetime.timedelta(weeks=1)).timestamp()
+            timestamp = (now - timedelta(weeks=1)).timestamp()
         elif value == 'month':
-            timestamp = (now - datetime.timedelta(days=30)).timestamp()
+            timestamp = (now - timedelta(days=30)).timestamp()
         elif value == '6month':
-            timestamp = (now - datetime.timedelta(days=182)).timestamp()
+            timestamp = (now - timedelta(days=182)).timestamp()
         elif value == 'year':
-            timestamp = (now - datetime.timedelta(days=365)).timestamp()
+            timestamp = (now - timedelta(days=365)).timestamp()
         else:
             timestamp = None
         return timestamp
