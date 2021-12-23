@@ -1,20 +1,19 @@
-from typing import Final
 import secrets
 
 
-FIAT_SYMBOLS: Final = ['EUR', 'USD', 'GBP']
-USD_COINS: Final = ['TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
-USD_SYMBOLS: Final = ['USD', 'TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
+FIAT_SYMBOLS = ['EUR', 'USD', 'GBP', 'ETH2']
+USD_COINS = ['TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
+USD_SYMBOLS = ['USD', 'TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
 
-EXCHANGE_REGEX: Final = '^(kraken|binance|coinbasepro)$'
+EXCHANGE_REGEX = '^(kraken|binance|coinbasepro)$'
 
 # key: old symbol
 # value: new symbol
-COIN_REBRANDING: Final = {
+COIN_REBRANDING = {
     'NANO': 'XNO'
 }
 
-COIN_SYNONYMS: Final = [
+COIN_SYNONYMS = [
     ['NANO', 'XNO']
 ]
 
