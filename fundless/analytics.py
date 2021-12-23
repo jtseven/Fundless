@@ -517,6 +517,9 @@ class PortfolioAnalytics:
     def update_historical_prices(self):
         if self.last_market_update == 0:
             return
+        if len(self.trades_df) == 0:
+            return
+
         to_timestamp = time()
         freq = None
         month = 60*60*24*30
