@@ -581,7 +581,7 @@ class PortfolioAnalytics:
             # add most recent prices for data consistency
             current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol in list(history_df.columns)]
             history_df = history_df.append(pd.DataFrame([current_prices], columns=history_df.columns, index=[
-                pd.to_datetime(int(time()), unit='s', utc=True)])).sort_index()
+                pd.to_datetime('now', utc=True)])).sort_index()
 
             # convert to local timezone
             history_df.index = history_df.index.tz_convert('Europe/Berlin')
@@ -596,16 +596,20 @@ class PortfolioAnalytics:
         if self.history_df is None:
             raise ValueError
         if from_timestamp is not None:
-            start_time = pd.to_datetime(from_timestamp, unit='s', utc=True)
+            start_time = pd.to_datetime(from_timestamp, unit='s', utc=True).tz_convert('Europe/Berlin')
             price_history = self.history_df.copy().truncate(before=start_time)
         else:
             price_history = self.history_df.copy()
-            start_time = price_history.index.min()
-        if start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=31)):
+            if price_history.index.min().tzinfo is None or price_history.index.min().tzinfo.utcoffset(price_history.index.min()) is None:
+                # tz naive time
+                start_time = price_history.index.min().tz_localize('Europe/Berlin')
+            else:  # tz aware
+                start_time = price_history.index.min().tz_convert('Europe/Berlin')
+        if start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=31)):
             freq = 'D'
-        elif start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=14, minutes=2)):
+        elif start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=14, minutes=2)):
             freq = '3H'
-        elif start_time < (pd.to_datetime(int(time()), unit='s', utc=True) - pd.DateOffset(days=1, minutes=2)):
+        elif start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=1, minutes=2)):
             freq = 'H'
         else:
             freq = '5T'  # 5 minutes
@@ -616,7 +620,7 @@ class PortfolioAnalytics:
         current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol
                           in list(price_history.columns)]
         price_history = price_history.append(pd.DataFrame([current_prices], columns=price_history.columns, index=[
-            pd.to_datetime(int(time()), unit='s', utc=True).tz_convert('Europe/Berlin')])).sort_index()
+            pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin')])).sort_index()
         if start_time+pd.Timedelta(days=2) < price_history.index.min():
             price_history = price_history.append(pd.DataFrame(0, index=[start_time], columns=price_history.columns)).sort_index()
 
