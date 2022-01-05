@@ -62,7 +62,7 @@ if __name__ == '__main__':
     # dashboard as web application
     if config.dashboard_config.dashboard:
         dashboard = Dashboard(config, analytics)
-        webapp = threading.Thread(target=dashboard.run_dashboard)
+        webapp = threading.Thread(target=dashboard.run_dashboard, daemon=True)
         webapp.start()
 
     # automated saving plan execution
