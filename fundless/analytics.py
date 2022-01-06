@@ -88,12 +88,13 @@ class PortfolioAnalytics:
                 while True:
                     schedule.run_pending()
                     sleep(1)
-            updates = Thread(target=run_updates)
+            updates = Thread(target=run_updates, daemon=True)
             updates.start()
             self.running_updates = True
         except Exception as e:
+            logger.error("Exception while runnign API updates!")
+            logger.error(e)
             self.running_updates = False
-            raise e
 
     def update_data(self):
         self.update_markets()
