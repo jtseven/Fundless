@@ -7,7 +7,7 @@ Interaction with the bot is done by Telegram, analytics on the bots performance 
 <img src="doc/screenshot_telegram.jpeg" width="300" />
 
 ### Dashboard
-<img src="doc/screenshot_dashboard.png" width="900" />
+<img src="doc/demo.gif" width="900" />
 
 
 ## Get Started
