@@ -95,15 +95,23 @@ class PortfolioAnalytics:
             logger.error("Exception while runnign API updates!")
             logger.error(e)
             self.running_updates = False
+            raise e
 
     def update_data(self):
-        self.update_markets()
-        self.update_order_ids()
-        self.update_trades_df()
-        self.update_index_df()
-        self.update_portfolio_metrics()
-        self.update_historical_prices()
-        self.update_exchange_balance()
+        try:
+            self.update_markets()
+            self.update_order_ids()
+            self.update_trades_df()
+            self.update_index_df()
+            self.update_portfolio_metrics()
+            self.update_historical_prices()
+            self.update_exchange_balance()
+        except requests.exceptions.RequestException as e:
+            logger.error("Erorr while fetching data from an API:")
+            logger.error(e)
+        except Exception as e:
+            logger.error("Uncaught exception while updating analytics data!")
+            raise e
 
     def init_config_parameters(self):
         self.base_cost_row = f'cost_{self.config.trading_bot_config.base_currency.value.lower()}'
@@ -203,7 +211,7 @@ class PortfolioAnalytics:
                             coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
                         return coin_name
             logger.error(f'Could not find market data for {symbol.upper()}')
-            raise e
+            coin_name = symbol.upper()
         if abbr:
             coin_name = coin_name[:14] + '..' if len(coin_name) > 14 else coin_name
         return coin_name
@@ -403,7 +411,7 @@ class PortfolioAnalytics:
         try:
             with retrying(self.coingecko.get_coins_markets, sleeptime=20, sleepscale=1, jitter=0,
                           retry_exceptions=(requests.exceptions.HTTPError,)) as get_markets:
-                markets = pd.DataFrame.from_records(get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=200))
+                markets = pd.DataFrame.from_records(get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=250))
                 markets['symbol'] = markets['symbol'].str.lower()
         except requests.exceptions.HTTPError as e:
             logger.error('Network error while updating market data from CoinGecko:')
