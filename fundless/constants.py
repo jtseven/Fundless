@@ -3,8 +3,10 @@ import secrets
 
 
 FIAT_SYMBOLS: Final = ['EUR', 'USD', 'GBP']
-USD_COINS: Final = ['TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
-USD_SYMBOLS: Final = ['USD', 'TUSD', 'USDC', 'BUSD', 'DAI', 'UST']
+USD_COINS: Final = ['USDT', 'TUSD', 'USDC', 'BUSD', 'DAI', 'UST', 'MIM', 'FRAX']
+USD_SYMBOLS: Final = ['USD'] + USD_COINS
+EUR_COINS: Final = ['EURT']
+STABLE_COINS: Final = USD_COINS + EUR_COINS
 
 EXCHANGE_REGEX: Final = '^(kraken|binance|coinbasepro)$'
 

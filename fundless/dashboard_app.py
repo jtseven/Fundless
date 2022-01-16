@@ -16,7 +16,7 @@ from config import Config
 from analytics import PortfolioAnalytics
 import layouts
 from login import LoginProvider
-from constants import Auth0EnvNames
+from constants import Auth0EnvNames, STABLE_COINS
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,6 @@ class Dashboard:
         server.secret_key = Auth0EnvNames.SECRET_KEY
         external_stylesheets = [
             dbc.themes.LITERA,  # FLATLY, LITERA, YETI
-            dbc.icons.FONT_AWESOME,
             'https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.css',
         ]
         external_scripts = [
@@ -129,6 +128,7 @@ class Dashboard:
                 <title>{%title%}</title>
                 {%favicon%}
                 {%css%}
+                <script src="https://kit.fontawesome.com/830ba245ba.js" crossorigin="anonymous"></script>
             </head>
             <body>
                 {%app_entry%}
@@ -146,9 +146,7 @@ class Dashboard:
             dcc.Location(id='url', refresh=False),
             dcc.Location(id='redirect', refresh=True),
             layouts.create_page_with_sidebar(),
-            DeferScript(src='https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.js'),
             DeferScript(src='assets/custom.js')
-
         ])
 
         self.app.validation_layout = html.Div([
@@ -157,7 +155,8 @@ class Dashboard:
             layouts.create_strategy_page(self.analytics),
             layouts.create_trades_page(self.analytics),
             layouts.create_not_implemented(''),
-            layouts.create_404('')
+            layouts.create_404(''),
+            self.app.layout,
         ])
 
         ########################################################################################################
@@ -206,68 +205,25 @@ class Dashboard:
             else:
                 logger.debug("Not updating config!")
 
-        def set_index(symbols):
-            current = self.config.trading_bot_config.cherry_pick_symbols
-            new = symbols
-            if Counter(current) == Counter(new):
-                return
-            logger.debug('Updating index')
-            self.config.trading_bot_config.cherry_pick_symbols = new
-            self.analytics.update_config(index_changed=True)
-
-        @self.app.callback(Input('index-apply', 'n_clicks'),
-                           State('index_coins', 'value'),
-                           Output('savings_plan_info', 'children'))
-        def update_index(_, index_symbols):
-            set_index(index_symbols)
-            return layouts.savings_plan_info(analytics)
-
-        @self.app.callback(Input('index-reset', 'n_clicks'),
-                           Output('index_coins', 'value'),
-                           Output('savings_plan_info', 'children'))
-        def reset_index_coins(_):
-            coins = [sym for sym in self.analytics.config.trading_bot_config.cherry_pick_symbols]
-            info = layouts.savings_plan_info(analytics)
-            return coins, info
-
-        @self.app.callback(Input('index-holdings', 'n_clicks'),
-                           Output('index_coins', 'value'),
-                           Output('savings_plan_info', 'children'),
-                           State('index_coins', 'value'))
-        def add_holdings(_, current_select):
-            holdings = list(self.analytics.index_df.loc[self.analytics.index_df['amount'] != 0].symbol.str.lower())
-            union = holdings + [sym for sym in current_select if sym not in holdings]
-            set_index(union)
-            return union, layouts.savings_plan_info(analytics)
-
         @self.app.callback(Input('quote_select', 'value'),
-                           Output('index_coins', 'options'),
+                           Output('coin_selection_buttons', 'children'),
                            Output('savings_plan_info', 'children'))
         def set_base_symbol(sym: str):
             if sym.lower() == self.config.trading_bot_config.base_symbol.lower():
-                return dash.no_update, dash.no_update
+                return dash.no_update
             self.config.trading_bot_config.base_symbol = sym
-            coins_select = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                                          analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
-                                          or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
-
-            return coins_select, layouts.savings_plan_info(analytics)
+            return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics)
 
         @self.app.callback(Input('exchange_select', 'value'),
-                           Output('index_coins', 'options'),
-                           Output('savings_plan_info', 'children'))
+                           Output('savings_plan_info', 'children'),
+                           Output('coin_selection_buttons', 'children'))
         def set_exchange(exchange: str):
             if exchange == self.config.trading_bot_config.exchange.value:
-                return dash.no_update, dash.no_update
+                return dash.no_update
             self.config.trading_bot_config.exchange = exchange
             self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
             logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
-            coins_select = [
-                {'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
-                or sym in analytics.config.trading_bot_config.cherry_pick_symbols
-            ]
-            return coins_select, layouts.savings_plan_info(analytics, force_update=True)
+            return layouts.savings_plan_info(analytics, force_update=True), layouts.create_coin_buttons(analytics)
 
         @self.app.callback(Input('volume', 'value'),
                            Output('savings_plan_info', 'children'))
@@ -293,6 +249,58 @@ class Dashboard:
                 return layouts.create_weighting_sliders(analytics)
             else:
                 return dash.no_update
+
+        @self.app.callback(
+            Input({'type': 'btn-coin-select', 'index': ALL}, 'n_clicks'),
+            State({'type': 'btn-coin-select', 'index': ALL}, 'value'),
+            State({'type': 'btn-coin-select', 'index': ALL}, 'active'),
+            Output('coin_selection_buttons', 'children'),
+            Output('savings_plan_info', 'children'),
+        )
+        def update_coin_buttons(n_clicks, symbol_arr, active_arr):
+
+            if len(n_clicks) > 0:
+                if any(v > 0 for v in n_clicks if v is not None):
+                    print(f'{n_clicks=}')
+                    print(f'{symbol_arr=}')
+                    print(f'{active_arr=}')
+
+                    # TODO: find an easier way to solve this
+                    if 'prev_n_clicks' not in locals():
+                        global prev_n_clicks
+                        prev_n_clicks = n_clicks
+                        toggled = n_clicks.index(1)
+                    else:
+                        toggled = [i for i, curr, prev in enumerate(zip(n_clicks, prev_n_clicks)) if curr != prev]
+                        if len(toggled) > 0:
+                            toggled = toggled[0]
+                        else:
+                            toggled = None
+
+                    active_arr[toggled] = not active_arr[toggled]
+                    new_picks = [symbol for symbol, active in zip(symbol_arr, active_arr) if active]
+                    print(f'{new_picks=}')
+                    if set(new_picks) != set(self.config.trading_bot_config.cherry_pick_symbols):
+                        self.config.trading_bot_config.cherry_pick_symbols = new_picks
+                        self.analytics.update_config(index_changed=True)
+                        print('updating coin buttons')
+                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics)
+            return dash.no_update
+
+        @self.app.callback(
+            Input('dropdown_add_coin', 'value'),
+            State('dropdown_add_coin', 'options'),
+            Output('dropdown_add_coin', 'value'),
+            Output('dropdown_add_coin', 'options'),
+            Output('coin_selection_buttons', 'children')
+        )
+        def add_coin_selection_button(sym, options):
+            if sym is not None:
+                self.config.trading_bot_config.cherry_pick_symbols.append(sym.lower())
+                self.analytics.update_config(index_changed=True)
+                new_options = [option for option in options if not option.get('value') == sym]
+                return None, new_options, layouts.create_coin_buttons(analytics)
+            return dash.no_update
 
         @self.app.callback(
             Output({'type': 'card-collapse', 'index': MATCH}, 'is_open'),

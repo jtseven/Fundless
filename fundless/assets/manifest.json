@@ -8,10 +8,10 @@
   "scope": "/",
   "start_url": "/dashboard",
   "icons": [{
-      "src": "assets/icons/192.png",
+      "src": "icons/192.png",
       "sizes": "192x192"},
    {
-      "src": "assets/icons/512.png",
+      "src": "icons/512.png",
       "sizes": "512x512"}
    ]
 }

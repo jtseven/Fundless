@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class Exchanges:
     authorized_exchanges: dict = {}
-    active: ccxt.Exchange = None
+    active: ccxt.Exchange
 
     def __init__(self, config: Config):
         self.secrets = config.secrets
@@ -18,7 +18,7 @@ class Exchanges:
                 logger.warning(f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}")
 
         if self.trading_config.exchange not in self.authorized_exchanges.keys():
-            raise f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}"
+            raise RuntimeWarning(f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}")
         else:
             self.active = self.authorized_exchanges[self.trading_config.exchange]
 

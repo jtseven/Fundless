@@ -9,6 +9,7 @@ from operator import add
 from analytics import PortfolioAnalytics
 from config import TradingBotConfig, WeightingEnum
 from utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
+from constants import STABLE_COINS
 
 ################################################################################################################
 #                                                  Layouts                                                     #
@@ -420,12 +421,53 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     return infos
 
 
+def create_coin_buttons(analytics: PortfolioAnalytics):
+    buttons = []
+    for i, sym in enumerate(analytics.markets.symbol.values):
+        try:
+            top_n_coin = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(
+                9).symbol.tolist().index(sym) + 1
+        except ValueError:
+            top_n_coin = None
+
+        if top_n_coin is None and sym not in analytics.config.trading_bot_config.cherry_pick_symbols:
+            continue
+        if sym.upper() in STABLE_COINS:
+            continue
+
+        active = sym in analytics.config.trading_bot_config.cherry_pick_symbols
+        toggled = 'true' if active else 'false'
+        button = dbc.Button(
+            html.Span([
+                html.I(className=f"fa-solid fa-{top_n_coin} mx-1") if top_n_coin is not None else None,
+                analytics.get_coin_name(sym),
+                html.I(
+                    className="fas fa-check mx-2") if sym in analytics.config.trading_bot_config.cherry_pick_symbols else None
+            ]),
+            id={'type': 'btn-coin-select', 'index': i},
+            value=sym,
+            color='success' if (sym in analytics.config.trading_bot_config.cherry_pick_symbols
+                                and analytics.coin_available_on_exchange(sym))
+            else 'danger' if (sym in analytics.config.trading_bot_config.cherry_pick_symbols
+                              and not analytics.coin_available_on_exchange(sym))
+            else 'primary',
+            active=active,
+            disabled=((not analytics.coin_available_on_exchange(sym))
+                      and sym not in analytics.config.trading_bot_config.cherry_pick_symbols),
+            outline=True,
+            className='my-1 mx-1',
+        )
+
+        buttons.append(button)
+    return buttons
+
+
 def create_strategy_page(analytics: PortfolioAnalytics):
     def create_selection(id: str, labels: [str], values: [str], value: str):
         button_group = html.Div(
             dbc.RadioItems(
                 id=id,
-                className="btn-group",
+                className="btn-group text-ellipsis",
                 inputClassName="btn-check",
                 labelClassName="btn btn-outline-primary",
                 labelCheckedClassName="active",
@@ -448,47 +490,34 @@ def create_strategy_page(analytics: PortfolioAnalytics):
         )
         return info_list
 
-    settings = html.Div(dbc.Card(className='settings-card', children=[
-        dbc.Form([
+    def create_index_coin_selection():
+        return html.Div([
             dbc.Label('Index Coins', html_for='index_coins', style={'font-weight': 'bold'}),
+            dbc.Row(dbc.Col(children=create_coin_buttons(analytics), id='coin_selection_buttons')),
             dbc.Row([
                 dbc.Col(
-                    dcc.Dropdown(id='index_coins', multi=True, className='mb-2', style={'height': '100%'},
-                                 value=[sym for sym in analytics.config.trading_bot_config.cherry_pick_symbols],
+                    dcc.Dropdown(id='dropdown_add_coin', className='my-2 mt-2',
+                                 placeholder='Add more coins ...',
                                  options=[{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                                          analytics.markets.symbol.values if analytics.coin_available_on_exchange(sym)
-                                          or sym in analytics.config.trading_bot_config.cherry_pick_symbols]
+                                          analytics.markets.symbol.values
+                                          if not (sym in analytics.markets.head(10).symbol.values
+                                                  or sym in analytics.config.trading_bot_config.cherry_pick_symbols)
+                                          and sym.upper() not in STABLE_COINS
+                                          and analytics.coin_available_on_exchange(sym)
+                                          ]
                                  ),
-                    lg=10, md=12
-                ),
-                dbc.Col(
-                    md=12, lg=2,
-                    children=html.Div([
-                        dbc.Button('Apply', outline=True, color='success', id='index-apply',
-                                   className='my-1'),
-                        dbc.Button('Reset', outline=True, color='danger', id='index-reset',
-                                   className='my-1'),
-                        dbc.Button('Add Holdings', outline=True, color='info', id='index-holdings',
-                                   className='my-1'),
-                    ], className='d-grid gap-2'),
                 ),
             ]),
-            html.Hr(),
+            html.Br()
+        ])
+
+    settings = html.Div(dbc.Card(className='settings-card', children=[
+        dbc.Form([
+            create_index_coin_selection(),
 
             dbc.Label("Savings Plan Info", html_for='savings_plan_info', style={'font-weight': 'bold'}),
             html.Br(),
             create_savings_plan_info(),
-            html.Hr(),
-
-            dbc.Label("Accounting Currency", html_for='accounting_currency_select', style={'font-weight': 'bold'}),
-            html.Br(),
-            dbc.FormText("Used in analytics and config", className='text-muted'),
-            create_selection(
-                id='accounting_currency_select',
-                labels=['Euro', 'US Dollar'],
-                values=['eur', 'usd'],
-                value=analytics.config.trading_bot_config.base_currency.value.lower()
-            ),
             html.Hr(),
 
             dbc.Label("Exchange", html_for='exchange_select', style={'font-weight': 'bold'}),
@@ -539,8 +568,18 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                 html.Br(),
                 dbc.FormText("Set your custom weights of the index", className='text-muted'),
                 dbc.Form(id='custom_form')
-            ], id='custom-weighting-collapse')
+            ], id='custom-weighting-collapse'),
 
+            dbc.Label("Accounting Currency", html_for='accounting_currency_select', style={'font-weight': 'bold'}),
+            html.Br(),
+            dbc.FormText("Used in analytics and config", className='text-muted'),
+            create_selection(
+                id='accounting_currency_select',
+                labels=['Euro', 'US Dollar'],
+                values=['eur', 'usd'],
+                value=analytics.config.trading_bot_config.base_currency.value.lower()
+            ),
+            html.Hr(),
         ])
     ]))
     return html.Div([
