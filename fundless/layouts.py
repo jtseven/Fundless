@@ -514,6 +514,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
     settings = html.Div(dbc.Card(className='settings-card', children=[
         dbc.Form([
             create_index_coin_selection(),
+            html.Hr(),
 
             dbc.Label("Savings Plan Info", html_for='savings_plan_info', style={'font-weight': 'bold'}),
             html.Br(),
@@ -561,7 +562,6 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                {'label': 'Custom', 'value': 'custom'}
                            ],
                            value=analytics.config.trading_bot_config.portfolio_weighting.value),
-
             dbc.Collapse([
                 html.Hr(),
                 dbc.Label("Custom Weights", html_for='custom_form', style={'font-weight': 'bold'}),
@@ -569,6 +569,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                 dbc.FormText("Set your custom weights of the index", className='text-muted'),
                 dbc.Form(id='custom_form')
             ], id='custom-weighting-collapse'),
+            html.Hr(),
 
             dbc.Label("Accounting Currency", html_for='accounting_currency_select', style={'font-weight': 'bold'}),
             html.Br(),
@@ -579,7 +580,6 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                 values=['eur', 'usd'],
                 value=analytics.config.trading_bot_config.base_currency.value.lower()
             ),
-            html.Hr(),
         ])
     ]))
     return html.Div([
