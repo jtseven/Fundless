@@ -758,7 +758,6 @@ class PortfolioAnalytics:
             for k, symbol in enumerate(symbols):
                 if symbol in self.config.trading_bot_config.custom_weights:
                     weights[k] = self.config.trading_bot_config.custom_weights[symbol]
-            weights = weights / weights.sum()
         else:
             weights = np.asarray([self.markets.loc[
                                       self.markets.symbol == sym, 'market_cap'].item() if sym in self.config.trading_bot_config.cherry_pick_symbols else 0.0
@@ -769,5 +768,5 @@ class PortfolioAnalytics:
                 weights = np.sqrt(np.sqrt(weights))
             elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.cbrt_market_cap:
                 weights = np.cbrt(weights)
-            weights = weights / weights.sum()
+        weights = weights / weights.sum()
         return symbols, weights

@@ -3,8 +3,10 @@ from dash import html
 import dash_bootstrap_components as dbc
 from dash_extensions import DeferScript
 from functools import reduce
-from itertools import groupby
+from itertools import groupby, chain
 from operator import add
+from typing import List
+import numpy as np
 
 from analytics import PortfolioAnalytics
 from config import TradingBotConfig, WeightingEnum
@@ -380,6 +382,30 @@ def create_holdings_page(analytics: PortfolioAnalytics):
     ], style={'margin-top': '2rem'})
 
 
+def savings_plan_weight_chart(analytics):
+    index_coins = [coin for coin in analytics.config.trading_bot_config.cherry_pick_symbols if analytics.coin_available_on_exchange(coin)]
+    index_coins, index_weights = analytics.fetch_index_weights(np.asarray(index_coins))
+    sorter = index_weights.argsort()[::-1]
+    index_coins = index_coins[sorter]
+    index_weights = index_weights[sorter]
+    styling = [f'{weight}fr ' for weight in index_weights]
+
+    chart = html.Div([html.Div([html.Div(
+        id=f'{sym}_index_entry', className=f'alloc_entry_{i % 8}',
+        children=html.Div(
+            sym.upper() if i < 3 else '',
+            id=f'target_{sym}',
+            style={'width': '100%', 'height': '100%'}
+        )) for i, sym in enumerate(index_coins)],
+        id='index_chart', style={'grid-template-columns': ''.join(styling)}),
+        html.Div([
+            dbc.Tooltip(analytics.get_coin_name(sym), target=f'target_{sym}', placement='top')
+            for sym in index_coins
+        ])])
+
+    return chart
+
+
 def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     available_coins = analytics.available_index_coins()
     index_coins = analytics.config.trading_bot_config.cherry_pick_symbols
@@ -408,6 +434,19 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     else:
         text_balance = f"{accounting_currency} {available_balance:.2f} available in {quote_currency} on {analytics.exchanges.active.name}"
 
+    interval = analytics.config.trading_bot_config.savings_plan_interval
+    vol = analytics.config.trading_bot_config.savings_plan_cost
+    if isinstance(interval, List):
+        postfixes = ['st' if n == 1 else 'nd' if n == 2 else 'rd' if n == 3 else 'th' for n in interval]
+        if len(interval) > 2:
+            dates = [f'{d}{post}' for d, post in zip(interval[:-1], postfixes[:-1])]
+            text_interval = f"Savings plan execution on {', '.join(dates)} and {interval[-1]}{postfixes[-1]} of every month."
+        else:
+            text_interval = f"Savings plan execution on {interval[0]}{postfixes[0]} and {interval[-1]}{postfixes[-1]} of every month."
+    else:
+        text_interval = f"Savings plan is executed {interval.value}."
+    text_volume = f"With a volume of {analytics.config.trading_bot_config.base_currency.upper()} {vol:.2f} on each execution."
+
     infos = [
         dbc.ListGroupItem(
             info_available,
@@ -416,7 +455,15 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
         dbc.ListGroupItem(
             text_balance,
             color=color_balance
-        )
+        ),
+        dbc.ListGroupItem(
+            text_interval,
+            color='success'
+        ),
+        dbc.ListGroupItem(
+            text_volume,
+            color='success'
+        ),
     ]
     return infos
 
@@ -491,6 +538,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
         return info_list
 
     def create_index_coin_selection():
+        top_9 = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(9).symbol.values
         return html.Div([
             dbc.Label('Index Coins', html_for='index_coins', style={'font-weight': 'bold'}),
             dbc.Row(dbc.Col(children=create_coin_buttons(analytics), id='coin_selection_buttons')),
@@ -500,7 +548,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                  placeholder='Add more coins ...',
                                  options=[{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
                                           analytics.markets.symbol.values
-                                          if not (sym in analytics.markets.head(10).symbol.values
+                                          if not (sym in top_9
                                                   or sym in analytics.config.trading_bot_config.cherry_pick_symbols)
                                           and sym.upper() not in STABLE_COINS
                                           and analytics.coin_available_on_exchange(sym)
@@ -508,12 +556,15 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                  ),
                 ),
             ]),
-            html.Br()
         ])
 
     settings = html.Div(dbc.Card(className='settings-card', children=[
         dbc.Form([
             create_index_coin_selection(),
+            html.Hr(),
+
+            dbc.Label("Savings Plan Coin Allocations", html_for='index_chart', style={'font-weight': 'bold'}),
+            html.Div(savings_plan_weight_chart(analytics), id='chart_savings_plan_allocations'),
             html.Hr(),
 
             dbc.Label("Savings Plan Info", html_for='savings_plan_info', style={'font-weight': 'bold'}),

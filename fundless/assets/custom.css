@@ -21,6 +21,50 @@
   margin-top: 2rem;
 }
 
+/* Horizontal bar chart for savings plan weights */
+#index_chart {
+    border: 2px solid white;
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 2fr;
+}
+
+#index_chart div {
+  color: white;
+  font-family: sans-serif;
+  font-weight: bold;
+  font-size: 12px;
+  line-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alloc_entry_0 {
+    background: #d6cbd3
+}
+.alloc_entry_1 {
+    background: #eca1a6
+}
+.alloc_entry_2 {
+    background: #bdcebe
+}
+.alloc_entry_3 {
+    background: #ada397
+}
+.alloc_entry_4 {
+    background: #d5e1df
+}
+.alloc_entry_5 {
+    background: #e3eaa7
+}
+.alloc_entry_6 {
+    background: #b5e7a0
+}
+.alloc_entry_7 {
+    background: #86af49
+}
 /* When you mouse over the navigation links, change their color */
 .nav-link:hover {
   color: #064579;

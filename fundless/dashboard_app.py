@@ -234,13 +234,17 @@ class Dashboard:
                 self.config.trading_bot_config.savings_plan_cost = float(vol)
             return layouts.savings_plan_info(analytics)
 
-        @self.app.callback(Input('weighting', 'value'), Output('custom-weighting-collapse', 'is_open'))
+        @self.app.callback(
+            Input('weighting', 'value'),
+            Output('custom-weighting-collapse', 'is_open'),
+            Output('chart_savings_plan_allocations', 'children')
+        )
         def show_custom_form(weighting):
             self.config.trading_bot_config.portfolio_weighting = weighting
             if weighting == 'custom':
-                return True
+                return True, layouts.savings_plan_weight_chart(analytics)
             else:
-                return False
+                return False, layouts.savings_plan_weight_chart(analytics)
 
         @self.app.callback(Input('custom-weighting-collapse', 'is_open'),
                            Output('custom_form', 'children'))
@@ -254,17 +258,16 @@ class Dashboard:
             Input({'type': 'btn-coin-select', 'index': ALL}, 'n_clicks'),
             State({'type': 'btn-coin-select', 'index': ALL}, 'value'),
             State({'type': 'btn-coin-select', 'index': ALL}, 'active'),
+            State('dropdown_add_coin', 'options'),
             Output('coin_selection_buttons', 'children'),
             Output('savings_plan_info', 'children'),
+            Output('chart_savings_plan_allocations', 'children'),
+            Output('dropdown_add_coin', 'options')
         )
-        def update_coin_buttons(n_clicks, symbol_arr, active_arr):
+        def update_coin_buttons(n_clicks, symbol_arr, active_arr, options):
 
             if len(n_clicks) > 0:
                 if any(v > 0 for v in n_clicks if v is not None):
-                    print(f'{n_clicks=}')
-                    print(f'{symbol_arr=}')
-                    print(f'{active_arr=}')
-
                     # TODO: find an easier way to solve this
                     if 'prev_n_clicks' not in locals():
                         global prev_n_clicks
@@ -279,12 +282,20 @@ class Dashboard:
 
                     active_arr[toggled] = not active_arr[toggled]
                     new_picks = [symbol for symbol, active in zip(symbol_arr, active_arr) if active]
-                    print(f'{new_picks=}')
                     if set(new_picks) != set(self.config.trading_bot_config.cherry_pick_symbols):
+                        top_9 = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(
+                            9).symbol.values
+                        new_options = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                                       analytics.markets.symbol.values
+                                       if sym not in new_picks
+                                       and sym not in top_9
+                                       and sym.upper() not in STABLE_COINS
+                                       and analytics.coin_available_on_exchange(sym)
+                                       ]
                         self.config.trading_bot_config.cherry_pick_symbols = new_picks
                         self.analytics.update_config(index_changed=True)
-                        print('updating coin buttons')
-                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics)
+                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics),\
+                               layouts.savings_plan_weight_chart(analytics), new_options
             return dash.no_update
 
         @self.app.callback(
