@@ -7,9 +7,9 @@ from dash_extensions.enrich import NoOutputTransform, DashProxy, Input, Output, 
     MultiplexerTransform, MATCH, ALL, ClientsideFunction
 from dash_extensions import DeferScript
 from gevent.pywsgi import WSGIServer
-from collections import Counter
 from flask import render_template, redirect
 import logging
+import traceback
 
 # local imports
 from config import Config
@@ -18,9 +18,7 @@ import layouts
 from login import LoginProvider
 from constants import Auth0EnvNames, STABLE_COINS
 
-
 logger = logging.getLogger(__name__)
-
 
 APP_URL = '/app/'
 
@@ -182,16 +180,21 @@ class Dashboard:
                            Input('update-interval', 'n_intervals'),
                            Input('chart_time_range', 'value'), Input('chart_tabs', 'active_tab'))
         def update_charts_slow(_, chart_range, active_tab):
-            timestamp = analytics.get_timestamp(chart_range)
-            self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
-            self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
-            if active_tab == 'history_tab':
-                chart = self.history_chart
-            elif active_tab == 'performance_tab':
-                chart = self.performance_chart
-            else:
-                logger.warning('Invalid tab selected!')
-                chart = None
+            try:
+                timestamp = analytics.get_timestamp(chart_range)
+                self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
+                self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
+                if active_tab == 'history_tab':
+                    chart = self.history_chart
+                elif active_tab == 'performance_tab':
+                    chart = self.performance_chart
+                else:
+                    logger.warning('Invalid tab selected!')
+                    chart = None
+            except Exception:
+                logger.error('Error in performance/history chart update callback!')
+                logger.error(traceback.format_exc())
+                raise
             return chart
 
         @self.app.callback(Input('accounting_currency_select', 'value'))
@@ -294,7 +297,7 @@ class Dashboard:
                                        ]
                         self.config.trading_bot_config.cherry_pick_symbols = new_picks
                         self.analytics.update_config(index_changed=True)
-                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics),\
+                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics), \
                                layouts.savings_plan_weight_chart(analytics), new_options
             return dash.no_update
 
