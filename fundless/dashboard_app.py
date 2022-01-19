@@ -258,48 +258,68 @@ class Dashboard:
                 return dash.no_update
 
         @self.app.callback(
+            Input({'type': 'btn-coin-select', 'index': MATCH}, 'n_clicks'),
+            State({'type': 'btn-coin-select', 'index': MATCH}, 'active'),
+            Output({'type': 'btn-coin-select', 'index': MATCH}, 'active'),
+        )
+        def update_coin_selection_active_state(n_clicks, active):
+            if n_clicks is not None:
+                if n_clicks > 0:
+                    return not active
+            return dash.no_update
+
+        @self.app.callback(
             Input({'type': 'btn-coin-select', 'index': ALL}, 'n_clicks'),
             State({'type': 'btn-coin-select', 'index': ALL}, 'value'),
             State({'type': 'btn-coin-select', 'index': ALL}, 'active'),
-            State('dropdown_add_coin', 'options'),
             Output('coin_selection_buttons', 'children'),
             Output('savings_plan_info', 'children'),
             Output('chart_savings_plan_allocations', 'children'),
             Output('dropdown_add_coin', 'options')
         )
-        def update_coin_buttons(n_clicks, symbol_arr, active_arr, options):
+        def update_index_coins(_, __, ___):
+            n_clicks = dash.callback_context.triggered[0]['value']
+            if n_clicks is None:
+                return dash.no_update
+            if n_clicks < 1:
+                return dash.no_update
 
-            if len(n_clicks) > 0:
-                if any(v > 0 for v in n_clicks if v is not None):
-                    # TODO: find an easier way to solve this
-                    if 'prev_n_clicks' not in locals():
-                        global prev_n_clicks
-                        prev_n_clicks = n_clicks
-                        toggled = n_clicks.index(1)
-                    else:
-                        toggled = [i for i, curr, prev in enumerate(zip(n_clicks, prev_n_clicks)) if curr != prev]
-                        if len(toggled) > 0:
-                            toggled = toggled[0]
-                        else:
-                            toggled = None
+            prop_id = dash.callback_context.triggered[0]['prop_id']
+            value_key = prop_id[:prop_id.rfind('.')] + '.value'
+            active_key = prop_id[:prop_id.rfind('.')] + '.active'
+            value = str(dash.callback_context.states[value_key])
+            active = bool(dash.callback_context.states[active_key])
 
-                    active_arr[toggled] = not active_arr[toggled]
-                    new_picks = [symbol for symbol, active in zip(symbol_arr, active_arr) if active]
-                    if set(new_picks) != set(self.config.trading_bot_config.cherry_pick_symbols):
-                        top_9 = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(
-                            9).symbol.values
-                        new_options = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
-                                       analytics.markets.symbol.values
-                                       if sym not in new_picks
-                                       and sym not in top_9
-                                       and sym.upper() not in STABLE_COINS
-                                       and analytics.coin_available_on_exchange(sym)
-                                       ]
-                        self.config.trading_bot_config.cherry_pick_symbols = new_picks
-                        self.analytics.update_config(index_changed=True)
-                        return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics), \
-                               layouts.savings_plan_weight_chart(analytics), new_options
-            return dash.no_update
+            index = self.config.trading_bot_config.cherry_pick_symbols
+            additional_options = dash.no_update
+            buttons = dash.no_update
+            if not active:
+                logger.info(f'Adding {value} to the index')
+                # add coin to index
+                if value not in index:
+                    self.config.trading_bot_config.cherry_pick_symbols.append(value)
+                    self.analytics.update_config(index_changed=True)
+                    buttons = layouts.create_coin_buttons(analytics)
+                else:
+                    return dash.no_update
+            else:
+                # remove coin from index
+                logger.info(f'Removing {value} from the index')
+                if value in index:
+                    self.config.trading_bot_config.cherry_pick_symbols.remove(value)
+                    self.analytics.update_config(index_changed=True)
+                    top_9 = analytics.top_n(9)
+                    if value not in top_9:
+                        additional_options = [{'label': analytics.get_coin_name(sym), 'value': sym} for sym in
+                                              analytics.markets.symbol.values
+                                              if sym not in self.config.trading_bot_config.cherry_pick_symbols
+                                              and sym not in top_9
+                                              and sym.upper() not in STABLE_COINS
+                                              and analytics.coin_available_on_exchange(sym)
+                                              ]
+                buttons = layouts.create_coin_buttons(analytics)
+            return buttons, layouts.savings_plan_info(analytics), \
+                   layouts.savings_plan_weight_chart(analytics), additional_options
 
         @self.app.callback(
             Input('dropdown_add_coin', 'value'),

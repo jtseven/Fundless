@@ -7,7 +7,7 @@ from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr, Optional
 import plotly.express as px
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 import numpy as np
 from time import time, sleep
 from redo import retrying
@@ -20,7 +20,7 @@ import ccxt
 
 from config import Config, WeightingEnum, ExchangeEnum
 from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS, EXCHANGE_REGEX, COIN_REBRANDING, COIN_SYNONYMS
+from constants import FIAT_SYMBOLS, COIN_REBRANDING, COIN_SYNONYMS, STABLE_COINS
 from exchanges import Exchanges
 
 
@@ -47,6 +47,7 @@ class PortfolioAnalytics:
     history_df: pd.DataFrame = None
     coingecko: CoinGeckoAPI
     markets: pd.DataFrame  # CoinGecko Market Data
+    top_non_stablecoins: pd.DataFrame
     running_updates = False
 
     last_market_update: float = 0  # seconds since epoch
@@ -420,6 +421,7 @@ class PortfolioAnalytics:
             return
         markets.replace(coingecko_symbol_dict, inplace=True)
         self.markets = markets
+        self.top_non_stablecoins = markets.loc[~markets.symbol.str.upper().isin(STABLE_COINS)]
         self.last_market_update = time()
 
     def update_index_df(self):
@@ -771,3 +773,9 @@ class PortfolioAnalytics:
                 weights = np.cbrt(weights)
         weights = weights / weights.sum()
         return symbols, weights
+
+    '''
+    return: sorted array of top n non-stablecoin crypto by market cap
+    '''
+    def top_n(self, n: int) -> List:
+        return self.top_non_stablecoins.head(n).symbol.tolist()

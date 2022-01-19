@@ -472,35 +472,36 @@ def create_coin_buttons(analytics: PortfolioAnalytics):
     buttons = []
     for i, sym in enumerate(analytics.markets.symbol.values):
         try:
-            top_n_coin = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(
-                9).symbol.tolist().index(sym) + 1
+            top_n_coin = analytics.top_n(9).index(sym) + 1
         except ValueError:
             top_n_coin = None
 
-        if top_n_coin is None and sym not in analytics.config.trading_bot_config.cherry_pick_symbols:
+        in_index = sym in analytics.config.trading_bot_config.cherry_pick_symbols
+        if top_n_coin is None and not in_index:
             continue
         if sym.upper() in STABLE_COINS:
             continue
 
-        active = sym in analytics.config.trading_bot_config.cherry_pick_symbols
-        toggled = 'true' if active else 'false'
+        available = analytics.coin_available_on_exchange(sym)
+        toggled = 'true' if in_index else 'false'
         button = dbc.Button(
             html.Span([
                 html.I(className=f"fa-solid fa-{top_n_coin} mx-1") if top_n_coin is not None else None,
                 analytics.get_coin_name(sym),
                 html.I(
-                    className="fas fa-check mx-2") if sym in analytics.config.trading_bot_config.cherry_pick_symbols else None
+                    className="fas fa-check mx-2") if in_index and available else html.I(
+                    className="fas fa-times mx-2") if in_index and not available else None
             ]),
             id={'type': 'btn-coin-select', 'index': i},
             value=sym,
-            color='success' if (sym in analytics.config.trading_bot_config.cherry_pick_symbols
-                                and analytics.coin_available_on_exchange(sym))
-            else 'danger' if (sym in analytics.config.trading_bot_config.cherry_pick_symbols
-                              and not analytics.coin_available_on_exchange(sym))
+            color='success' if (in_index
+                                and available)
+            else 'danger' if (in_index
+                              and not available)
             else 'primary',
-            active=active,
+            active=in_index,
             disabled=((not analytics.coin_available_on_exchange(sym))
-                      and sym not in analytics.config.trading_bot_config.cherry_pick_symbols),
+                      and not in_index),
             outline=True,
             className='my-1 mx-1',
         )
@@ -538,7 +539,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
         return info_list
 
     def create_index_coin_selection():
-        top_9 = analytics.markets.loc[~analytics.markets.symbol.str.upper().isin(STABLE_COINS)].head(9).symbol.values
+        top_9 = analytics.top_n(9)
         return html.Div([
             dbc.Label('Index Coins', html_for='index_coins', style={'font-weight': 'bold'}),
             dbc.Row(dbc.Col(children=create_coin_buttons(analytics), id='coin_selection_buttons')),
