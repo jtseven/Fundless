@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+import pytz
 import requests.exceptions
 import schedule
 from pycoingecko import CoinGeckoAPI
@@ -726,7 +727,7 @@ class PortfolioAnalytics:
 
     @staticmethod
     def get_timestamp(value: str):
-        now = datetime.now()
+        now = datetime.now(pytz.timezone('Europe/Berlin'))
         if value == 'day':
             timestamp = (now - timedelta(days=1)).timestamp()
         elif value == 'week':
