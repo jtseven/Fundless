@@ -326,14 +326,17 @@ class Dashboard:
             State('dropdown_add_coin', 'options'),
             Output('dropdown_add_coin', 'value'),
             Output('dropdown_add_coin', 'options'),
-            Output('coin_selection_buttons', 'children')
+            Output('coin_selection_buttons', 'children'),
+            Output('savings_plan_info', 'children'),
+            Output('chart_savings_plan_allocations', 'children'),
         )
         def add_coin_selection_button(sym, options):
             if sym is not None:
                 self.config.trading_bot_config.cherry_pick_symbols.append(sym.lower())
                 self.analytics.update_config(index_changed=True)
                 new_options = [option for option in options if not option.get('value') == sym]
-                return None, new_options, layouts.create_coin_buttons(analytics)
+                return None, new_options, layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics),\
+                       layouts.savings_plan_weight_chart(analytics)
             return dash.no_update
 
         @self.app.callback(

@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 
 from analytics import PortfolioAnalytics
-from config import TradingBotConfig, WeightingEnum
+from config import WeightingEnum
 from utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
 from constants import STABLE_COINS
 
@@ -413,7 +413,7 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     accounting_currency = analytics.config.trading_bot_config.base_currency.value
     exchange = analytics.exchanges.active.name
     if len(available_coins) == len(index_coins):
-        info_available = f"All selected coins available to buy with {quote_currency} on {exchange}."
+        info_available = f"All {len(index_coins)} selected coins available to buy with {quote_currency} on {exchange}."
         color_available = 'success'
     elif len(available_coins)/len(index_coins) > 0.5:
         info_available = f"{len(available_coins)} of {len(index_coins)} selected coins available to " \
@@ -483,7 +483,6 @@ def create_coin_buttons(analytics: PortfolioAnalytics):
             continue
 
         available = analytics.coin_available_on_exchange(sym)
-        toggled = 'true' if in_index else 'false'
         button = dbc.Button(
             html.Span([
                 html.I(className=f"fa-solid fa-{top_n_coin} mx-1") if top_n_coin is not None else None,
