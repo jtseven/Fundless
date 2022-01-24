@@ -191,11 +191,9 @@ def create_info_cards(analytics: PortfolioAnalytics):
     symbol = analytics.currency_symbol
     if analytics.performance > 0:
         color = 'text-success'
-        prefix = ''
         text = 'Profit'
     else:
         color = 'text-danger'
-        prefix = '',
         text = 'Loss'
 
     def get_color(val: float):
@@ -212,7 +210,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                         [
                             html.H1('Portfolio value', className='small text-secondary'),
                             html.H5(f'{analytics.net_worth:,.2f} {symbol}', className='card-text'),
-                            html.H6(f'{prefix}{analytics.performance:,.2%}', className=f'card-text {color}')
+                            html.H6(f'{analytics.performance:,.2%}', className=f'card-text {color}')
                         ]
                     )
                 ], color='secondary', outline=True),
@@ -223,7 +221,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                     dbc.CardBody(
                         [
                             html.H1(f'{text}', className='small text-secondary'),
-                            html.H5(f'{prefix}{analytics.net_worth - analytics.invested:,.2f} {symbol}',
+                            html.H5(f'{analytics.net_worth - analytics.invested:,.2f} {symbol}',
                                     className=f'card-text {color}'),
                             html.H6(html.Span(f'{analytics.invested:,.2f} {symbol}', id='invested'),
                                     className=f'card-text'),

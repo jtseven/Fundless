@@ -627,14 +627,14 @@ class PortfolioAnalytics:
             freq = '5T'  # 5 minutes
 
         # price_history = price_history.asfreq(freq=freq, method='pad')
-        price_history = price_history.resample(freq, origin='end').pad()
+        price_history = price_history.tz_localize(None).resample(freq, origin='end').pad()
         # add most recent prices for data consistency
         current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol
                           in list(price_history.columns)]
         price_history = price_history.append(pd.DataFrame([current_prices], columns=price_history.columns, index=[
-            pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin')])).sort_index()
-        if start_time+pd.Timedelta(days=2) < price_history.index.min():
-            price_history = price_history.append(pd.DataFrame(0, index=[start_time], columns=price_history.columns)).sort_index()
+            pd.to_datetime('now')])).sort_index()
+        if start_time+pd.Timedelta(days=2) < price_history.index.min().tz_localize('Europe/Berlin'):
+            price_history = price_history.append(pd.DataFrame(0, index=[start_time.tz_localize(None)], columns=price_history.columns)).sort_index()
 
         invested = self.trades_df[['date', 'buy_symbol', self.base_cost_row]].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
@@ -642,12 +642,12 @@ class PortfolioAnalytics:
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
         invested = invested.pivot(index='date', columns='buy_symbol', values=self.base_cost_row)
         invested = invested.cumsum().fillna(method='pad').fillna(0)
-        invested = invested.reindex(price_history.index, method='pad').fillna(0)
+        invested = invested.tz_localize(None).reindex(price_history.index, method='pad').fillna(0)
         invested.columns = invested.columns.str.lower()
 
         value = value.pivot(index='date', columns='buy_symbol', values='amount')
         value = value.cumsum().fillna(method='pad').fillna(0)
-        value = value.reindex(price_history.index, method='pad').fillna(0)
+        value = value.tz_localize(None).reindex(price_history.index, method='pad').fillna(0)
         value.columns = value.columns.str.lower()
         value = value * price_history
 
