@@ -108,12 +108,12 @@ class PortfolioAnalytics:
             self.update_portfolio_metrics()
             self.update_historical_prices()
             self.update_exchange_balance()
-        except requests.exceptions.RequestException as e:
-            logger.error("Erorr while fetching data from an API:")
-            logger.error(e)
+        except (requests.exceptions.RequestException, ConnectionError, ccxt.NetworkError) as e:
+            logger.warning("Network error while fetching data from an API:")
+            logger.warning(e)
         except Exception as e:
             logger.error("Uncaught exception while updating analytics data!")
-            raise e
+            logger.error(e)
 
     def init_config_parameters(self):
         self.base_cost_row = f'cost_{self.config.trading_bot_config.base_currency.value.lower()}'
