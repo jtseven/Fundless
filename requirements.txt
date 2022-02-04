@@ -1,6 +1,6 @@
 ccxt==1.68.65
 pandas==1.4.0
-numpy~=1.21.2
+numpy~=1.22.2
 scikit-learn==1.0.1
 pycoingecko~=2.2.0
 pathlib~=1.0.1
