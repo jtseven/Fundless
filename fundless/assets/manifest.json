@@ -1,8 +1,8 @@
 {
   "name": "Fundless",
   "short_name": "Fundless",
-  "theme_color": "#3e21f3",
-  "background_color": "#2196f3",
+  "theme_color": "#343a40",
+  "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
   "scope": "/",
