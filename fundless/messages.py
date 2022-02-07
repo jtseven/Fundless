@@ -85,6 +85,8 @@ class TelegramBot:
         self.order_weights = None
         self.order_symbols = None
 
+        self.automatic_execution = config.trading_bot_config.savings_plan_automatic_execution
+
         self.UnknownAnswerHandler = MessageHandler(Filters.text & ~Filters.command, self._unknown)
 
         self.savings_plan_conversation = ConversationHandler(
@@ -299,7 +301,16 @@ class TelegramBot:
         base_amount = print_crypto_amount(base_amount)
         update.message.reply_text(f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}")
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+
+        self.order_weights = weights
+        self.order_symbols = symbols
         time.sleep(2)
+
+        if self.automatic_execution:
+            update.message.reply_text("Automatic execution: Buy directly")
+            self._savings_plan_execution(update, context)
+            return ConversationHandler.END
+
         reply_keyboard = [[
             "Yes",
             "No"
@@ -307,8 +318,6 @@ class TelegramBot:
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         update.message.reply_text(text="Should I proceed?", reply_markup=markup)
 
-        self.order_weights = weights
-        self.order_symbols = symbols
         return EXECUTING
 
     @authorized_only
@@ -330,6 +339,13 @@ class TelegramBot:
             coin_name = self.trading_bot.analytics.get_coin_name(symbol)
             err = abs(rel_to_volume.max())
             update.message.reply_text(f"The absolute allocation error of {coin_name} is {err:.1%} of your order volume!")
+
+            if self.automatic_execution:
+                update.message.reply_text("Automatic execution: rebalance = True")
+                self.rebalance = True
+                self._order_planning(update, context)
+                return ConversationHandler.END
+
             reply_keyboard = [[
                 "Yes",
                 "No"
@@ -342,6 +358,13 @@ class TelegramBot:
         else:
             update.message.reply_text("Ahh perfect, your portfolio looks well balanced!")
             self.rebalance = False
+            
+            if self.automatic_execution:
+                update.message.reply_text("Automatic execution: rebalance = False")
+                self.rebalance = True
+                self._order_planning(update, context)
+                return ConversationHandler.END
+
             reply_keyboard = [[
                 "Yes",
                 "No"
@@ -368,7 +391,7 @@ class TelegramBot:
 
     @authorized_only
     def _savings_plan_execution(self, update: Update, context: CallbackContext):
-        if update.message.text == 'Yes':
+        if update.message.text == 'Yes' or self.automatic_execution:
             update.message.reply_text(
                 f"Great! I am buying your crypto on {self.trading_bot.bot_config.trading_bot_config.exchange.values[1]}")
             try:
