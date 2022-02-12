@@ -333,6 +333,56 @@ class TradingBot:
         # after = self.exchanges.active.fetch_total_balance()
         return report
 
+    def savings_plan_order_planner(self, rebalance=True) -> dict:
+        order_dict = {'symbols': [], 'weights': [], 'messages': [], 'executable': True}
+
+        available_symbols = self.filter_available(self.bot_config.trading_bot_config.cherry_pick_symbols)
+        if len(available_symbols) < len(self.bot_config.trading_bot_config.cherry_pick_symbols):
+            order_dict['messages'].append(f"The following coins are not available to buy on your exchange "
+                                      f"with {self.bot_config.trading_bot_config.base_symbol.upper()}:")
+            order_dict['messages'].append(f"{[coin.upper() for coin in self.bot_config.trading_bot_config.cherry_pick_symbols if coin not in available_symbols]}")
+
+        if rebalance:
+            symbols, weights = self.rebalancing_weights()
+        else:
+            symbols, weights = self.analytics.fetch_index_weights()
+
+        # filter out symbols that are not available on the exchange
+        symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
+                                 symbol in available_symbols])
+        # filter coin order volumes that are below the minimum threshold for the exchange
+        symbols_filtered, weights_filtered, reasons = self.volume_corrected_weights(symbols, weights)
+
+        if len(symbols_filtered) == 0:
+            order_dict['executable'] = False
+            reason = reasons[0]
+            order_dict['messages'].append('Your order is not executable!')
+            if 'too low' in reason:
+                order_dict['messages'].append("Your order volume is too low!")
+            elif 'not available' in reason:
+                order_dict['messages'].append("The currency you selected for buying the coins is not available "
+                                          "on the exchange!")
+            else:
+                order_dict['messages'].append("Either your order volume is too low or the tickers you want"
+                                          " to trade are not available on the exchange!")
+            return order_dict
+
+        vol_problems = [symbol.upper() for symbol in symbols if
+                        symbol not in symbols_filtered and symbol in self.bot_config.trading_bot_config.cherry_pick_symbols]
+        if len(vol_problems) > 0:
+            order_dict['messages'].append("The order volume is too low, to buy the following coins:")
+            order_dict['messages'].append(f"{vol_problems}")
+            order_dict['messages'].append(
+                "But don't worry, I will include them another time and keep your portfolio well balanced!")
+        order_dict['symbols'] = symbols_filtered
+        order_dict['weights'] = weights_filtered
+
+        return order_dict
+
+
+    # def execute_savings_plan(self, rebalance=True):
+
+
     def check_orders(self, order_ids: List[Union[str, int]], symbols: List[Union[str, int]]) -> dict:
         logger.info("Checking order status...")
         closed_orders = []

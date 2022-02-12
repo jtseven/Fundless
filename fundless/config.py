@@ -73,7 +73,7 @@ class ExchangeToken(TypedDict, total=False):
 
 class TelegramToken(TypedDict):
     token: str
-    chat_id: str
+    chat_id: int
 
 
 class BaseConfig(BaseModel):

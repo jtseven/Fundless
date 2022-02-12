@@ -14,7 +14,7 @@ from telegram.ext import (
     CallbackContext,
     TypeHandler
 )
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, User, Chat
 from telegram.chataction import ChatAction
 import logging
 from typing import Callable, Any
@@ -85,16 +85,14 @@ class TelegramBot:
         self.order_weights = None
         self.order_symbols = None
 
-        self.automatic_execution = config.trading_bot_config.savings_plan_automatic_execution
-
         self.UnknownAnswerHandler = MessageHandler(Filters.text & ~Filters.command, self._unknown)
 
         self.savings_plan_conversation = ConversationHandler(
             entry_points=[CommandHandler('savings_plan', self._rebalancing_question)],
             states={
                 REBALANCING_DECISION: [MessageHandler(Filters.regex('^(Yes|No)$'), self._rebalancing_decision)],
-                PLANNING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._order_planning)],
-                EXECUTING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._savings_plan_execution)],
+                PLANNING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._order_planning_conversation)],
+                EXECUTING: [MessageHandler(Filters.regex('^(Yes|No)$'), self._savings_plan_execution_conversation)],
                 CHECKING: [TypeHandler(StateChangeUpdate, self._change_conversation_state),
                             MessageHandler(Filters.text | Filters.command, self._executing_answer)]
             },
@@ -234,10 +232,45 @@ class TelegramBot:
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
         msg = f"Should I execute your savings plan?"
         self.updater.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
+        msg = "If yes, enter /savings_plan"
+        self.updater.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
+
+    def order_planning(self) ->  bool:
+        order_dict = self.trading_bot.savings_plan_order_planner(self.rebalance)
+        symbols = order_dict['symbols']
+        weights = order_dict['weights']
+        messages = order_dict['messages']
+
+        if len(messages) > 0:
+            for msg in messages:
+                self.updater.bot.send_message(chat_id=self.chat_id, text=msg)
+
+        if not order_dict['executable']:
+            return False
+
+        msg = ("```\nThat's what I came up with:\n"
+               "---------------------------")
+        for symbol, weight in zip(symbols, weights):
+            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:6.2f} {self.config.trading_bot_config.base_currency.values[1]}"
+        msg += "\n---------------------------"
+        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
+        msg += "\n```"
+        logger.info(msg)
+        self.updater.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode='MarkdownV2')
+        base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(
+            self.config.trading_bot_config.savings_plan_cost)
+        base_amount = print_crypto_amount(base_amount)
+        self.updater.bot.send_message(chat_id=self.chat_id, text=
+            f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}")
+        self.updater.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+
+        self.order_weights = weights
+        self.order_symbols = symbols
+        return True
 
     @retriable(attempts=5, sleeptime=4, retry_exceptions=(telegram.error.NetworkError,))
     @authorized_only
-    def _order_planning(self, update: Update, context: CallbackContext):
+    def _order_planning_conversation(self, update: Update, context: CallbackContext):
         # TODO check if bot asked for execution before
         if update.message.text == 'No':
             update.message.reply_text("Okay, canceling this savings plan!")
@@ -248,67 +281,7 @@ class TelegramBot:
         )
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(1)
-        available_symbols = self.trading_bot.filter_available(self.config.trading_bot_config.cherry_pick_symbols)
-        if len(available_symbols) < len(self.config.trading_bot_config.cherry_pick_symbols):
-            update.message.reply_text(f"The following coins are not available to buy on your exchange "
-                                      f"with {self.config.trading_bot_config.base_symbol.upper()}:")
-            update.message.reply_text(f"{[coin.upper() for coin in self.config.trading_bot_config.cherry_pick_symbols if coin not in available_symbols]}")
-
-        if self.rebalance:
-            symbols, weights = self.trading_bot.rebalancing_weights()
-            # filter out symbols that are not available on the exchange
-            symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
-                                     symbol in available_symbols])
-            # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered, reasons = self.trading_bot.volume_corrected_weights(symbols, weights)
-        else:
-            symbols, weights = self.trading_bot.analytics.fetch_index_weights()
-            # filter out symbols that are not available on the exchange
-            symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
-                                     symbol in available_symbols])
-            # filter coin order volumes that are below the minimum threshold for the exchange
-            symbols_filtered, weights_filtered, reasons = self.trading_bot.volume_corrected_weights(symbols, weights)
-        if len(symbols_filtered) == 0:
-            reason = reasons[0]
-            update.message.reply_text('Your order is not executable!')
-            if 'too low' in reason:
-                update.message.reply_text("Your order volume is too low!")
-            elif 'not available' in reason:
-                update.message.reply_text("The currency you selected for buying the coins is not available "
-                                          "on the exchange!")
-            else:
-                update.message.reply_text("Either your order volume is too low or the tickers you want"
-                                          " to trade are not available on the exchange!")
-            return ConversationHandler.END
-        vol_problems = [symbol.upper() for symbol in symbols if symbol not in symbols_filtered and symbol in self.config.trading_bot_config.cherry_pick_symbols]
-        if len(vol_problems) > 0:
-            update.message.reply_text("The order volume is too low, to buy the following coins:")
-            update.message.reply_text(f"{vol_problems}")
-            update.message.reply_text(
-                "But don't worry, I will include them another time and keep your portfolio well balanced!")
-        symbols = symbols_filtered
-        weights = weights_filtered
-        msg = ("```\nThat's what I came up with:\n"
-               "---------------------------")
-        for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:6.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-        msg += "\n---------------------------"
-        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-        msg += "\n```"
-        logger.info(msg)
-        update.message.reply_text(msg, parse_mode='MarkdownV2')
-        base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(self.config.trading_bot_config.savings_plan_cost)
-        base_amount = print_crypto_amount(base_amount)
-        update.message.reply_text(f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}")
-        context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-
-        self.order_weights = weights
-        self.order_symbols = symbols
-        time.sleep(2)
-
-        if self.automatic_execution:
-            update.message.reply_text("Automatic execution: Buy directly")
-            self._savings_plan_execution(update, context)
+        if not self.order_planning():
             return ConversationHandler.END
 
         reply_keyboard = [[
@@ -340,12 +313,6 @@ class TelegramBot:
             err = abs(rel_to_volume.max())
             update.message.reply_text(f"The absolute allocation error of {coin_name} is {err:.1%} of your order volume!")
 
-            if self.automatic_execution:
-                update.message.reply_text("Automatic execution: rebalance = True")
-                self.rebalance = True
-                self._order_planning(update, context)
-                return ConversationHandler.END
-
             reply_keyboard = [[
                 "Yes",
                 "No"
@@ -358,12 +325,6 @@ class TelegramBot:
         else:
             update.message.reply_text("Ahh perfect, your portfolio looks well balanced!")
             self.rebalance = False
-            
-            if self.automatic_execution:
-                update.message.reply_text("Automatic execution: rebalance = False")
-                self.rebalance = True
-                self._order_planning(update, context)
-                return ConversationHandler.END
 
             reply_keyboard = [[
                 "Yes",
@@ -389,48 +350,55 @@ class TelegramBot:
         update.message.reply_text("Should I proceed with an overview of the planned buy order?", reply_markup=markup)
         return PLANNING
 
+    def order_report(self, report):
+        send = self.updater.bot.send_message
+        problems = report['problems']
+        if problems['fail']:
+            send(chat_id=self.chat_id, text='I can not place your orders!')
+            time.sleep(1)
+            if len(problems['symbols'].keys()) > 0:
+                msg = "Problematic coins:"
+                for symbol in problems['symbols'].keys():
+                    msg += f"\n\t- {symbol}, {problems['symbols'][symbol]}"
+                send(chat_id=self.chat_id, text=msg)
+            else:
+                send(chat_id=self.chat_id, text=problems['description'])
+            time.sleep(1)
+            send(chat_id=self.chat_id, text='Solve the problems and try again next time!')
+            send(chat_id=self.chat_id, text="See you")
+            return ConversationHandler.END
+        else:
+            if 'adjusted_volume' in problems:
+                send(chat_id=self.chat_id, text=
+                    "The order amount was adjusted by a small amount, as your available balance was slightly lower than needed!")
+            order_ids = report['order_ids']
+            placed_symbols = report['symbols']
+            send(chat_id=self.chat_id, text="Done! I placed your orders")
+            send(chat_id=self.chat_id, text=
+                "I will check if your orders went threw in a few seconds and get back to you :)")
+            self.updater.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1))
+            return CHECKING
+
+    def execute_order(self):
+        try:
+            self.updater.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
+            report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
+        except ccxt.BaseError as e:
+            self.updater.bot.send_message(chat_id=self.chat_id,
+                                          text="Ohhh, there was a Problem with the exchange! Sorry :(")
+            self.updater.bot.send_message(chat_id=self.chat_id, text='This is, what the exchange returned:')
+            self.updater.bot.send_message(chat_id=self.chat_id, text=str(e))
+            self.updater.bot.send_message(chat_id=self.chat_id, text='Try to solve it and try again next time')
+            self.updater.bot.send_message(chat_id=self.chat_id, text='See you :)')
+            return ConversationHandler.END
+        return self.order_report(report)
+
     @authorized_only
-    def _savings_plan_execution(self, update: Update, context: CallbackContext):
-        if update.message.text == 'Yes' or self.automatic_execution:
+    def _savings_plan_execution_conversation(self, update: Update, context: CallbackContext):
+        if update.message.text == 'Yes':
             update.message.reply_text(
                 f"Great! I am buying your crypto on {self.trading_bot.bot_config.trading_bot_config.exchange.values[1]}")
-            try:
-                context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                report = self.trading_bot.weighted_buy_order(self.order_symbols, self.order_weights)
-            except ccxt.BaseError as e:
-                update.message.reply_text("Ohhh, there was a Problem with the exchange! Sorry :(")
-                update.message.reply_text('This is, what the exchange returned:')
-                update.message.reply_text(str(e))
-                update.message.reply_text('Try to solve it and try again next time')
-                update.message.reply_text('See you :)')
-                return ConversationHandler.END
-            problems = report['problems']
-            if problems['fail']:
-                update.message.reply_text('I can not place your orders!')
-                context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                time.sleep(1)
-                if len(problems['symbols'].keys()) > 0:
-                    msg = "Problematic coins:"
-                    for symbol in problems['symbols'].keys():
-                        msg += f"\n\t- {symbol}, {problems['symbols'][symbol]}"
-                    update.message.reply_text(msg)
-                else:
-                    update.message.reply_text(problems['description'])
-                context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
-                time.sleep(1)
-                update.message.reply_text('Solve the problems and try again next time!')
-                update.message.reply_text("See you")
-                return ConversationHandler.END
-            else:
-                if 'adjusted_volume' in problems:
-                    update.message.reply_text("The order amount was adjusted by a small amount, as your available balance was slightly lower than needed!")
-                order_ids = report['order_ids']
-                placed_symbols = report['symbols']
-                update.message.reply_text("Done! I placed your orders")
-                update.message.reply_text(
-                    "I will check if your orders went threw in a few seconds and get back to you :)")
-                context.job_queue.run_once(self.check_orders, when=10, context=(order_ids, placed_symbols, 1, update))
-                return CHECKING
+            return self.execute_order()
         else:
             update.message.reply_text("Hmmm.. okay.. I will ask you another time")
             return ConversationHandler.END
@@ -443,7 +411,9 @@ class TelegramBot:
 
     def check_orders(self, context: CallbackContext):
         job = context.job
-        order_ids, symbols, n_retry, update = job.context
+        order_ids, symbols, n_retry = job.context
+        user = User(first_name='name', is_bot=False, id=self.chat_id)
+        chat = Chat(id=self.chat_id, type='private')
         try:  # everything in try block, to correctly end conversation state in case of exception
             context.bot.send_message(self.chat_id, text='I am checking your orders now!')
             context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
@@ -477,8 +447,8 @@ class TelegramBot:
                 context.bot.send_message(self.chat_id, text='Nice, all your orders are filled!')
                 context.bot.send_message(self.chat_id, text='See you :)')
                 state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
-                state_update._effective_user = update.effective_user
-                state_update._effective_chat = update.effective_chat
+                state_update._effective_user = user
+                state_update._effective_chat = chat
                 context.update_queue.put(state_update)
             else:
                 context.bot.send_message(self.chat_id, text='Some of your orders are not filled yet:')
@@ -492,8 +462,8 @@ class TelegramBot:
                     context.bot.send_message(self.chat_id, text="We have waited long enough! Pls solve the orders that are"
                                                                 "still open manually..")
                     state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
-                    state_update._effective_user = update.effective_user
-                    state_update._effective_chat = update.effective_chat
+                    state_update._effective_user = user
+                    state_update._effective_chat = chat
                     context.update_queue.put(state_update)
                 else:
                     wait_time = 60 * n_retry * n_retry  # have an exponentially increasing wait time
@@ -501,15 +471,15 @@ class TelegramBot:
                     context.bot.send_message(self.chat_id,
                                              text=f"I will wait {wait_time / 60:.0f} minutes and get back to you :)")
                     context.job_queue.run_once(self.check_orders, when=wait_time,
-                                               context=(order_ids, symbols, n_retry + 1, update))
+                                               context=(order_ids, symbols, n_retry + 1))
                     state_update = StateChangeUpdate(randint(0, 999999999), next_state=CHECKING)
-                    state_update._effective_user = update.effective_user
-                    state_update._effective_chat = update.effective_chat
+                    state_update._effective_user = user
+                    state_update._effective_chat = chat
                     context.update_queue.put(state_update)
         except Exception as e:
             state_update = StateChangeUpdate(randint(0, 999999999), next_state=ConversationHandler.END)
-            state_update._effective_user = update.effective_user
-            state_update._effective_chat = update.effective_chat
+            state_update._effective_user = user
+            state_update._effective_chat = chat
             logger.error(f"Uncaught error when checking order status!")
             logger.error(e)
             raise e
@@ -557,3 +527,6 @@ class TelegramBot:
         context.bot.send_message(chat_id=self.chat_id, text="Sorry, I do not know that command.")
         markup = ReplyKeyboardMarkup(self.command_keyboard, resize_keyboard=True, one_time_keyboard=True)
         context.bot.send_message(chat_id=self.chat_id, text='You can use these commands:', reply_markup=markup)
+
+    def send(self, text: str):
+        self.updater.bot.send_message(chat_id=self.chat_id, text=text)

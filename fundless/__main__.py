@@ -77,7 +77,14 @@ if __name__ == '__main__':
                     return
 
             logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
-            message_bot.ask_savings_plan_execution()
+            if config.trading_bot_config.savings_plan_automatic_execution:
+                message_bot.send('Executing savings plan!')
+                if message_bot.order_planning():
+                    message_bot.execute_order()
+            else:
+                message_bot.ask_savings_plan_execution()
+
+
         if interval == IntervalEnum.daily:
             schedule.every().day.at(execution_time).do(job)
         elif interval == IntervalEnum.weekly:
