@@ -388,8 +388,8 @@ class PortfolioAnalytics:
         else:
             date = date.tz_convert('Europe/Berlin')
         id_dict = {'id': [id], 'symbol': [symbol], 'date': [date]}
-
-        self.order_ids = self.order_ids.append(pd.DataFrame.from_dict(id_dict), ignore_index=True)
+        id_df = pd.DataFrame.from_dict(id_dict)
+        self.order_ids = pd.concat([self.order_ids, id_df], ignore_index=True)
         self.update_order_ids_file()
 
     def update_order_ids(self):
@@ -463,11 +463,12 @@ class PortfolioAnalytics:
                       self.base_cost_row: [base_cost],
                       'exchange': exchange.value
                       }
+        trade_dict_df = pd.DataFrame.from_dict(trade_dict)
         if trades_df is not None:
-            trades_df = trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
+            trades_df = pd.concat([trades_df, trade_dict_df], ignore_index=True)
             return trades_df
         else:
-            self.trades_df = self.trades_df.append(pd.DataFrame.from_dict(trade_dict), ignore_index=True)
+            self.trades_df = pd.concat([self.trades_df, trade_dict_df], ignore_index=True)
             self.update_trades_file()
 
     def index_balance(self) -> Tuple:
@@ -579,7 +580,7 @@ class PortfolioAnalytics:
             if freq is not None:
                 # round datetime index to given frequency,
                 # otherwise all coins have price data at slightly different times
-                history_df = history_df.fillna(method='pad').fillna(method='bfill').reindex(history_df.index.round(freq).drop_duplicates(), method='nearest')
+                history_df = history_df.fillna(method='ffill').fillna(method='bfill').reindex(history_df.index.round(freq).drop_duplicates(), method='nearest')
                 if freq == 'H':
                     truncate_from = pd.to_datetime(from_timestamp, unit='s', utc=True)
                     truncate_to = pd.to_datetime(to_timestamp-day, unit='s', utc=True)
@@ -592,11 +593,8 @@ class PortfolioAnalytics:
 
             # add most recent prices for data consistency
             current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol in list(history_df.columns)]
-            history_df = history_df.append(pd.DataFrame([current_prices], columns=history_df.columns, index=[
-                pd.to_datetime('now', utc=True)])).sort_index()
-
-            # convert to local timezone
-            history_df.index = history_df.index.tz_convert('Europe/Berlin')
+            now_row = pd.DataFrame([current_prices], columns=history_df.columns, index=[pd.Timestamp.now(tz='utc')])
+            history_df = pd.concat([history_df, now_row]).sort_index()
 
             if self.history_df is not None:
                 mask = (self.history_df.index < truncate_from) | (self.history_df.index > truncate_to)
@@ -608,46 +606,43 @@ class PortfolioAnalytics:
         if self.history_df is None:
             raise ValueError
         if from_timestamp is not None:
-            start_time = pd.to_datetime(from_timestamp, unit='s', utc=True).tz_convert('Europe/Berlin')
+            start_time = pd.to_datetime(from_timestamp, unit='s', utc=True)
             price_history = self.history_df.copy().truncate(before=start_time)
         else:
             price_history = self.history_df.copy()
-            if price_history.index.min().tzinfo is None or price_history.index.min().tzinfo.utcoffset(price_history.index.min()) is None:
-                # tz naive time
-                start_time = price_history.index.min().tz_localize('Europe/Berlin')
-            else:  # tz aware
-                start_time = price_history.index.min().tz_convert('Europe/Berlin')
-        if start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=31)):
+            start_time = price_history.index.min()
+        if start_time < (pd.Timestamp.now(tz='utc') - pd.DateOffset(days=31)):
             freq = 'D'
-        elif start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=14, minutes=2)):
+        elif start_time < (pd.Timestamp.now(tz='utc') - pd.DateOffset(days=14, minutes=2)):
             freq = '3H'
-        elif start_time < (pd.to_datetime('now', utc=True).tz_convert('Europe/Berlin') - pd.DateOffset(days=1, minutes=2)):
+        elif start_time < (pd.Timestamp.now(tz='utc') - pd.DateOffset(days=1, minutes=2)):
             freq = 'H'
         else:
             freq = '5T'  # 5 minutes
 
-        # price_history = price_history.asfreq(freq=freq, method='pad')
-        price_history = price_history.tz_localize(None).resample(freq, origin='end').pad()
+        price_history = price_history.resample(freq, origin='end').ffill()
         # add most recent prices for data consistency
         current_prices = [self.markets.loc[self.markets['symbol'] == symbol, ['current_price']].values[0][0] for symbol
                           in list(price_history.columns)]
-        price_history = price_history.append(pd.DataFrame([current_prices], columns=price_history.columns, index=[
-            pd.to_datetime('now')])).sort_index()
-        if start_time+pd.Timedelta(days=2) < price_history.index.min().tz_localize('Europe/Berlin'):
-            price_history = price_history.append(pd.DataFrame(0, index=[start_time.tz_localize(None)], columns=price_history.columns)).sort_index()
+        current_prices = pd.DataFrame([current_prices], columns=price_history.columns, index=[pd.Timestamp.now(tz='utc')])
+        price_history = pd.concat([price_history, current_prices]).sort_index()
+        if start_time+pd.Timedelta(days=2) < price_history.index.min():
+            zero_row = pd.DataFrame(0, index=[start_time], columns=price_history.columns)
+            price_history = pd.concat([price_history, zero_row]).sort_index()
+        price_history.index = pd.to_datetime(price_history.index, utc=True).tz_convert(tz='Europe/Berlin')
 
         invested = self.trades_df[['date', 'buy_symbol', self.base_cost_row]].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
         value = self.trades_df[['date', 'buy_symbol', 'amount']].groupby(
             ['date', 'buy_symbol'], as_index=False, axis=0).sum()
         invested = invested.pivot(index='date', columns='buy_symbol', values=self.base_cost_row)
-        invested = invested.cumsum().fillna(method='pad').fillna(0)
-        invested = invested.tz_localize(None).reindex(price_history.index, method='pad').fillna(0)
+        invested = invested.cumsum().fillna(method='ffill').fillna(0)
+        invested = invested.reindex(price_history.index, method='ffill').fillna(0)
         invested.columns = invested.columns.str.lower()
 
         value = value.pivot(index='date', columns='buy_symbol', values='amount')
-        value = value.cumsum().fillna(method='pad').fillna(0)
-        value = value.tz_localize(None).reindex(price_history.index, method='pad').fillna(0)
+        value = value.cumsum().fillna(method='ffill').fillna(0)
+        value = value.reindex(price_history.index, method='ffill').fillna(0)
         value.columns = value.columns.str.lower()
         value = value * price_history
 
