@@ -32,6 +32,8 @@ trading_bot:
     selected: btc
   savings_plan:
     cost: 50  # denoted in base_currency
+    automatic_execution: no  # do not ask for order confirmation via telegram
+    rebalance_on_automatic_execution: yes
     interval:
       options:
         - daily
@@ -50,7 +52,7 @@ trading_bot:
         symbols:  # as defined by coingecko
           - btc
           - eth
-    index:
+    index:  # not yet implemented
       top_n: 15
       exclude_symbols: [xrp, usdc, dai, usdt, busd]
     weighting:

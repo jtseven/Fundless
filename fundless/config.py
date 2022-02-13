@@ -136,6 +136,7 @@ class TradingBotConfig(BaseConfig):
     savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
     savings_plan_execution_time: constr(regex='^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
     savings_plan_automatic_execution: Optional[bool] = False
+    savings_plan_rebalance_on_automatic_execution: Optional[bool] = True
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
     cherry_pick_symbols: Optional[List[constr(to_lower=True)]]
@@ -197,6 +198,7 @@ class TradingBotConfig(BaseConfig):
             savings_plan_interval=dictionary['savings_plan']['interval']['selected'],
             savings_plan_execution_time=dictionary['savings_plan']['execution_time'],
             savings_plan_automatic_execution=dictionary['savings_plan']['automatic_execution'],
+            savings_plan_rebalance_on_automatic_execution=dictionary['savings_plan']['rebalance_on_automatic_execution'],
             portfolio_mode=dictionary['portfolio']['mode']['selected'],
             portfolio_weighting=dictionary['portfolio']['weighting']['selected'],
             cherry_pick_symbols=dictionary['portfolio'].get('cherry_pick', {}).get('symbols', None),

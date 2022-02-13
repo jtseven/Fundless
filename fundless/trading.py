@@ -333,7 +333,9 @@ class TradingBot:
         # after = self.exchanges.active.fetch_total_balance()
         return report
 
-    def savings_plan_order_planner(self, rebalance=True) -> dict:
+    def savings_plan_order_planner(self, rebalance: bool = None) -> dict:
+        if rebalance is None:
+            rebalance = self.bot_config.trading_bot_config.savings_plan_rebalance_on_automatic_execution
         order_dict = {'symbols': [], 'weights': [], 'messages': [], 'executable': True}
 
         available_symbols = self.filter_available(self.bot_config.trading_bot_config.cherry_pick_symbols)
@@ -348,10 +350,17 @@ class TradingBot:
             symbols, weights = self.analytics.fetch_index_weights()
 
         # filter out symbols that are not available on the exchange
-        symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
-                                 symbol in available_symbols])
-        # filter coin order volumes that are below the minimum threshold for the exchange
-        symbols_filtered, weights_filtered, reasons = self.volume_corrected_weights(symbols, weights)
+        try:
+            symbols, weights = zip(*[(symbol, weight) for symbol, weight in zip(symbols, weights) if
+                                     symbol in available_symbols])
+        except ValueError:
+            # no symbols are available
+            symbols_filtered = []
+            weights_filtered = []
+            reasons = ['not available']
+        else:
+            # filter coin order volumes that are below the minimum threshold for the exchange
+            symbols_filtered, weights_filtered, reasons = self.volume_corrected_weights(symbols, weights)
 
         if len(symbols_filtered) == 0:
             order_dict['executable'] = False
