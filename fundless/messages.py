@@ -81,7 +81,7 @@ class TelegramBot:
         self.dispatcher = self.updater.dispatcher
         self.trading_bot = trading_bot
         self.config = config
-        self.rebalance = False
+        self.rebalance = True
         self.order_weights = None
         self.order_symbols = None
 

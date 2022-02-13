@@ -66,7 +66,7 @@ if __name__ == '__main__':
         webapp.start()
 
     # automated saving plan execution
-    if telegram_bot is not None:
+    if message_bot is not None:
         interval = config.trading_bot_config.savings_plan_interval
         execution_time = config.trading_bot_config.savings_plan_execution_time
 
