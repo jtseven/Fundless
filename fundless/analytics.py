@@ -303,7 +303,7 @@ class PortfolioAnalytics:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(trades_df=trades_df,
                                                        date=datetime.fromtimestamp(order['timestamp']/1000.0).strftime('%Y-%m-%d %H:%M:%S'),
-                                                       id=id,
+                                                       id=str(id),
                                                        buy_symbol=order['symbol'].split('/')[0],
                                                        sell_symbol=order['symbol'].split('/')[1],
                                                        price=order['price'],
@@ -513,6 +513,8 @@ class PortfolioAnalytics:
         return df
 
     def allocation_pie(self, as_image=False, title=True):
+        if self.index_df is None:
+            return {}
         allocation_df = self.index_df.copy()
 
         fig = px.pie(allocation_df, values='allocation', names='symbol',
@@ -649,8 +651,9 @@ class PortfolioAnalytics:
         return value, invested
 
     def value_history_chart(self, as_image=False, from_timestamp=None, title=True):
-        value, invested = self.compute_value_history(from_timestamp=from_timestamp)
-        if value is None or invested is None:
+        try:
+            value, invested = self.compute_value_history(from_timestamp=from_timestamp)
+        except ValueError:
             return {}
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
@@ -682,7 +685,7 @@ class PortfolioAnalytics:
     def performance_chart(self, as_image=False, from_timestamp=None, title=True):
         try:
             value, invested = self.compute_value_history(from_timestamp=from_timestamp)
-        except:
+        except ValueError:
             return {}
         performance_df = pd.DataFrame(index=value.index, columns=['invested', 'net_worth'])
         performance_df['invested'] = invested.sum(axis=1)
