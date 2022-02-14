@@ -53,7 +53,11 @@ class Exchanges:
         else:
             raise ValueError('Invalid Exchange given!')
 
-        exchange.set_sandbox_mode(self.trading_config.test_mode)
+        if 'test' in exchange.urls.keys():
+            exchange.set_sandbox_mode(self.trading_config.test_mode)
+        elif self.trading_config.test_mode:
+            # Test mode is enabled, but current exchange does not support it
+            return False
         if not exchange.check_required_credentials():
             return False
         self.authorized_exchanges[exchange_name] = exchange
