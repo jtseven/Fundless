@@ -98,7 +98,8 @@ class TradingBot:
         allocations = allocations
         symbols, index_weights = self.analytics.fetch_index_weights(symbols)
         allocation_error['symbols'] = symbols
-        allocation_error['relative'] = np.divide(allocations/100, index_weights)
+        allocation_error['relative'] = np.divide(allocations/100, index_weights, out=np.zeros_like(allocations),
+                                                 where=(index_weights != 0))
         allocation_error['percentage_points'] = allocations - (index_weights * 100)
         allocation_error['absolute'] = values - index_weights * values.sum()
         allocation_error['index_weights'] = index_weights
@@ -317,8 +318,8 @@ class TradingBot:
                 continue
             else:
                 self.analytics.add_order_id(id=order['id'], symbol=ticker, date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                logger.info("Order:")
-                logger.info(order)
+                logger.debug("Order:")
+                logger.debug(order)
                 try:
                     logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 except TypeError:
