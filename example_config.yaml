@@ -40,8 +40,10 @@ trading_bot:
         - weekly
         - biweekly
         - array of day numbers  # e.g. [5, 20] for execution on 5th and 20th of every month
+        - x_daily  # executes savings plan every x days
       selected: [5, 20]
-    execution_time: '12:30'
+      every_n_days: 2  # if selected: 'x_days', range: [2, 30]
+    execution_time: '12:30'  # hh:mm, 24 hour format
   portfolio:
     mode:
       options:

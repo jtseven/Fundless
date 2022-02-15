@@ -38,6 +38,8 @@ class SavingsPlanScheduler:
             schedule.every().week.at(self.execution_time).do(self.job)
         elif self.interval == IntervalEnum.biweekly:
             schedule.every(2).weeks.at(self.execution_time).do(self.job)
+        elif self.interval == IntervalEnum.x_daily:
+            schedule.every(self.config.trading_bot_config.x_days).days.at(self.execution_time).do(self.job)
         elif isinstance(self.interval, List):
             schedule.every().day.at(self.execution_time).do(self.job)
         else:
