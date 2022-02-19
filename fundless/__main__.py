@@ -54,9 +54,13 @@ if __name__ == '__main__':
     else:
         message_bot = None
 
-    scheduler = SavingsPlanScheduler(config, message_bot)
-    savings_plan = threading.Thread(target=scheduler.run, daemon=True)
-    savings_plan.start()
+    if message_bot is not None:
+        scheduler = SavingsPlanScheduler(config, message_bot)
+        savings_plan = threading.Thread(target=scheduler.run, daemon=True)
+        savings_plan.start()
+    else:
+        savings_plan = None
+        logger.warning('Savings plan is not executed, when the telegram bot is not running!')
 
     # dashboard as web application
     if config.dashboard_config.dashboard:
@@ -68,4 +72,5 @@ if __name__ == '__main__':
 
     if webapp is not None:
         webapp.join()
-    savings_plan.join()
+    if savings_plan is not None:
+        savings_plan.join()
