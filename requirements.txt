@@ -1,4 +1,4 @@
-ccxt==1.68.65
+ccxt==1.73.76
 pandas==1.4.1
 numpy==1.22.2
 pycoingecko~=2.2.0
