@@ -508,6 +508,9 @@ class PortfolioAnalytics:
             lambda sym: 'yes' if self.coin_available_on_exchange(sym) else 'no')
         df['Amount'] = self.index_df['amount'].map(print_crypto_amount)
         df['Allocation'] = self.index_df['allocation'].map('{:.2%}'.format)
+        _, target_allocation = self.fetch_index_weights(symbols=df['Coin'])
+        df['Target Allocation'] = target_allocation
+        df['Target Allocation'] = df['Target Allocation'].map('{:.2%}'.format)
         df['Value'] = self.index_df['value'].map(value_format.format)
         df['Performance'] = self.index_df['performance'].fillna(0).map('{:.2%}'.format)
         return df
