@@ -510,7 +510,7 @@ class PortfolioAnalytics:
         df['Allocation'] = self.index_df['allocation'].map('{:.2%}'.format)
         _, target_allocation = self.fetch_index_weights(symbols=df['Coin'])
         df['Target Allocation'] = target_allocation
-        df['Target Allocation'] = df['Target Allocation'].map('{:.2%}'.format)
+        df['Target Allocation'] = df['Target Allocation'].map(lambda row: f'{row:.2%}' if row != 0 else '-')
         df['Value'] = self.index_df['value'].map(value_format.format)
         df['Performance'] = self.index_df['performance'].fillna(0).map('{:.2%}'.format)
         return df
