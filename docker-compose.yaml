@@ -1,11 +1,13 @@
-version: "3.9"
+version: "2"
 services:
   fundless:
-    environment:
-      - TZ=Europe/Berlin
+    container_name: fundless
+    image: fundless
     build: .
     restart: unless-stopped
     volumes:
       - .:/code
     ports:
       - "80:80"
+    environment:
+      - TZ=Europe/Berlin
