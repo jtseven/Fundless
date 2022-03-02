@@ -484,21 +484,29 @@ class PortfolioAnalytics:
 
     @property
     def performance(self) -> float:
+        if self.trades_df is None or self.index_df is None:
+            return 0
         amount_invested = self.trades_df[self.base_cost_row].sum()
         portfolio_value = self.index_df.value.sum()
         return portfolio_value / amount_invested - 1
 
     @property
     def invested(self) -> float:
+        if self.trades_df is None:
+            return 0
         return self.trades_df[self.base_cost_row].sum()
 
     @property
     def net_worth(self) -> float:
+        if self.index_df is None:
+            return 0
         return self.index_df.value.sum()
 
     @property
     def pretty_index_df(self):
         df = pd.DataFrame()
+        if self.index_df is None:
+            return df
         self.index_df.sort_values(by='allocation', ascending=False, inplace=True)
         value_format = f'{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}'
         df['Coin'] = self.index_df['symbol']

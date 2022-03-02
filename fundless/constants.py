@@ -17,7 +17,10 @@ COIN_REBRANDING: Final = {
 }
 
 COIN_SYNONYMS: Final = [
-    ['NANO', 'XNO']
+    ['NANO', 'XNO'],
+    ['ETH', 'ETH2', 'ETH2.S'],
+    ['DOT', 'DOT.S'],
+    ['ADA', 'ADA.S']
 ]
 
 
