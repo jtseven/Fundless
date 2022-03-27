@@ -9,6 +9,7 @@ from config import Config
 from dashboard_app import Dashboard
 from exchanges import Exchanges
 from savings_plan_scheduler import SavingsPlanScheduler
+
 """
 
 FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
@@ -18,17 +19,19 @@ orders and will possibly be able to rebalance after the one year waiting period 
 """
 telegram_bot = True
 
-secrets_yaml = 'secrets.yaml'
-config_yaml = 'config.yaml'
-trades_csv = 'fundless/data/trades.csv'
-trades_csv_test = 'fundless/data/test_trades.csv'
-order_ids_csv = 'fundless/data/order_ids.csv'
-order_ids_csv_test = 'fundless/data/ids_test.csv'
+secrets_yaml = "secrets.yaml"
+config_yaml = "config.yaml"
+trades_csv = "fundless/data/trades.csv"
+trades_csv_test = "fundless/data/test_trades.csv"
+order_ids_csv = "fundless/data/order_ids.csv"
+order_ids_csv_test = "fundless/data/ids_test.csv"
 
 
-if __name__ == '__main__':
-    logging_format = '%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s'
-    coloredlogs.install(level='INFO', fmt=logging_format)
+if __name__ == "__main__":
+    logging_format = (
+        "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
+    )
+    coloredlogs.install(level="INFO", fmt=logging_format)
     logger = logging.getLogger()
 
     logger.info("Hi, I will just buy and HODL!")
@@ -41,7 +44,9 @@ if __name__ == '__main__':
 
     # the analytics module for portfolio performance analysis
     if config.trading_bot_config.test_mode:
-        analytics = PortfolioAnalytics(trades_csv_test, order_ids_csv_test, config, exchanges)
+        analytics = PortfolioAnalytics(
+            trades_csv_test, order_ids_csv_test, config, exchanges
+        )
     else:
         analytics = PortfolioAnalytics(trades_csv, order_ids_csv, config, exchanges)
 
@@ -60,7 +65,9 @@ if __name__ == '__main__':
         savings_plan.start()
     else:
         savings_plan = None
-        logger.warning('Savings plan is not executed, when the telegram bot is not running!')
+        logger.warning(
+            "Savings plan is not executed, when the telegram bot is not running!"
+        )
 
     # dashboard as web application
     if config.dashboard_config.dashboard:

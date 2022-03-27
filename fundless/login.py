@@ -1,4 +1,11 @@
-from flask_login import login_user, LoginManager, UserMixin, logout_user, current_user, login_required
+from flask_login import (
+    login_user,
+    LoginManager,
+    UserMixin,
+    logout_user,
+    current_user,
+    login_required,
+)
 import secrets
 from os import environ as env
 from dotenv import load_dotenv, find_dotenv
@@ -21,7 +28,9 @@ class User(UserMixin):
 
 
 class LoginProvider:
-    def __init__(self, config: DashboardConfig, server: Flask, secrets_store: SecretsStore):
+    def __init__(
+        self, config: DashboardConfig, server: Flask, secrets_store: SecretsStore
+    ):
         self.secret_key = secrets.token_hex(24)
         self.provider = config.login_provider
         self.secrets_store = secrets_store
@@ -33,14 +42,14 @@ class LoginProvider:
             # Login manager object will be used to login / logout users
             login_manager = LoginManager()
             login_manager.init_app(server)
-            login_manager.login_view = '/login'
+            login_manager.login_view = "/login"
 
             @login_manager.user_loader
             def load_user(username):
                 """
-                    This function loads the user by user id. Typically this looks up the user from a user database.
-                    We won't be registering or looking up users in this example, since we'll just login using LDAP server.
-                    So we'll simply return a User object with the passed in username.
+                This function loads the user by user id. Typically this looks up the user from a user database.
+                We won't be registering or looking up users in this example, since we'll just login using LDAP server.
+                So we'll simply return a User object with the passed in username.
                 """
                 return User(username)
 
@@ -54,27 +63,27 @@ class LoginProvider:
             self.AUTH0_CLIENT_ID = env.get(Auth0EnvNames.AUTH0_CLIENT_ID)
             self.AUTH0_CLIENT_SECRET = env.get(Auth0EnvNames.AUTH0_CLIENT_SECRET)
             self.AUTH0_DOMAIN = env.get(Auth0EnvNames.AUTH0_DOMAIN)
-            self.AUTH0_BASE_URL = 'https://' + self.AUTH0_DOMAIN
+            self.AUTH0_BASE_URL = "https://" + self.AUTH0_DOMAIN
             self.AUTH0_AUDIENCE = env.get(Auth0EnvNames.AUTH0_AUDIENCE)
 
             # auth0 setup
             oauth = OAuth(server)
             self.auth0 = oauth.register(
-                'auth0',
+                "auth0",
                 client_id=self.AUTH0_CLIENT_ID,
                 client_secret=self.AUTH0_CLIENT_SECRET,
                 api_base_url=self.AUTH0_BASE_URL,
-                access_token_url=self.AUTH0_BASE_URL + '/oauth/token',
-                authorize_url=self.AUTH0_BASE_URL + '/authorize',
+                access_token_url=self.AUTH0_BASE_URL + "/oauth/token",
+                authorize_url=self.AUTH0_BASE_URL + "/authorize",
                 client_kwargs={
-                    'scope': 'openid profile email',
+                    "scope": "openid profile email",
                 },
             )
 
             @server.errorhandler(Exception)
             def handle_auth_error(ex):
                 response = jsonify(message=str(ex))
-                response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
+                response.status_code = ex.code if isinstance(ex, HTTPException) else 500
                 return response
 
     # def login(self, username: str = None, password: str = None):
@@ -95,32 +104,43 @@ class LoginProvider:
             # Clear session stored data
             session.clear()
             # Redirect user to logout endpoint
-            params = {'returnTo': url_for('home', _external=True), 'client_id': self.AUTH0_CLIENT_ID}
-            return redirect(self.auth0.api_base_url + '/v2/logout?' + urlencode(params))
+            params = {
+                "returnTo": url_for("home", _external=True),
+                "client_id": self.AUTH0_CLIENT_ID,
+            }
+            return redirect(self.auth0.api_base_url + "/v2/logout?" + urlencode(params))
         elif self.provider == LoginProviderEnum.custom:
             if current_user.is_authenticated:
                 logout_user()
-                return redirect('/home')
+                return redirect("/home")
             else:
-                return redirect('/login')
+                return redirect("/login")
 
     def login_page(self):
         if self.provider == LoginProviderEnum.auth0:
-            return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
+            return self.auth0.authorize_redirect(
+                redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE
+            )
         elif self.provider == LoginProviderEnum.custom:
-            email = request.form.get('email')
-            password = request.form.get('password')
+            email = request.form.get("email")
+            password = request.form.get("password")
 
-            if email == self.secrets_store.dashboard_user and password == self.secrets_store.dashboard_password:
+            if (
+                email == self.secrets_store.dashboard_user
+                and password == self.secrets_store.dashboard_password
+            ):
                 user = User(email)
                 login_user(user, remember=True)
-                return redirect('/app')
+                return redirect("/app")
             else:
-                return render_template('login.html')
+                return render_template("login.html")
 
     def is_authenticated(self):
         if self.provider == LoginProviderEnum.custom:
-            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            if (
+                hasattr(current_user, "is_authenticated")
+                and current_user.is_authenticated
+            ):
                 return True
             else:
                 return False
@@ -134,35 +154,37 @@ class LoginProvider:
 
     def auth0_callback(self):
         if self.provider != LoginProviderEnum.auth0:
-            return redirect('/login')
+            return redirect("/login")
             # raise ValueError('The auth0 callback method should only be executed if auth0 is used as login provider!')
         else:
             self.auth0.authorize_access_token()
-            resp = self.auth0.get('userinfo')
+            resp = self.auth0.get("userinfo")
             userinfo = resp.json()
 
             session[Auth0EnvNames.JWT_PAYLOAD] = userinfo
             session[Auth0EnvNames.PROFILE_KEY] = {
-                'user_id': userinfo['sub'],
-                'name': userinfo['name'],
-                'picture': userinfo['picture']
+                "user_id": userinfo["sub"],
+                "name": userinfo["name"],
+                "picture": userinfo["picture"],
             }
             # session['user_config'] = TradingBotConfig.from_dict(
             #     userinfo['http://fundless.jtseven.de/user_metadata']['trading_bot']).json()
 
-            return redirect('/app')
+            return redirect("/app")
 
     # Function decorator for website callbacks that require an authenticated user
     def requires_auth(self, f):
         if self.provider == LoginProviderEnum.auth0:
+
             @wraps(f)
             def decorated(*args, **kwargs):
                 if Auth0EnvNames.PROFILE_KEY not in session:
                     # Redirect to Login page here
-                    return redirect('/login')
+                    return redirect("/login")
                 return f(*args, **kwargs)
+
             return decorated
         elif self.provider == LoginProviderEnum.custom:
             return login_required(f)
         else:
-            raise ValueError('No valid login provider set in dashboard config!')
+            raise ValueError("No valid login provider set in dashboard config!")
