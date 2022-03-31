@@ -1,3 +1,4 @@
+from authlib.oauth2.rfc6749 import OAuth2Token
 from flask_login import (
     login_user,
     LoginManager,
@@ -67,6 +68,13 @@ class LoginProvider:
             self.AUTH0_AUDIENCE = env.get(Auth0EnvNames.AUTH0_AUDIENCE)
 
             # auth0 setup
+            def fetch_token(name, request):
+                token = OAuth2Token.find(
+                    name=name,
+                    user=request.user
+                )
+                return token.to_token()
+
             oauth = OAuth(server)
             self.auth0 = oauth.register(
                 "auth0",
@@ -78,6 +86,8 @@ class LoginProvider:
                 client_kwargs={
                     "scope": "openid profile email",
                 },
+                server_metadata_url=f'https://{env.get(Auth0EnvNames.AUTH0_DOMAIN)}/.well-known/openid-configuration',
+                fetch_token=fetch_token
             )
 
             @server.errorhandler(Exception)
