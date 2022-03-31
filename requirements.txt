@@ -6,7 +6,7 @@ pathlib~=1.0.1
 PyYaml==6.0
 schedule~=1.1.0
 python-telegram-bot>=13.9
-pydantic~=1.8.2
+pydantic~=1.9.0
 aenum~=3.1.0
 redo~=2.0.4
 plotly==5.5.0
