@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 
 from analytics import PortfolioAnalytics
-from config import WeightingEnum
+from config import WeightingEnum, IntervalEnum
 from utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
 from constants import STABLE_COINS
 
@@ -434,16 +434,29 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
 
     interval = analytics.config.trading_bot_config.savings_plan_interval
     vol = analytics.config.trading_bot_config.savings_plan_cost
+    exc_time = analytics.config.trading_bot_config.savings_plan_execution_time
+    monthly_vol = 0
     if isinstance(interval, List):
         postfixes = ['st' if n == 1 else 'nd' if n == 2 else 'rd' if n == 3 else 'th' for n in interval]
+        monthly_vol = len(interval) * vol
         if len(interval) > 2:
             dates = [f'{d}{post}' for d, post in zip(interval[:-1], postfixes[:-1])]
-            text_interval = f"Savings plan execution on {', '.join(dates)} and {interval[-1]}{postfixes[-1]} of every month."
+            text_interval = f"Savings plan execution on {', '.join(dates)} and {interval[-1]}{postfixes[-1]} of every month at {exc_time}."
         else:
-            text_interval = f"Savings plan execution on {interval[0]}{postfixes[0]} and {interval[-1]}{postfixes[-1]} of every month."
+            text_interval = f"Savings plan execution on {interval[0]}{postfixes[0]} and {interval[-1]}{postfixes[-1]} of every month at {exc_time}."
+    elif interval == IntervalEnum.x_daily:
+        monthly_vol = 365/12 / analytics.config.trading_bot_config.x_days * vol
+        text_interval = f"Savings plan is executed every {analytics.config.trading_bot_config.x_days} days at {exc_time}."
     else:
-        text_interval = f"Savings plan is executed {interval.value}."
-    text_volume = f"With a volume of {analytics.config.trading_bot_config.base_currency.upper()} {vol:.2f} on each execution."
+        text_interval = f"Savings plan is executed {interval.value} at {exc_time}."
+        if interval == IntervalEnum.daily:
+            monthly_vol = 365/12 * vol
+        elif interval == IntervalEnum.weekly:
+            monthly_vol = 365/12 / 7 * vol
+        elif interval == IntervalEnum.biweekly:
+            monthly_vol = 365/12 / 14 * vol
+
+    text_volume = f"With an average monthly volume of {analytics.config.trading_bot_config.base_currency.upper()} {monthly_vol:.2f}."
 
     infos = [
         dbc.ListGroupItem(

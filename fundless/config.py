@@ -43,6 +43,7 @@ class IntervalEnum(str, MultiValueEnum):
     daily = 'daily'
     weekly = 'weekly'
     biweekly = 'biweekly', 'bi-weekly'
+    x_daily = 'x-daily', 'x_daily', 'every n days', 'every x days'
 
 
 class OrderTypeEnum(str, MultiValueEnum):
@@ -73,7 +74,7 @@ class ExchangeToken(TypedDict, total=False):
 
 class TelegramToken(TypedDict):
     token: str
-    chat_id: str
+    chat_id: int
 
 
 class BaseConfig(BaseModel):
@@ -134,7 +135,10 @@ class TradingBotConfig(BaseConfig):
     base_symbol: constr(strip_whitespace=True, to_lower=True, regex='^(busd|usdc|usdt|usd|eur|btc)$')
     savings_plan_cost: confloat(gt=0, le=10000)
     savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
+    x_days: Optional[conint(ge=2, le=30)]
     savings_plan_execution_time: constr(regex='^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
+    savings_plan_automatic_execution: Optional[bool] = False
+    savings_plan_rebalance_on_automatic_execution: Optional[bool] = True
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
     cherry_pick_symbols: Optional[List[constr(to_lower=True)]]
@@ -194,7 +198,10 @@ class TradingBotConfig(BaseConfig):
             base_symbol=dictionary['base_symbol']['selected'],
             savings_plan_cost=dictionary['savings_plan']['cost'],
             savings_plan_interval=dictionary['savings_plan']['interval']['selected'],
+            x_days=dictionary['savings_plan']['interval'].get('every_n_days', None),
             savings_plan_execution_time=dictionary['savings_plan']['execution_time'],
+            savings_plan_automatic_execution=dictionary['savings_plan']['automatic_execution'],
+            savings_plan_rebalance_on_automatic_execution=dictionary['savings_plan']['rebalance_on_automatic_execution'],
             portfolio_mode=dictionary['portfolio']['mode']['selected'],
             portfolio_weighting=dictionary['portfolio']['weighting']['selected'],
             cherry_pick_symbols=dictionary['portfolio'].get('cherry_pick', {}).get('symbols', None),

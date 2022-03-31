@@ -32,14 +32,18 @@ trading_bot:
     selected: btc
   savings_plan:
     cost: 50  # denoted in base_currency
+    automatic_execution: no  # do not ask for order confirmation via telegram
+    rebalance_on_automatic_execution: yes
     interval:
       options:
         - daily
         - weekly
         - biweekly
         - array of day numbers  # e.g. [5, 20] for execution on 5th and 20th of every month
+        - x_daily  # executes savings plan every x days
       selected: [5, 20]
-    execution_time: '12:30'
+      every_n_days: 2  # if selected: 'x_days', range: [2, 30]
+    execution_time: '12:30'  # hh:mm, 24 hour format
   portfolio:
     mode:
       options:
@@ -50,7 +54,7 @@ trading_bot:
         symbols:  # as defined by coingecko
           - btc
           - eth
-    index:
+    index:  # not yet implemented
       top_n: 15
       exclude_symbols: [xrp, usdc, dai, usdt, busd]
     weighting:
