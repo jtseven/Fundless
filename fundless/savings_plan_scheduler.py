@@ -37,7 +37,7 @@ class SavingsPlanScheduler:
             )
             if self.config.trading_bot_config.savings_plan_automatic_execution:
                 self.message_bot.send("Executing savings plan!")
-                if self.message_bot.order_planning():
+                if self.message_bot.order_planning(automatic=True):
                     self.message_bot.execute_order()
             else:
                 self.message_bot.ask_savings_plan_execution()

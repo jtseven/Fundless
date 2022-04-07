@@ -294,40 +294,42 @@ class TelegramBot:
             chat_id=self.chat_id, text=msg, reply_markup=markup
         )
 
-    def order_planning(self) -> bool:
+    def order_planning(self, automatic: bool) -> bool:
         order_dict = self.trading_bot.savings_plan_order_planner(self.rebalance)
         symbols = order_dict["symbols"]
         weights = order_dict["weights"]
         messages = order_dict["messages"]
 
         if len(messages) > 0:
-            for msg in messages:
-                self.updater.bot.send_message(chat_id=self.chat_id, text=msg)
+            if self.config.telegram_bot_config.verbose_messages or not order_dict["executable"]:
+                for msg in messages:
+                    self.updater.bot.send_message(chat_id=self.chat_id, text=msg)
 
         if not order_dict["executable"]:
             return False
 
-        msg = "```\nThat's what I came up with:\n" "---------------------------"
-        for symbol, weight in zip(symbols, weights):
-            msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:6.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-        msg += "\n---------------------------"
-        msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-        msg += "\n```"
-        logger.info(msg)
-        self.updater.bot.send_message(
-            chat_id=self.chat_id, text=msg, parse_mode="MarkdownV2"
-        )
-        base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(
-            self.config.trading_bot_config.savings_plan_cost
-        )
-        base_amount = print_crypto_amount(base_amount)
-        self.updater.bot.send_message(
-            chat_id=self.chat_id,
-            text=f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}",
-        )
-        self.updater.bot.send_chat_action(
-            chat_id=self.chat_id, action=ChatAction.TYPING
-        )
+        if self.config.telegram_bot_config.verbose_messages or not automatic:
+            msg = "```\nThat's what I came up with:\n" "---------------------------"
+            for symbol, weight in zip(symbols, weights):
+                msg += f"\n  {symbol.upper() + ':': <6}  {weight * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:6.2f} {self.config.trading_bot_config.base_currency.values[1]}"
+            msg += "\n---------------------------"
+            msg += f"\n Sum:  {weights.sum() * self.trading_bot.bot_config.trading_bot_config.savings_plan_cost:.2f} {self.config.trading_bot_config.base_currency.values[1]}"
+            msg += "\n```"
+            logger.info(msg)
+            self.updater.bot.send_message(
+                chat_id=self.chat_id, text=msg, parse_mode="MarkdownV2"
+            )
+            base_amount = self.trading_bot.analytics.base_currency_to_base_symbol(
+                self.config.trading_bot_config.savings_plan_cost
+            )
+            base_amount = print_crypto_amount(base_amount)
+            self.updater.bot.send_message(
+                chat_id=self.chat_id,
+                text=f"You are buying with {base_amount} {self.trading_bot.bot_config.trading_bot_config.base_symbol.upper()}",
+            )
+            self.updater.bot.send_chat_action(
+                chat_id=self.chat_id, action=ChatAction.TYPING
+            )
 
         self.order_weights = weights
         self.order_symbols = symbols
@@ -344,7 +346,7 @@ class TelegramBot:
         update.message.reply_text("Alright! I am computing the optimal buy order...")
         context.bot.send_chat_action(chat_id=self.chat_id, action=ChatAction.TYPING)
         time.sleep(1)
-        if not self.order_planning():
+        if not self.order_planning(automatic=False):
             return ConversationHandler.END
 
         reply_keyboard = [["Yes", "No"]]
@@ -455,11 +457,12 @@ class TelegramBot:
                 )
             order_ids = report["order_ids"]
             placed_symbols = report["symbols"]
-            send(chat_id=self.chat_id, text="Done! I placed your orders")
-            send(
-                chat_id=self.chat_id,
-                text="I will check if your orders went threw in a few seconds and get back to you :)",
-            )
+            if self.config.telegram_bot_config.verbose_messages:
+                send(chat_id=self.chat_id, text="Done! I placed your orders")
+                send(
+                    chat_id=self.chat_id,
+                    text="I will check if your orders went threw in a few seconds and get back to you :)",
+                )
             self.updater.job_queue.run_once(
                 self.check_orders, when=10, context=(order_ids, placed_symbols, 1)
             )
@@ -516,10 +519,11 @@ class TelegramBot:
         user = User(first_name="name", is_bot=False, id=self.chat_id)
         chat = Chat(id=self.chat_id, type="private")
         try:  # everything in try block, to correctly end conversation state in case of exception
-            context.bot.send_message(
-                self.chat_id, text="I am checking your orders now!"
-            )
-            context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
+            if self.config.telegram_bot_config.verbose_messages:
+                context.bot.send_message(
+                    self.chat_id, text="I am checking your orders now!"
+                )
+                context.bot.send_chat_action(self.chat_id, action=ChatAction.TYPING)
             order_report = self.trading_bot.check_orders(order_ids, symbols)
             open_orders = order_report["open"]
             closed_orders = order_report["closed"]
@@ -560,10 +564,11 @@ class TelegramBot:
                 )
 
             if len(closed_orders) == len(order_ids):
-                context.bot.send_message(
-                    self.chat_id, text="Nice, all your orders are filled!"
-                )
-                context.bot.send_message(self.chat_id, text="See you :)")
+                if self.config.telegram_bot_config.verbose_messages:
+                    context.bot.send_message(
+                        self.chat_id, text="Nice, all your orders are filled!"
+                    )
+                    context.bot.send_message(self.chat_id, text="See you :)")
                 state_update = StateChangeUpdate(
                     randint(0, 999999999), next_state=ConversationHandler.END
                 )

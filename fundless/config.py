@@ -231,11 +231,27 @@ class TradingBotConfig(BaseConfig):
 
 
 class TelegramBotConfig(BaseConfig):
-    # no config needed yet
+    verbose_messages: bool = False
+
     @classmethod
     def from_config_yaml(cls, file_path):
-        self = cls()
+        file = Path(file_path)
+        with open(file) as f:
+            try:
+                data = yaml.safe_load(f)
+            except yaml.YAMLError as exc:
+                logger.error("Error while parsing config file:")
+                logger.error(exc)
+                raise exc
+            config = data["telegram_bot"]
+            self = cls.from_dict(config)
         return self
+
+    @classmethod
+    def from_dict(cls, dictionary):
+        return cls(
+            verbose_messages=dictionary.get('verbose_messages', False)
+        )
 
 
 class SecretsStore(BaseConfig):

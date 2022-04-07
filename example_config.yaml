@@ -70,3 +70,4 @@ trading_bot:
         eth: 50
 
 telegram_bot:
+  verbose_messages: no
