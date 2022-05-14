@@ -551,7 +551,8 @@ class TelegramBot:
                 msg = "```\n"
                 msg += "----- Completed Coins -----"
                 for symbol in closed_orders:
-                    msg += f"\n  - {symbol.split('/')[0].upper()}"
+                    msg += f"\n  - {symbol.split('/')[0].upper()}  {order_report[symbol]['cost']:<6.2f} " \
+                           f"{self.config.trading_bot_config.base_currency.values[1]}"
                     volume += order_report[symbol]["cost"]
                 msg += "\n---------------------------"
                 base_currency_volume = (
