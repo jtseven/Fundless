@@ -21,17 +21,23 @@ class SavingsPlanScheduler:
 
     def job(self):
         if not self.lock.acquire(blocking=False):
-            logger.warning('Savings plan execution was invoked, while another order is already running!')
+            logger.warning(
+                "Savings plan execution was invoked, while another order is already running!"
+            )
             return
         try:
             if isinstance(self.interval, List):
                 if date.today().day not in self.interval:
-                    logger.info(f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})")
+                    logger.info(
+                        f"No savings plan execution today ({date.today().strftime('%d.%m.%y')})"
+                    )
                     return
-            logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
+            logger.info(
+                f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})..."
+            )
             if self.config.trading_bot_config.savings_plan_automatic_execution:
-                self.message_bot.send('Executing savings plan!')
-                if self.message_bot.order_planning():
+                self.message_bot.send("Executing savings plan!")
+                if self.message_bot.order_planning(automatic=True):
                     self.message_bot.execute_order()
             else:
                 self.message_bot.ask_savings_plan_execution()
@@ -46,11 +52,15 @@ class SavingsPlanScheduler:
         elif self.interval == IntervalEnum.biweekly:
             schedule.every(2).weeks.at(self.execution_time).do(self.job)
         elif self.interval == IntervalEnum.x_daily:
-            schedule.every(self.config.trading_bot_config.x_days).days.at(self.execution_time).do(self.job)
+            schedule.every(self.config.trading_bot_config.x_days).days.at(
+                self.execution_time
+            ).do(self.job)
         elif isinstance(self.interval, List):
             schedule.every().day.at(self.execution_time).do(self.job)
         else:
-            raise ValueError(f'Unknown interval for savings plan execution: {self.interval}')
+            raise ValueError(
+                f"Unknown interval for savings plan execution: {self.interval}"
+            )
         while True:
             schedule.run_pending()
             time.sleep(40)

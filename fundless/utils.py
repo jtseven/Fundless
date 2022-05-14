@@ -14,19 +14,19 @@ logger = logging.getLogger(__name__)
 def pretty_print_date(datetime):
     day = datetime.day
     if day in (1, 21, 31):
-        suffix = 'st'
+        suffix = "st"
     elif day in (2, 22):
-        suffix = 'nd'
+        suffix = "nd"
     elif day in (3, 23):
-        suffix = 'rd'
+        suffix = "rd"
     else:
-        suffix = 'th'
-    return datetime.strftime(f'%e{suffix} %B %Y')
+        suffix = "th"
+    return datetime.strftime(f"%e{suffix} %B %Y")
 
 
 def print_crypto_amount(amount: float):
     if amount == 0:
-        return '0'
+        return "0"
     order_of_magnitude = math.floor(math.log(amount, 10))
     if order_of_magnitude < 0:
         precision = -1 * order_of_magnitude + 2
@@ -37,7 +37,7 @@ def print_crypto_amount(amount: float):
             precision = 2
     else:
         precision = 0
-    return f'{amount:,.{precision}f}'
+    return f"{amount:,.{precision}f}"
 
 
 def parse_secrets(file_path):
@@ -57,6 +57,7 @@ def convert_html_to_dash(html_code):
     """Convert standard html (as string) to Dash components.
 
     Looks into the list of dash_modules to find the right component (default to [html, dcc, dbc])."""
+
     def find_component(name):
         for module in dash_modules:
             try:
@@ -67,7 +68,9 @@ def convert_html_to_dash(html_code):
 
     def parse_css(css):
         """Convert a style in ccs format to dictionary accepted by Dash"""
-        return {k: v for style in css.strip(";").split(";") for k, v in [style.split(":")]}
+        return {
+            k: v for style in css.strip(";").split(";") for k, v in [style.split(":")]
+        }
 
     def parse_value(v):
         try:
