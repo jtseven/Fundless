@@ -385,6 +385,19 @@ class Dashboard:
             )
 
         @self.app.callback(
+            Output("download-dataframe-csv", "data"),
+            Input("btn_csv", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def func(_):
+            return dcc.send_data_frame(
+                self.analytics.trades_csv_export().to_csv,
+                "fundless_export.csv",
+                sep=";",
+                index=False,
+            )
+
+        @self.app.callback(
             Input("dropdown_add_coin", "value"),
             State("dropdown_add_coin", "options"),
             Output("dropdown_add_coin", "value"),

@@ -1039,6 +1039,23 @@ def create_trades_page(analytics: PortfolioAnalytics):
 
     return html.Div(
         [
+            dbc.Row(
+                [
+                    html.Div(
+                        [
+                            dbc.Button(
+                                "Export to CSV",
+                                id="btn_csv",
+                                color="primary",
+                                className="me-2",
+                            ),
+                            dcc.Download(id="download-dataframe-csv"),
+                        ],
+                        className="d-grid gap-2 col-4 mx-auto",
+                    )
+                ]
+            ),
+            html.Hr(),
             masonry_cards,
             DeferScript(
                 src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"
