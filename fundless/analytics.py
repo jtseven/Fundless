@@ -1119,6 +1119,40 @@ class PortfolioAnalytics:
         weights = weights / weights.sum()
         return symbols, weights
 
+    def trades_csv_export(
+        self,
+    ):  # Export all trades in a Parqet (Portfolio Tool) compatible format
+        cols = [
+            "datetime",
+            "price",
+            "shares",
+            "tax",
+            "fee",
+            "type",
+            "assettype",
+            "identifier",
+            "currency",
+        ]
+        export = pd.DataFrame(columns=cols)
+        export["datetime"] = self.trades_df["date"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        export["price"] = self.trades_df["cost_eur"] / self.trades_df["amount"]
+        export["shares"] = self.trades_df["amount"]
+        export["tax"] = 0
+
+        def get_fee(row: pd.Series):
+            if row["fee"] == 0:
+                return 0
+            if row["fee_symbol"] == "EUR":
+                return row["fee"]
+            return self.convert(row["fee"], row["fee_symbol"], "EUR")
+
+        export["fee"] = self.trades_df[["fee", "fee_symbol"]].apply(get_fee, axis=1)
+        export["type"] = "Buy"
+        export["assettype"] = "Crypto"
+        export["identifier"] = self.trades_df["buy_symbol"]
+        export["currency"] = "EUR"
+        return export
+
     """
     return: sorted array of top n non-stablecoin crypto by market cap
     """
