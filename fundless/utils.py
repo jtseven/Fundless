@@ -68,9 +68,7 @@ def convert_html_to_dash(html_code):
 
     def parse_css(css):
         """Convert a style in ccs format to dictionary accepted by Dash"""
-        return {
-            k: v for style in css.strip(";").split(";") for k, v in [style.split(":")]
-        }
+        return {k: v for style in css.strip(";").split(";") for k, v in [style.split(":")]}
 
     def parse_value(v):
         try:

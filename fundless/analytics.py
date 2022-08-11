@@ -121,9 +121,7 @@ class PortfolioAnalytics:
             logger.error(e)
 
     def init_config_parameters(self):
-        self.base_cost_row = (
-            f"cost_{self.config.trading_bot_config.base_currency.value.lower()}"
-        )
+        self.base_cost_row = f"cost_{self.config.trading_bot_config.base_currency.value.lower()}"
         self.currency_symbol = self.config.trading_bot_config.base_currency.values[1]
         self.csv_dtypes = {
             "id": "str",
@@ -153,9 +151,7 @@ class PortfolioAnalytics:
             "exchange",
         ]
 
-    def update_config(
-        self, base_currency_changed: bool = False, index_changed: bool = False
-    ):
+    def update_config(self, base_currency_changed: bool = False, index_changed: bool = False):
         self.init_config_parameters()
         if base_currency_changed:
             # update all market data again if base currency changed
@@ -168,31 +164,20 @@ class PortfolioAnalytics:
     def coin_available_on_exchange(self, coin: str):
         if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
             return True
-        return (
-            f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}"
-            in self.exchanges.active.symbols
-        )
+        return f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
 
     def available_index_coins(self):
         return [
-            coin
-            for coin in self.config.trading_bot_config.cherry_pick_symbols
-            if self.coin_available_on_exchange(coin)
+            coin for coin in self.config.trading_bot_config.cherry_pick_symbols if self.coin_available_on_exchange(coin)
         ]
 
-    def available_quote_currency(
-        self, convert_to_accounting_currency=True, force_update=False
-    ) -> float:
+    def available_quote_currency(self, convert_to_accounting_currency=True, force_update=False) -> float:
         if self.exchange_balance is None or force_update:
             self.update_exchange_balance()
         if convert_to_accounting_currency:
-            return self.exchange_balance["converted"].get(
-                self.config.trading_bot_config.base_symbol.upper(), 0.0
-            )
+            return self.exchange_balance["converted"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
         else:
-            return self.exchange_balance["amount"].get(
-                self.config.trading_bot_config.base_symbol.upper(), 0.0
-            )
+            return self.exchange_balance["amount"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
 
     def update_exchange_balance(self):
         balance = {
@@ -200,19 +185,11 @@ class PortfolioAnalytics:
             "converted": {},
         }  # amount: amount of coin, converted: amount in accounting currency
         balances = self.exchanges.active.fetch_total_balance()
-        symbols = np.fromiter(
-            [key for key in balances.keys() if balances[key] > 0.0], dtype="U10"
-        )
-        amounts = np.fromiter(
-            [balances.get(symbol, 0.0) for symbol in symbols], dtype=float
-        )
-        balance["amount"] = {
-            symbol.upper(): amount for symbol, amount in zip(symbols, amounts)
-        }
+        symbols = np.fromiter([key for key in balances.keys() if balances[key] > 0.0], dtype="U10")
+        amounts = np.fromiter([balances.get(symbol, 0.0) for symbol in symbols], dtype=float)
+        balance["amount"] = {symbol.upper(): amount for symbol, amount in zip(symbols, amounts)}
         balances["converted"] = {
-            symbol.upper(): self.convert(
-                amount, symbol, self.config.trading_bot_config.base_currency
-            )
+            symbol.upper(): self.convert(amount, symbol, self.config.trading_bot_config.base_currency)
             for symbol, amount in zip(symbols, amounts)
         }
         self.exchange_balance = balances
@@ -223,9 +200,7 @@ class PortfolioAnalytics:
         found = [symbol in synonyms for synonyms in COIN_SYNONYMS]
         if any(found):
             found_index = np.where(found)[0]
-            alternatives = [
-                syn for syn in COIN_SYNONYMS[found_index[0]] if syn != symbol
-            ]
+            alternatives = [syn for syn in COIN_SYNONYMS[found_index[0]] if syn != symbol]
             logger.debug(f"Found alternatives for {symbol}:")
             logger.debug(alternatives)
             return alternatives
@@ -236,17 +211,13 @@ class PortfolioAnalytics:
     def get_coin_id(self, symbol: str):
         symbol = symbol.lower()
         try:
-            coin_id = self.markets.loc[self.markets["symbol"] == symbol, ["id"]].values[
-                0
-            ][0]
+            coin_id = self.markets.loc[self.markets["symbol"] == symbol, ["id"]].values[0][0]
         except IndexError as e:
             alternatives = self.get_alternative_crypto_symbols(symbol)
             if len(alternatives) > 0:
                 for alt in alternatives:
                     try:
-                        coin_id = self.markets.loc[
-                            self.markets["symbol"] == alt.lower(), ["id"]
-                        ].values[0][0]
+                        coin_id = self.markets.loc[self.markets["symbol"] == alt.lower(), ["id"]].values[0][0]
                     except IndexError:
                         continue
                     else:
@@ -260,29 +231,19 @@ class PortfolioAnalytics:
             return symbol
         symbol = symbol.lower()
         try:
-            coin_name = self.markets.loc[
-                self.markets["symbol"] == symbol, ["name"]
-            ].values[0][0]
+            coin_name = self.markets.loc[self.markets["symbol"] == symbol, ["name"]].values[0][0]
         except IndexError as e:
-            logger.warning(
-                f"No coin name found in Coingecko market data for {symbol.upper()}!"
-            )
+            logger.warning(f"No coin name found in Coingecko market data for {symbol.upper()}!")
             alternatives = self.get_alternative_crypto_symbols(symbol)
             if len(alternatives) > 0:
                 for alt in alternatives:
                     try:
-                        coin_name = self.markets.loc[
-                            self.markets["symbol"] == alt.lower(), ["name"]
-                        ].values[0][0]
+                        coin_name = self.markets.loc[self.markets["symbol"] == alt.lower(), ["name"]].values[0][0]
                     except IndexError:
                         continue
                     else:
                         if abbr:
-                            coin_name = (
-                                coin_name[:14] + ".."
-                                if len(coin_name) > 14
-                                else coin_name
-                            )
+                            coin_name = coin_name[:14] + ".." if len(coin_name) > 14 else coin_name
                         return coin_name
             logger.error(f"Could not find market data for {symbol.upper()}")
             coin_name = symbol.upper()
@@ -293,9 +254,7 @@ class PortfolioAnalytics:
     def get_coin_image(self, symbol: str):
         symbol = symbol.lower()
         try:
-            image = self.markets.loc[
-                self.markets["symbol"] == symbol, ["image"]
-            ].values[0][0]
+            image = self.markets.loc[self.markets["symbol"] == symbol, ["image"]].values[0][0]
         except IndexError:
             logger.warning(f"No image found for coin {symbol.upper()}!")
             return "assets/coins-solid.png"
@@ -322,9 +281,7 @@ class PortfolioAnalytics:
     def get_crypto_price(self, crypto: str, vs_currency: str):
         crypto_id = self.get_coin_id(crypto)
         if vs_currency.lower() == self.config.trading_bot_config.base_currency.lower():
-            price = self.markets.loc[
-                self.markets["id"] == crypto_id, ["current_price"]
-            ].values[0][0]
+            price = self.markets.loc[self.markets["id"] == crypto_id, ["current_price"]].values[0][0]
         else:
             with retrying(
                 self.coingecko.get_price,
@@ -333,9 +290,7 @@ class PortfolioAnalytics:
                 jitter=0,
                 retry_exceptions=(requests.exceptions.HTTPError,),
             ) as get_price:
-                price = get_price(crypto_id, vs_currencies=vs_currency.lower())[
-                    crypto_id
-                ][vs_currency.lower()]
+                price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][vs_currency.lower()]
         return price
 
     def base_symbol_to_base_currency(self, base_symbol_amount: float):
@@ -350,31 +305,23 @@ class PortfolioAnalytics:
 
     def update_trades_df(self):
         if self.last_trades_update < time() - 60:
-            trades_df = pd.read_csv(
-                self.trades_file, dtype=self.csv_dtypes, parse_dates=["date"]
-            )
+            trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=["date"])
             trades_df.date = pd.to_datetime(trades_df.date, utc=True)
 
             if len(trades_df) > 0:
                 if trades_df["date"].iloc[0].tzinfo is None:
-                    trades_df["date"] = trades_df["date"].dt.tz_localize(
-                        "UTC", ambiguous="infer"
-                    )
+                    trades_df["date"] = trades_df["date"].dt.tz_localize("UTC", ambiguous="infer")
 
             update_file = False
 
             for col in self.trades_cols:
                 if col not in trades_df.columns:
                     logger.warning(f"Column: {col} not in trades.csv, adding it.")
-                    trades_df.insert(
-                        loc=self.trades_cols.index(col), column=col, value=np.nan
-                    )
+                    trades_df.insert(loc=self.trades_cols.index(col), column=col, value=np.nan)
                     update_file = True
 
             # check for missing orders (that are in order_ids.csv but not in trades.csv)
-            missing_ids = self.order_ids.loc[
-                ~self.order_ids["id"].isin(trades_df["id"])
-            ]
+            missing_ids = self.order_ids.loc[~self.order_ids["id"].isin(trades_df["id"])]
             if len(missing_ids) > 0:
                 logger.warning("Found orders in orders.csv that are not in trades.csv!")
                 logger.warning("Adding them to trades.csv")
@@ -384,16 +331,8 @@ class PortfolioAnalytics:
                     missing_ids["date"].values,
                 ):
 
-                    if (
-                        date.astype(np.int64)
-                        > (
-                            pd.Timestamp.now(tz="Europe/Berlin")
-                            - pd.Timedelta(minutes=10)
-                        ).value
-                    ):
-                        logger.info(
-                            f"Skipping order {id}, as it will be added by the savings plan bot."
-                        )
+                    if date.astype(np.int64) > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value:
+                        logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
                         # skip orders, that are new, as they are still pending to be added regularly
                         continue
                     with retrying(
@@ -411,21 +350,15 @@ class PortfolioAnalytics:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(
                                 trades_df=trades_df,
-                                date=datetime.fromtimestamp(
-                                    order["timestamp"] / 1000.0
-                                ).strftime("%Y-%m-%d %H:%M:%S"),
+                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S"),
                                 id=str(id),
                                 buy_symbol=order["symbol"].split("/")[0],
                                 sell_symbol=order["symbol"].split("/")[1],
                                 price=order["price"],
                                 amount=order["amount"],
                                 cost=order["cost"],
-                                fee=order["fee"]["cost"]
-                                if order["fee"] is not None
-                                else 0.0,
-                                fee_symbol=order["fee"]["currency"]
-                                if order["fee"] is not None
-                                else "",
+                                fee=order["fee"]["cost"] if order["fee"] is not None else 0.0,
+                                fee_symbol=order["fee"]["currency"] if order["fee"] is not None else "",
                                 exchange=self.config.trading_bot_config.exchange,
                             )
                             update_file = True
@@ -437,14 +370,10 @@ class PortfolioAnalytics:
 
             # base_cost_row has the cost denoted in base_currency rather than buy_symbol
             def compute_base_cost(row):
-                accounting_currency = (
-                    self.config.trading_bot_config.base_currency.value.lower()
-                )
+                accounting_currency = self.config.trading_bot_config.base_currency.value.lower()
                 date = row.date.strftime("%d-%m-%Y")
                 if row.sell_symbol not in FIAT_SYMBOLS:
-                    coin_id = self.get_coin_id(
-                        row.sell_symbol
-                    )  # TODO support for fiat as sell_symbol
+                    coin_id = self.get_coin_id(row.sell_symbol)  # TODO support for fiat as sell_symbol
                 else:
                     coin_id = row.sell_symbol
 
@@ -452,9 +381,9 @@ class PortfolioAnalytics:
                     if row.sell_symbol.lower() != accounting_currency:
                         # TODO use convert method (implement historic prices in convert method)
                         return (
-                            self.coingecko.get_coin_history_by_id(
-                                coin_id, date=date, localization=False
-                            )["market_data"]["current_price"][accounting_currency]
+                            self.coingecko.get_coin_history_by_id(coin_id, date=date, localization=False)[
+                                "market_data"
+                            ]["current_price"][accounting_currency]
                             * row.cost_total
                         )
                     else:
@@ -474,20 +403,16 @@ class PortfolioAnalytics:
             # add cost of trades in currently selected currency, it it's not there yet
             if self.base_cost_row in trades_df.columns:
                 if trades_df[self.base_cost_row].isnull().values.any():
-                    trades_df.loc[
-                        trades_df[self.base_cost_row].isnull(), self.base_cost_row
-                    ] = trades_df.loc[trades_df[self.base_cost_row].isnull()].apply(
-                        lambda row: compute_base_cost(row), axis=1
-                    )
+                    trades_df.loc[trades_df[self.base_cost_row].isnull(), self.base_cost_row] = trades_df.loc[
+                        trades_df[self.base_cost_row].isnull()
+                    ].apply(lambda row: compute_base_cost(row), axis=1)
                     update_file = True
             else:
                 logger.info(
                     "Updating your trades file with historic cost in base currency, this will take a while "
                     "but is only performed once!"
                 )
-                trades_df[self.base_cost_row] = trades_df.apply(
-                    lambda row: compute_base_cost(row), axis=1
-                )
+                trades_df[self.base_cost_row] = trades_df.apply(lambda row: compute_base_cost(row), axis=1)
                 update_file = True
 
             # add column for used exchange, if it's not there yet
@@ -529,15 +454,11 @@ class PortfolioAnalytics:
         self.update_order_ids_file()
 
     def update_order_ids(self):
-        self.order_ids = pd.read_csv(
-            self.order_ids_file, index_col=False, parse_dates=["date"]
-        )
+        self.order_ids = pd.read_csv(self.order_ids_file, index_col=False, parse_dates=["date"])
         self.order_ids.date = pd.to_datetime(self.order_ids.date, utc=True)
         if len(self.order_ids) > 0:
             if self.order_ids["date"].iloc[0].tzinfo is None:
-                self.order_ids["date"] = self.order_ids["date"].dt.tz_localize(
-                    "UTC", ambiguous="infer"
-                )
+                self.order_ids["date"] = self.order_ids["date"].dt.tz_localize("UTC", ambiguous="infer")
 
     def update_order_ids_file(self):
         self.order_ids.sort_values("date", inplace=True)
@@ -571,28 +492,17 @@ class PortfolioAnalytics:
             return
         markets.replace(coingecko_symbol_dict, inplace=True)
         self.markets = markets
-        self.top_non_stablecoins = markets.loc[
-            ~markets.symbol.str.upper().isin(STABLE_COINS)
-        ]
+        self.top_non_stablecoins = markets.loc[~markets.symbol.str.upper().isin(STABLE_COINS)]
         self.last_market_update = time()
 
     def update_index_df(self):
         # update index portfolio value
         other = pd.DataFrame(index=self.config.trading_bot_config.cherry_pick_symbols)
-        index_df = (
-            self.trades_df[["buy_symbol", "amount", self.base_cost_row]]
-            .copy()
-            .groupby("buy_symbol")
-            .sum()
-        )
+        index_df = self.trades_df[["buy_symbol", "amount", self.base_cost_row]].copy().groupby("buy_symbol").sum()
         index_df.index = index_df.index.str.lower()
-        index_df = pd.merge(
-            index_df, other, how="outer", left_index=True, right_index=True
-        )
+        index_df = pd.merge(index_df, other, how="outer", left_index=True, right_index=True)
         index_df.fillna(value=0, inplace=True, axis="columns")
-        index_df = self.markets[["symbol", "current_price"]].join(
-            index_df, on="symbol", how="inner"
-        )
+        index_df = self.markets[["symbol", "current_price"]].join(index_df, on="symbol", how="inner")
         index_df["value"] = index_df["current_price"] * index_df["amount"]
         index_df["allocation"] = index_df["value"] / index_df["value"].sum()
         index_df["symbol"] = index_df["symbol"].str.upper()
@@ -647,9 +557,7 @@ class PortfolioAnalytics:
             trades_df = pd.concat([trades_df, trade_dict_df], ignore_index=True)
             return trades_df
         else:
-            self.trades_df = pd.concat(
-                [self.trades_df, trade_dict_df], ignore_index=True
-            )
+            self.trades_df = pd.concat([self.trades_df, trade_dict_df], ignore_index=True)
             self.update_trades_file()
 
     def index_balance(self) -> Tuple:
@@ -689,14 +597,10 @@ class PortfolioAnalytics:
         if self.index_df is None:
             return df
         self.index_df.sort_values(by="allocation", ascending=False, inplace=True)
-        value_format = (
-            f"{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}"
-        )
+        value_format = f"{self.config.trading_bot_config.base_currency.values[1]} {{:,.2f}}"
         df["Coin"] = self.index_df["symbol"]
         df["Currently in Index"] = self.index_df["symbol"].map(
-            lambda sym: "yes"
-            if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols
-            else "no"
+            lambda sym: "yes" if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else "no"
         )
         df[f"Available"] = self.index_df["symbol"].map(
             lambda sym: "yes" if self.coin_available_on_exchange(sym) else "no"
@@ -705,9 +609,7 @@ class PortfolioAnalytics:
         df["Allocation"] = self.index_df["allocation"].map("{:.2%}".format)
         _, target_allocation = self.fetch_index_weights(symbols=df["Coin"])
         df["Target Allocation"] = target_allocation
-        df["Target Allocation"] = df["Target Allocation"].map(
-            lambda row: f"{row:.2%}" if row != 0 else "-"
-        )
+        df["Target Allocation"] = df["Target Allocation"].map(lambda row: f"{row:.2%}" if row != 0 else "-")
         df["Value"] = self.index_df["value"].map(value_format.format)
         df["Performance"] = self.index_df["performance"].fillna(0).map("{:.2%}".format)
         return df
@@ -724,9 +626,7 @@ class PortfolioAnalytics:
             color_discrete_sequence=px.colors.sequential.Viridis,
             hole=0.6,
         )
-        fig.update_traces(
-            textposition="inside", textinfo="label", hoverinfo="label+percent"
-        )
+        fig.update_traces(textposition="inside", textinfo="label", hoverinfo="label+percent")
         fig.update_layout(
             showlegend=False,
             title={"xanchor": "center", "x": 0.5},
@@ -778,9 +678,7 @@ class PortfolioAnalytics:
         with self.history_update_lock:
             # pull historic market data for all coins (pretty heavy on API requests)
             for coin in self.index_df["symbol"].str.lower():
-                id = self.markets.loc[self.markets["symbol"] == coin, ["id"]].values[0][
-                    0
-                ]
+                id = self.markets.loc[self.markets["symbol"] == coin, ["id"]].values[0][0]
                 try:
                     with retrying(
                         self.coingecko.get_coin_market_chart_range_by_id,
@@ -799,12 +697,8 @@ class PortfolioAnalytics:
                     logger.error("Error while updating historic prices from API")
                     logger.error(e)
                     return
-                data_df = pd.DataFrame.from_records(
-                    data["prices"], columns=["timestamp", f"{coin}"]
-                )
-                data_df["timestamp"] = pd.to_datetime(
-                    data_df["timestamp"], unit="ms", utc=True
-                )
+                data_df = pd.DataFrame.from_records(data["prices"], columns=["timestamp", f"{coin}"])
+                data_df["timestamp"] = pd.to_datetime(data_df["timestamp"], unit="ms", utc=True)
                 data_df.set_index("timestamp", inplace=True)
                 if "history_df" not in locals():
                     history_df = data_df
@@ -817,17 +711,13 @@ class PortfolioAnalytics:
                 history_df = (
                     history_df.fillna(method="ffill")
                     .fillna(method="bfill")
-                    .reindex(
-                        history_df.index.round(freq).drop_duplicates(), method="nearest"
-                    )
+                    .reindex(history_df.index.round(freq).drop_duplicates(), method="nearest")
                 )
                 if freq == "H":
                     truncate_from = pd.to_datetime(from_timestamp, unit="s", utc=True)
                     truncate_to = pd.to_datetime(to_timestamp - day, unit="s", utc=True)
                 elif freq == "5T":
-                    truncate_from = pd.to_datetime(
-                        to_timestamp - day, unit="s", utc=True
-                    )
+                    truncate_from = pd.to_datetime(to_timestamp - day, unit="s", utc=True)
                     truncate_to = pd.to_datetime(time(), unit="s", utc=True)
             else:
                 truncate_from = pd.to_datetime(time(), unit="s", utc=True)
@@ -835,9 +725,7 @@ class PortfolioAnalytics:
 
             # add most recent prices for data consistency
             current_prices = [
-                self.markets.loc[
-                    self.markets["symbol"] == symbol, ["current_price"]
-                ].values[0][0]
+                self.markets.loc[self.markets["symbol"] == symbol, ["current_price"]].values[0][0]
                 for symbol in list(history_df.columns)
             ]
             now_row = pd.DataFrame(
@@ -848,13 +736,9 @@ class PortfolioAnalytics:
             history_df = pd.concat([history_df, now_row]).sort_index()
 
             if self.history_df is not None:
-                mask = (self.history_df.index < truncate_from) | (
-                    self.history_df.index > truncate_to
-                )
+                mask = (self.history_df.index < truncate_from) | (self.history_df.index > truncate_to)
                 history_df = pd.concat([history_df, self.history_df.loc[mask]])
-                history_df = history_df[
-                    ~history_df.index.duplicated(keep="first")
-                ].sort_index()
+                history_df = history_df[~history_df.index.duplicated(keep="first")].sort_index()
             self.history_df = history_df
 
     def compute_value_history(self, from_timestamp=None):
@@ -868,13 +752,9 @@ class PortfolioAnalytics:
             start_time = price_history.index.min()
         if start_time < (pd.Timestamp.now(tz="utc") - pd.DateOffset(days=31)):
             freq = "D"
-        elif start_time < (
-            pd.Timestamp.now(tz="utc") - pd.DateOffset(days=14, minutes=2)
-        ):
+        elif start_time < (pd.Timestamp.now(tz="utc") - pd.DateOffset(days=14, minutes=2)):
             freq = "3H"
-        elif start_time < (
-            pd.Timestamp.now(tz="utc") - pd.DateOffset(days=1, minutes=2)
-        ):
+        elif start_time < (pd.Timestamp.now(tz="utc") - pd.DateOffset(days=1, minutes=2)):
             freq = "H"
         else:
             freq = "5T"  # 5 minutes
@@ -882,9 +762,7 @@ class PortfolioAnalytics:
         price_history = price_history.resample(freq, origin="end").ffill()
         # add most recent prices for data consistency
         current_prices = [
-            self.markets.loc[
-                self.markets["symbol"] == symbol, ["current_price"]
-            ].values[0][0]
+            self.markets.loc[self.markets["symbol"] == symbol, ["current_price"]].values[0][0]
             for symbol in list(price_history.columns)
         ]
         current_prices = pd.DataFrame(
@@ -894,13 +772,9 @@ class PortfolioAnalytics:
         )
         price_history = pd.concat([price_history, current_prices]).sort_index()
         if start_time + pd.Timedelta(days=2) < price_history.index.min():
-            zero_row = pd.DataFrame(
-                0, index=[start_time], columns=price_history.columns
-            )
+            zero_row = pd.DataFrame(0, index=[start_time], columns=price_history.columns)
             price_history = pd.concat([price_history, zero_row]).sort_index()
-        price_history.index = pd.to_datetime(price_history.index, utc=True).tz_convert(
-            tz="Europe/Berlin"
-        )
+        price_history.index = pd.to_datetime(price_history.index, utc=True).tz_convert(tz="Europe/Berlin")
 
         invested = (
             self.trades_df[["date", "buy_symbol", self.base_cost_row]]
@@ -912,9 +786,7 @@ class PortfolioAnalytics:
             .groupby(["date", "buy_symbol"], as_index=False, axis=0)
             .sum()
         )
-        invested = invested.pivot(
-            index="date", columns="buy_symbol", values=self.base_cost_row
-        )
+        invested = invested.pivot(index="date", columns="buy_symbol", values=self.base_cost_row)
         invested = invested.cumsum().fillna(method="ffill").fillna(0)
         invested = invested.reindex(price_history.index, method="ffill").fillna(0)
         invested.columns = invested.columns.str.lower()
@@ -932,9 +804,7 @@ class PortfolioAnalytics:
             value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         except ValueError:
             return {}
-        performance_df = pd.DataFrame(
-            index=value.index, columns=["invested", "net_worth"]
-        )
+        performance_df = pd.DataFrame(index=value.index, columns=["invested", "net_worth"])
         performance_df["invested"] = invested.sum(axis=1)
         performance_df["net_worth"] = value.sum(axis=1)
 
@@ -985,17 +855,11 @@ class PortfolioAnalytics:
             value, invested = self.compute_value_history(from_timestamp=from_timestamp)
         except ValueError:
             return {}
-        performance_df = pd.DataFrame(
-            index=value.index, columns=["invested", "net_worth"]
-        )
+        performance_df = pd.DataFrame(index=value.index, columns=["invested", "net_worth"])
         performance_df["invested"] = invested.sum(axis=1)
         performance_df["net_worth"] = value.sum(axis=1)
-        performance_df["invested"] += (
-            performance_df["net_worth"].iloc[0] - performance_df["invested"].iloc[0]
-        )
-        performance_df["performance"] = (
-            performance_df["net_worth"] / performance_df["invested"] - 1
-        ) * 100
+        performance_df["invested"] += performance_df["net_worth"].iloc[0] - performance_df["invested"].iloc[0]
+        performance_df["performance"] = (performance_df["net_worth"] / performance_df["invested"] - 1) * 100
         performance_df.fillna(0, inplace=True)
 
         fig = px.line(
@@ -1043,14 +907,10 @@ class PortfolioAnalytics:
         # TODO could make these properties with @property decorator
         self.top_symbols = top_gainers["symbol"].values
         self.top_performances = top_gainers["performance"].values
-        self.top_growth = (
-            top_gainers["value"].values - top_gainers[self.base_cost_row].values
-        )
+        self.top_growth = top_gainers["value"].values - top_gainers[self.base_cost_row].values
         self.worst_symbols = worst_gainers["symbol"].values
         self.worst_performances = worst_gainers["performance"].values
-        self.worst_growth = (
-            worst_gainers["value"].values - worst_gainers[self.base_cost_row].values
-        )
+        self.worst_growth = worst_gainers["value"].values - worst_gainers[self.base_cost_row].values
 
     @staticmethod
     def get_timestamp(value: str):
@@ -1101,20 +961,11 @@ class PortfolioAnalytics:
                     for sym in symbols
                 ]
             )
-            if (
-                self.config.trading_bot_config.portfolio_weighting
-                == WeightingEnum.sqrt_market_cap
-            ):
+            if self.config.trading_bot_config.portfolio_weighting == WeightingEnum.sqrt_market_cap:
                 weights = np.sqrt(weights)
-            elif (
-                self.config.trading_bot_config.portfolio_weighting
-                == WeightingEnum.sqrt_sqrt_market_cap
-            ):
+            elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.sqrt_sqrt_market_cap:
                 weights = np.sqrt(np.sqrt(weights))
-            elif (
-                self.config.trading_bot_config.portfolio_weighting
-                == WeightingEnum.cbrt_market_cap
-            ):
+            elif self.config.trading_bot_config.portfolio_weighting == WeightingEnum.cbrt_market_cap:
                 weights = np.cbrt(weights)
         weights = weights / weights.sum()
         return symbols, weights

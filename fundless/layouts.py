@@ -179,9 +179,7 @@ def create_not_implemented(name: str):
                 className="lead",
             ),
             html.Hr(className="my-2"),
-            html.P(
-                dbc.Button("Home", color="primary", href="dashboard"), className="lead"
-            ),
+            html.P(dbc.Button("Home", color="primary", href="dashboard"), className="lead"),
         ],
         className="p-3 bg-light rounded-3",
     )
@@ -197,9 +195,7 @@ def create_404(pathname: str):
                 className="lead",
             ),
             html.Hr(className="my-2"),
-            html.P(
-                dbc.Button("Home", color="primary", href="dashboard"), className="lead"
-            ),
+            html.P(dbc.Button("Home", color="primary", href="dashboard"), className="lead"),
         ],
         className="p-3 bg-light rounded-3",
     )
@@ -229,9 +225,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                     [
                         dbc.CardBody(
                             [
-                                html.H1(
-                                    "Portfolio value", className="small text-secondary"
-                                ),
+                                html.H1("Portfolio value", className="small text-secondary"),
                                 html.H5(
                                     f"{analytics.net_worth:,.2f} {symbol}",
                                     className="card-text",
@@ -386,36 +380,20 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
     df = analytics.pretty_index_df
     # Get the actual headers
     n_levels = df.columns.nlevels
-    header_values = [
-        list(df.columns.get_level_values(level)) for level in range(n_levels)
-    ]
+    header_values = [list(df.columns.get_level_values(level)) for level in range(n_levels)]
 
     # The sizes of consecutive header groups at each level
-    header_spans = [
-        [len(list(group)) for _, group in groupby(level_values)]
-        for level_values in header_values
-    ]
+    header_spans = [[len(list(group)) for _, group in groupby(level_values)] for level_values in header_values]
 
     # The positions of header changes for each level as an integer
-    header_breaks = [
-        [sum(level_spans[:i]) for i in range(1, len(level_spans) + 1)]
-        for level_spans in header_spans
-    ]
+    header_breaks = [[sum(level_spans[:i]) for i in range(1, len(level_spans) + 1)] for level_spans in header_spans]
 
     # Include breaks from higher levels
-    header_breaks = [
-        sorted(set(reduce(add, header_breaks[:level])).union({0}))
-        for level in range(1, n_levels + 1)
-    ]
+    header_breaks = [sorted(set(reduce(add, header_breaks[:level])).union({0})) for level in range(1, n_levels + 1)]
 
     # Go from header break positions back to cell spans
     header_spans = [
-        reversed(
-            [
-                level_breaks[i] - level_breaks[i - 1]
-                for i in range(len(level_breaks) - 1, 0, -1)
-            ]
-        )
+        reversed([level_breaks[i] - level_breaks[i - 1] for i in range(len(level_breaks) - 1, 0, -1)])
         for level_breaks in header_breaks
     ]
 
@@ -431,8 +409,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                             style={"text-align": "left"}
                             if header_values[level][pos] == "Coin"
                             else {"text-align": "center"}
-                            if header_values[level][pos]
-                            in ["Currently in Index", "Available"]
+                            if header_values[level][pos] in ["Currently in Index", "Available"]
                             else {"text-align": "right"},
                         )
                         for pos, span in zip(header_breaks[level], header_spans[level])
@@ -454,9 +431,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                             if col not in ("Coin", "Currently in Index", f"Available")
                             else [
                                 html.Div(
-                                    html.Img(
-                                        src=analytics.get_coin_image(df.loc[i, col])
-                                    ),
+                                    html.Img(src=analytics.get_coin_image(df.loc[i, col])),
                                     className="crypto-icon",
                                 ),
                                 html.Div(
@@ -488,9 +463,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
             ]
         ),
     ]
-    return dbc.Table(
-        table, striped=False, bordered=False, hover=True, responsive=True, **kwargs
-    )
+    return dbc.Table(table, striped=False, bordered=False, hover=True, responsive=True, **kwargs)
 
 
 def create_holdings_page(analytics: PortfolioAnalytics):
@@ -500,9 +473,7 @@ def create_holdings_page(analytics: PortfolioAnalytics):
     return html.Div(
         [
             html.Div(table_dbc, id="holdings_table"),
-            dcc.Interval(
-                id="holdings-update-interval", interval=3 * 1000, n_intervals=0
-            ),
+            dcc.Interval(id="holdings-update-interval", interval=3 * 1000, n_intervals=0),
             # DeferScript(src='https://unpkg.com/bootstrap-table@1.18.3/dist/bootstrap-table.min.js')
         ],
         style={"margin-top": "2rem"},
@@ -592,10 +563,7 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     exc_time = analytics.config.trading_bot_config.savings_plan_execution_time
     monthly_vol = 0
     if isinstance(interval, List):
-        postfixes = [
-            "st" if n == 1 else "nd" if n == 2 else "rd" if n == 3 else "th"
-            for n in interval
-        ]
+        postfixes = ["st" if n == 1 else "nd" if n == 2 else "rd" if n == 3 else "th" for n in interval]
         monthly_vol = len(interval) * vol
         if len(interval) > 2:
             dates = [f"{d}{post}" for d, post in zip(interval[:-1], postfixes[:-1])]
@@ -604,7 +572,9 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
             text_interval = f"Savings plan execution on {interval[0]}{postfixes[0]} and {interval[-1]}{postfixes[-1]} of every month at {exc_time}."
     elif interval == IntervalEnum.x_daily:
         monthly_vol = 365 / 12 / analytics.config.trading_bot_config.x_days * vol
-        text_interval = f"Savings plan is executed every {analytics.config.trading_bot_config.x_days} days at {exc_time}."
+        text_interval = (
+            f"Savings plan is executed every {analytics.config.trading_bot_config.x_days} days at {exc_time}."
+        )
     else:
         text_interval = f"Savings plan is executed {interval.value} at {exc_time}."
         if interval == IntervalEnum.daily:
@@ -643,9 +613,7 @@ def create_coin_buttons(analytics: PortfolioAnalytics):
         button = dbc.Button(
             html.Span(
                 [
-                    html.I(className=f"fa-solid fa-{top_n_coin} mx-1")
-                    if top_n_coin is not None
-                    else None,
+                    html.I(className=f"fa-solid fa-{top_n_coin} mx-1") if top_n_coin is not None else None,
                     analytics.get_coin_name(sym),
                     html.I(className="fas fa-check mx-2")
                     if in_index and available
@@ -656,11 +624,7 @@ def create_coin_buttons(analytics: PortfolioAnalytics):
             ),
             id={"type": "btn-coin-select", "index": i},
             value=sym,
-            color="success"
-            if (in_index and available)
-            else "danger"
-            if (in_index and not available)
-            else "primary",
+            color="success" if (in_index and available) else "danger" if (in_index and not available) else "primary",
             active=in_index,
             disabled=((not analytics.coin_available_on_exchange(sym)) and not in_index),
             outline=True,
@@ -680,10 +644,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                 inputClassName="btn-check",
                 labelClassName="btn btn-outline-primary",
                 labelCheckedClassName="active",
-                options=[
-                    {"label": label, "value": value}
-                    for label, value in zip(labels, values)
-                ],
+                options=[{"label": label, "value": value} for label, value in zip(labels, values)],
                 value=value,
             ),
             className="radio-group",
@@ -703,9 +664,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
         top_9 = analytics.top_n(9)
         return html.Div(
             [
-                dbc.Label(
-                    "Index Coins", html_for="index_coins", style={"font-weight": "bold"}
-                ),
+                dbc.Label("Index Coins", html_for="index_coins", style={"font-weight": "bold"}),
                 dbc.Row(
                     dbc.Col(
                         children=create_coin_buttons(analytics),
@@ -726,9 +685,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                     }
                                     for sym in analytics.markets.symbol.values
                                     if not (
-                                        sym in top_9
-                                        or sym
-                                        in analytics.config.trading_bot_config.cherry_pick_symbols
+                                        sym in top_9 or sym in analytics.config.trading_bot_config.cherry_pick_symbols
                                     )
                                     and sym.upper() not in STABLE_COINS
                                     and analytics.coin_available_on_exchange(sym)
@@ -778,14 +735,8 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                         ),
                         create_selection(
                             id="exchange_select",
-                            labels=[
-                                exchange.values[1]
-                                for exchange in analytics.exchanges.authorized_exchanges.keys()
-                            ],
-                            values=[
-                                exchange.value
-                                for exchange in analytics.exchanges.authorized_exchanges.keys()
-                            ],
+                            labels=[exchange.values[1] for exchange in analytics.exchanges.authorized_exchanges.keys()],
+                            values=[exchange.value for exchange in analytics.exchanges.authorized_exchanges.keys()],
                             value=analytics.config.trading_bot_config.exchange.value,
                         ),
                         html.Hr(),
@@ -887,9 +838,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                             style={"font-weight": "bold"},
                         ),
                         html.Br(),
-                        dbc.FormText(
-                            "Used in analytics and config", className="text-muted"
-                        ),
+                        dbc.FormText("Used in analytics and config", className="text-muted"),
                         create_selection(
                             id="accounting_currency_select",
                             labels=["Euro", "US Dollar"],
@@ -911,9 +860,7 @@ def create_strategy_page(analytics: PortfolioAnalytics):
 def create_weighting_sliders(analytics: PortfolioAnalytics):
     if analytics.config.trading_bot_config.portfolio_weighting == WeightingEnum.custom:
         if analytics.config.trading_bot_config.custom_weights is None:
-            analytics.config.trading_bot_config.portfolio_weighting = (
-                WeightingEnum.equal
-            )
+            analytics.config.trading_bot_config.portfolio_weighting = WeightingEnum.equal
     return [
         dbc.Form(
             [
@@ -976,18 +923,14 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                             src=analytics.get_coin_image(sym),
                                             className="crypto-icon-small",
                                         )
-                                        for sym in orders.sort_values(
-                                            "cost", ascending=False
-                                        ).buy_symbol.unique()
+                                        for sym in orders.sort_values("cost", ascending=False).buy_symbol.unique()
                                     ],
                                     className="coin-symbol-group",
                                 ),
                                 html.Hr(),
                                 *[
                                     element
-                                    for coin, coin_orders in orders.groupby(
-                                        "buy_symbol", sort=False
-                                    )
+                                    for coin, coin_orders in orders.groupby("buy_symbol", sort=False)
                                     .sum()
                                     .sort_values("cost", ascending=False)
                                     .head(4)
@@ -1000,9 +943,7 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                 dbc.Collapse(
                                     [
                                         element
-                                        for coin, coin_orders in orders.groupby(
-                                            "buy_symbol", sort=False
-                                        )
+                                        for coin, coin_orders in orders.groupby("buy_symbol", sort=False)
                                         .sum()
                                         .sort_values("cost", ascending=False)
                                         .tail(-4)
@@ -1031,9 +972,7 @@ def create_trades_page(analytics: PortfolioAnalytics):
                     ]
                 ),
             )
-            for i, (date, orders) in enumerate(
-                reversed(tuple(order_days.groupby("date")))
-            )
+            for i, (date, orders) in enumerate(reversed(tuple(order_days.groupby("date"))))
         ],
     )
 
@@ -1057,9 +996,7 @@ def create_trades_page(analytics: PortfolioAnalytics):
             ),
             html.Hr(),
             masonry_cards,
-            DeferScript(
-                src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"
-            ),
+            DeferScript(src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"),
         ],
         className="pt-4",
     )

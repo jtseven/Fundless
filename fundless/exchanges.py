@@ -13,25 +13,17 @@ class Exchanges:
         self.secrets = config.secrets
         self.trading_config = config.trading_bot_config
 
-        for exchange_token in self.secrets.get_exchange_tokens(
-            test_mode=self.trading_config.test_mode
-        ):
+        for exchange_token in self.secrets.get_exchange_tokens(test_mode=self.trading_config.test_mode):
             if not self.init_exchange(exchange_name=exchange_token["exchange"]):
-                logger.warning(
-                    f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}"
-                )
+                logger.warning(f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}")
 
         if self.trading_config.exchange not in self.authorized_exchanges.keys():
-            raise RuntimeWarning(
-                f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}"
-            )
+            raise RuntimeWarning(f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}")
         else:
             self.active = self.authorized_exchanges[self.trading_config.exchange]
 
         logger.info("List of exchanges with validated API tokens:")
-        logger.info(
-            [exchange.values[1] for exchange in self.authorized_exchanges.keys()]
-        )
+        logger.info([exchange.values[1] for exchange in self.authorized_exchanges.keys()])
 
     def init_exchange(
         self,

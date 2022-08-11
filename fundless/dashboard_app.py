@@ -62,9 +62,7 @@ class Dashboard:
         self.server = server
         self.config = config
         self.analytics = analytics
-        self.login_provider = LoginProvider(
-            config.dashboard_config, self.server, config.secrets
-        )
+        self.login_provider = LoginProvider(config.dashboard_config, self.server, config.secrets)
 
         # Preload data heavy figures
         self.allocation_chart = self.analytics.allocation_pie(title=False)
@@ -217,12 +215,8 @@ class Dashboard:
         def update_charts_slow(_, chart_range, active_tab):
             try:
                 timestamp = analytics.get_timestamp(chart_range)
-                self.performance_chart = self.analytics.performance_chart(
-                    from_timestamp=timestamp, title=False
-                )
-                self.history_chart = analytics.value_history_chart(
-                    from_timestamp=timestamp, title=False
-                )
+                self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
+                self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
                 if active_tab == "history_tab":
                     chart = self.history_chart
                 elif active_tab == "performance_tab":
@@ -238,14 +232,9 @@ class Dashboard:
 
         @self.app.callback(Input("accounting_currency_select", "value"))
         def set_base_currency(value):
-            if (
-                self.config.trading_bot_config.base_currency.value.lower()
-                != value.lower()
-            ):
+            if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
                 logger.debug("Updating config!")
-                self.config.trading_bot_config.base_currency = (
-                    value  # this also changes the config in analytics
-                )
+                self.config.trading_bot_config.base_currency = value  # this also changes the config in analytics
                 self.analytics.update_config(base_currency_changed=True)
                 self.performance_chart = {}
                 self.history_chart = {}
@@ -261,9 +250,7 @@ class Dashboard:
             if sym.lower() == self.config.trading_bot_config.base_symbol.lower():
                 return dash.no_update
             self.config.trading_bot_config.base_symbol = sym
-            return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(
-                analytics
-            )
+            return layouts.create_coin_buttons(analytics), layouts.savings_plan_info(analytics)
 
         @self.app.callback(
             Input("exchange_select", "value"),
@@ -274,17 +261,11 @@ class Dashboard:
             if exchange == self.config.trading_bot_config.exchange.value:
                 return dash.no_update
             self.config.trading_bot_config.exchange = exchange
-            self.analytics.exchanges.active = (
-                self.analytics.exchanges.authorized_exchanges[exchange]
-            )
+            self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
             logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
-            return layouts.savings_plan_info(
-                analytics, force_update=True
-            ), layouts.create_coin_buttons(analytics)
+            return layouts.savings_plan_info(analytics, force_update=True), layouts.create_coin_buttons(analytics)
 
-        @self.app.callback(
-            Input("volume", "value"), Output("savings_plan_info", "children")
-        )
+        @self.app.callback(Input("volume", "value"), Output("savings_plan_info", "children"))
         def set_volume(vol):
             if vol is not None:
                 if vol == self.config.trading_bot_config.savings_plan_cost:
@@ -370,8 +351,7 @@ class Dashboard:
                         additional_options = [
                             {"label": analytics.get_coin_name(sym), "value": sym}
                             for sym in analytics.markets.symbol.values
-                            if sym
-                            not in self.config.trading_bot_config.cherry_pick_symbols
+                            if sym not in self.config.trading_bot_config.cherry_pick_symbols
                             and sym not in top_9
                             and sym.upper() not in STABLE_COINS
                             and analytics.coin_available_on_exchange(sym)
@@ -410,9 +390,7 @@ class Dashboard:
             if sym is not None:
                 self.config.trading_bot_config.cherry_pick_symbols.append(sym.lower())
                 self.analytics.update_config(index_changed=True)
-                new_options = [
-                    option for option in options if not option.get("value") == sym
-                ]
+                new_options = [option for option in options if not option.get("value") == sym]
                 return (
                     None,
                     new_options,
@@ -479,9 +457,7 @@ class Dashboard:
                 view = layouts.create_trades_page(self.analytics)
             elif pathname in ("/logout/", "/logout"):
                 forward = "logout"
-                view = html.Div(
-                    ["Logging out...", html.Meta(httpEquiv="refresh", content="1")]
-                )
+                view = html.Div(["Logging out...", html.Meta(httpEquiv="refresh", content="1")])
             else:
                 view = layouts.create_404(pathname)
             return view, forward

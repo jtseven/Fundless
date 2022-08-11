@@ -123,9 +123,7 @@ class DashboardConfig(BaseConfig):
         self = cls(
             dashboard=dictionary["dashboard"],
             domain_name=dictionary.get("domain_name", "localhost"),
-            login_provider=dictionary["login_provider"].get(
-                "selected", LoginProviderEnum.custom
-            ),
+            login_provider=dictionary["login_provider"].get("selected", LoginProviderEnum.custom),
         )
         return self
 
@@ -134,9 +132,7 @@ class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
     test_mode: Optional[bool] = False
     base_currency: BaseCurrencyEnum
-    base_symbol: constr(
-        strip_whitespace=True, to_lower=True, regex="^(busd|usdc|usdt|usd|eur|btc)$"
-    )
+    base_symbol: constr(strip_whitespace=True, to_lower=True, regex="^(busd|usdc|usdt|usd|eur|btc)$")
     savings_plan_cost: confloat(gt=0, le=10000)
     savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
     x_days: Optional[conint(ge=2, le=30)]
@@ -156,17 +152,13 @@ class TradingBotConfig(BaseConfig):
     @validator("base_currency")
     def check_if_currency_supported(cls, v):
         if v in (BaseCurrencyEnum.btc, BaseCurrencyEnum.eth):
-            raise NotImplementedError(
-                "Only USD and EUR base currencies are supported by now"
-            )
+            raise NotImplementedError("Only USD and EUR base currencies are supported by now")
         return v
 
     @validator("portfolio_mode")
     def check_if_portfolio_supported(cls, v):
         if v in (PortfolioModeEnum.index,):
-            raise NotImplementedError(
-                "Only cherry-picked portfolio is supported by now"
-            )
+            raise NotImplementedError("Only cherry-picked portfolio is supported by now")
         return v
 
     @root_validator
@@ -179,9 +171,7 @@ class TradingBotConfig(BaseConfig):
         elif values.get("portfolio_mode") == PortfolioModeEnum.cherry_pick:
             for symbol, weight in custom_weights.items():
                 if symbol not in values.get("cherry_pick_symbols"):
-                    raise ValueError(
-                        f"{symbol} defined in custom weights, but not in cherry picked symbols"
-                    )
+                    raise ValueError(f"{symbol} defined in custom weights, but not in cherry picked symbols")
         return values
 
     @classmethod
@@ -210,22 +200,16 @@ class TradingBotConfig(BaseConfig):
             savings_plan_interval=dictionary["savings_plan"]["interval"]["selected"],
             x_days=dictionary["savings_plan"]["interval"].get("every_n_days", None),
             savings_plan_execution_time=dictionary["savings_plan"]["execution_time"],
-            savings_plan_automatic_execution=dictionary["savings_plan"][
-                "automatic_execution"
-            ],
+            savings_plan_automatic_execution=dictionary["savings_plan"]["automatic_execution"],
             savings_plan_rebalance_on_automatic_execution=dictionary["savings_plan"][
                 "rebalance_on_automatic_execution"
             ],
             portfolio_mode=dictionary["portfolio"]["mode"]["selected"],
             portfolio_weighting=dictionary["portfolio"]["weighting"]["selected"],
-            cherry_pick_symbols=dictionary["portfolio"]
-            .get("cherry_pick", {})
-            .get("symbols", None),
+            cherry_pick_symbols=dictionary["portfolio"].get("cherry_pick", {}).get("symbols", None),
             custom_weights=dictionary["portfolio"]["weighting"].get("custom", None),
             index_top_n=dictionary["portfolio"].get("index", {}).get("top_n", None),
-            index_exclude_symbols=dictionary["portfolio"]
-            .get("index", {})
-            .get("exclude_symbols", None),
+            index_exclude_symbols=dictionary["portfolio"].get("index", {}).get("exclude_symbols", None),
         )
         return self
 
@@ -249,9 +233,7 @@ class TelegramBotConfig(BaseConfig):
 
     @classmethod
     def from_dict(cls, dictionary):
-        return cls(
-            verbose_messages=dictionary.get('verbose_messages', False)
-        )
+        return cls(verbose_messages=dictionary.get("verbose_messages", False))
 
 
 class SecretsStore(BaseConfig):
@@ -304,9 +286,7 @@ class SecretsStore(BaseConfig):
                 exchange=ExchangeEnum.coinbasepro,
                 api_key=dictionary["exchanges"]["mainnet"]["coinbasepro"]["api_key"],
                 secret=dictionary["exchanges"]["mainnet"]["coinbasepro"]["secret"],
-                passphrase=dictionary["exchanges"]["mainnet"]["coinbasepro"][
-                    "passphrase"
-                ],
+                passphrase=dictionary["exchanges"]["mainnet"]["coinbasepro"]["passphrase"],
             ),
             telegram=TelegramToken(
                 token=dictionary["telegram"]["token"],
@@ -334,9 +314,7 @@ class Config(BaseModel):
     def from_yaml_files(cls, config_yaml="config.yaml", secrets_yaml="secrets.yaml"):
         self = cls(
             trading_bot_config=TradingBotConfig.from_config_yaml(file_path=config_yaml),
-            telegram_bot_config=TelegramBotConfig.from_config_yaml(
-                file_path=config_yaml
-            ),
+            telegram_bot_config=TelegramBotConfig.from_config_yaml(file_path=config_yaml),
             dashboard_config=DashboardConfig.from_config_yaml(file_path=config_yaml),
             secrets=SecretsStore.from_secrets_yaml(file_path=secrets_yaml),
         )

@@ -29,9 +29,7 @@ class User(UserMixin):
 
 
 class LoginProvider:
-    def __init__(
-        self, config: DashboardConfig, server: Flask, secrets_store: SecretsStore
-    ):
+    def __init__(self, config: DashboardConfig, server: Flask, secrets_store: SecretsStore):
         self.secret_key = secrets.token_hex(24)
         self.provider = config.login_provider
         self.secrets_store = secrets_store
@@ -69,10 +67,7 @@ class LoginProvider:
 
             # auth0 setup
             def fetch_token(name, request):
-                token = OAuth2Token.find(
-                    name=name,
-                    user=request.user
-                )
+                token = OAuth2Token.find(name=name, user=request.user)
                 return token.to_token()
 
             oauth = OAuth(server)
@@ -86,8 +81,8 @@ class LoginProvider:
                 client_kwargs={
                     "scope": "openid profile email",
                 },
-                server_metadata_url=f'https://{env.get(Auth0EnvNames.AUTH0_DOMAIN)}/.well-known/openid-configuration',
-                fetch_token=fetch_token
+                server_metadata_url=f"https://{env.get(Auth0EnvNames.AUTH0_DOMAIN)}/.well-known/openid-configuration",
+                fetch_token=fetch_token,
             )
 
             @server.errorhandler(Exception)
@@ -128,17 +123,12 @@ class LoginProvider:
 
     def login_page(self):
         if self.provider == LoginProviderEnum.auth0:
-            return self.auth0.authorize_redirect(
-                redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE
-            )
+            return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
         elif self.provider == LoginProviderEnum.custom:
             email = request.form.get("email")
             password = request.form.get("password")
 
-            if (
-                email == self.secrets_store.dashboard_user
-                and password == self.secrets_store.dashboard_password
-            ):
+            if email == self.secrets_store.dashboard_user and password == self.secrets_store.dashboard_password:
                 user = User(email)
                 login_user(user, remember=True)
                 return redirect("/app")
@@ -147,10 +137,7 @@ class LoginProvider:
 
     def is_authenticated(self):
         if self.provider == LoginProviderEnum.custom:
-            if (
-                hasattr(current_user, "is_authenticated")
-                and current_user.is_authenticated
-            ):
+            if hasattr(current_user, "is_authenticated") and current_user.is_authenticated:
                 return True
             else:
                 return False
