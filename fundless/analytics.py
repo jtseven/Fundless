@@ -985,7 +985,7 @@ class PortfolioAnalytics:
             "currency",
         ]
         export = pd.DataFrame(columns=cols)
-        export["datetime"] = self.trades_df["date"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        export["datetime"] = self.trades_df["date"]
         export["price"] = self.trades_df["cost_eur"] / self.trades_df["amount"]
         export["shares"] = self.trades_df["amount"]
         export["tax"] = 0

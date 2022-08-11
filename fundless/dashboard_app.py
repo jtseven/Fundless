@@ -375,6 +375,8 @@ class Dashboard:
                 "fundless_export.csv",
                 sep=";",
                 index=False,
+                float_format="%.12f",
+                date_format="%Y-%m-%dT%H:%M:%SZ",
             )
 
         @self.app.callback(
