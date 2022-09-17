@@ -980,23 +980,30 @@ def create_trades_page(analytics: PortfolioAnalytics):
         [
             dbc.Row(
                 [
-                    html.Div(
+                    dbc.Col(
                         [
-                            dbc.Button(
-                                "Export to CSV",
-                                id="btn_csv",
-                                color="primary",
-                                className="me-2",
+                            dbc.DropdownMenu(
+                                label="Export to CSV",
+                                children=[
+                                    dbc.DropdownMenuItem("Everything", id="btn_csv_all", n_clicks=0),
+                                    dbc.DropdownMenuItem("Last 3 Months", id="btn_csv_3", n_clicks=0),
+                                    dbc.DropdownMenuItem("Last Month", id="btn_csv_month", n_clicks=0),
+                                ],
+                                className="d-block w-100",
                             ),
                             dcc.Download(id="download-dataframe-csv"),
                         ],
-                        className="d-grid gap-2 col-4 mx-auto",
+                        class_name="d-flex",
+                        md=4,
+                        sm=12,
                     )
-                ]
+                ],
+                class_name="d-flex",
+                justify="start",
             ),
             html.Hr(),
             masonry_cards,
             DeferScript(src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"),
         ],
-        className="pt-4",
+        className="pt-2",
     )

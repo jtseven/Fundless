@@ -970,9 +970,8 @@ class PortfolioAnalytics:
         weights = weights / weights.sum()
         return symbols, weights
 
-    def trades_csv_export(
-        self,
-    ):  # Export all trades in a Parqet (Portfolio Tool) compatible format
+    # Export all trades in a Parqet (Portfolio Tool) compatible format
+    def trades_csv_export(self, since: Optional[datetime] = None):
         cols = [
             "datetime",
             "price",
@@ -1002,6 +1001,8 @@ class PortfolioAnalytics:
         export["assettype"] = "Crypto"
         export["identifier"] = self.trades_df["buy_symbol"]
         export["currency"] = "EUR"
+        if since is not None:
+            export = export.loc[export["datetime"] >= since]
         return export
 
     """

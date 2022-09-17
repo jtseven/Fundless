@@ -19,6 +19,8 @@ from gevent.pywsgi import WSGIServer
 from flask import render_template, redirect
 import logging
 import traceback
+from datetime import datetime, timedelta
+import pytz
 
 # local imports
 from config import Config
@@ -366,12 +368,50 @@ class Dashboard:
 
         @self.app.callback(
             Output("download-dataframe-csv", "data"),
-            Input("btn_csv", "n_clicks"),
+            Input("btn_csv_all", "n_clicks"),
             prevent_initial_call=True,
         )
-        def func(_):
+        def export_csv_all(n_clicks):
+            if n_clicks < 1:
+                return
             return dcc.send_data_frame(
                 self.analytics.trades_csv_export().to_csv,
+                "fundless_export.csv",
+                sep=";",
+                index=False,
+                float_format="%.12f",
+                date_format="%Y-%m-%dT%H:%M:%SZ",
+            )
+
+        @self.app.callback(
+            Output("download-dataframe-csv", "data"),
+            Input("btn_csv_3", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def export_csv_3(n_clicks):
+            if n_clicks < 1:
+                return
+            since = datetime.now(tz=pytz.timezone("Europe/Berlin")) - timedelta(days=91)
+            return dcc.send_data_frame(
+                self.analytics.trades_csv_export(since=since).to_csv,
+                "fundless_export.csv",
+                sep=";",
+                index=False,
+                float_format="%.12f",
+                date_format="%Y-%m-%dT%H:%M:%SZ",
+            )
+
+        @self.app.callback(
+            Output("download-dataframe-csv", "data"),
+            Input("btn_csv_month", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def export_csv_month(n_clicks):
+            if n_clicks < 1:
+                return
+            since = datetime.now(tz=pytz.timezone("Europe/Berlin")) - timedelta(days=30)
+            return dcc.send_data_frame(
+                self.analytics.trades_csv_export(since=since).to_csv,
                 "fundless_export.csv",
                 sep=";",
                 index=False,
