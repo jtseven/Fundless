@@ -820,6 +820,7 @@ class PortfolioAnalytics:
             x=performance_df.index,
             y=y,
             line_shape="spline",
+            render_mode="svg",
             color_discrete_sequence=color,
         )
 
@@ -867,6 +868,7 @@ class PortfolioAnalytics:
             x=performance_df.index,
             y="performance",
             line_shape="spline",
+            render_mode="svg",
             color_discrete_sequence=["green"],
         )
         fig.update_layout(
