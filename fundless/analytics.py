@@ -498,7 +498,12 @@ class PortfolioAnalytics:
     def update_index_df(self):
         # update index portfolio value
         other = pd.DataFrame(index=self.config.trading_bot_config.cherry_pick_symbols)
-        index_df = self.trades_df[["buy_symbol", "amount", self.base_cost_row]].copy().groupby("buy_symbol").sum()
+        index_df = (
+            self.trades_df[["buy_symbol", "amount", self.base_cost_row]]
+            .copy()
+            .groupby("buy_symbol")
+            .sum(numeric_only=True)
+        )
         index_df.index = index_df.index.str.lower()
         index_df = pd.merge(index_df, other, how="outer", left_index=True, right_index=True)
         index_df.fillna(value=0, inplace=True, axis="columns")
@@ -779,12 +784,12 @@ class PortfolioAnalytics:
         invested = (
             self.trades_df[["date", "buy_symbol", self.base_cost_row]]
             .groupby(["date", "buy_symbol"], as_index=False, axis=0)
-            .sum()
+            .sum(numeric_only=True)
         )
         value = (
             self.trades_df[["date", "buy_symbol", "amount"]]
             .groupby(["date", "buy_symbol"], as_index=False, axis=0)
-            .sum()
+            .sum(numeric_only=True)
         )
         invested = invested.pivot(index="date", columns="buy_symbol", values=self.base_cost_row)
         invested = invested.cumsum().fillna(method="ffill").fillna(0)

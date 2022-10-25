@@ -931,7 +931,7 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                 *[
                                     element
                                     for coin, coin_orders in orders.groupby("buy_symbol", sort=False)
-                                    .sum()
+                                    .sum(numeric_only=True)
                                     .sort_values("cost", ascending=False)
                                     .head(4)
                                     .iterrows()
@@ -944,7 +944,7 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                     [
                                         element
                                         for coin, coin_orders in orders.groupby("buy_symbol", sort=False)
-                                        .sum()
+                                        .sum(numeric_only=True)
                                         .sort_values("cost", ascending=False)
                                         .tail(-4)
                                         .iterrows()
