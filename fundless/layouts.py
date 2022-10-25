@@ -33,7 +33,7 @@ def create_dashboard(analytics: PortfolioAnalytics, allocation_pie):
                                     "displayModeBar": False,
                                     "staticPlot": True,
                                 },
-                                children=allocation_pie,
+                                figure=allocation_pie,
                             ),
                         ],
                         xl=5,
