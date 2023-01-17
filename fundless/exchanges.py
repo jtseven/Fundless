@@ -63,9 +63,11 @@ class Exchanges:
             return False
         if not exchange.check_required_credentials():
             return False
+        try:
+            exchange.load_markets()
+        except ccxt.AuthenticationError:
+            return False
         self.authorized_exchanges[exchange_name] = exchange
-        exchange.load_markets()
-
         return True
 
         # not_available = [symbol.upper() for symbol in self.trading_config.cherry_pick_symbols if
