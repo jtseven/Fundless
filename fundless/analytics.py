@@ -243,7 +243,9 @@ class PortfolioAnalytics:
                         if abbr:
                             coin_name = coin_name[:14] + ".." if len(coin_name) > 14 else coin_name
                         return coin_name
-            logger.error(f"Could not find market data for {symbol.upper()}")
+            logger.error(
+                f"Could not find market data for {symbol.upper()}. This could be because the coin is not within the top 250 coins on coingecko!"
+            )
             coin_name = symbol.upper()
         if abbr:
             coin_name = coin_name[:14] + ".." if len(coin_name) > 14 else coin_name
@@ -488,6 +490,12 @@ class PortfolioAnalytics:
                         per_page=250,
                     )
                 )
+                more_markets = pd.DataFrame.from_records(
+                    get_markets(
+                        vs_currency=self.config.trading_bot_config.base_currency.value, per_page=250, page=2
+                    )
+                )
+                markets = pd.concat([markets, more_markets], ignore_index=True)
                 markets["symbol"] = markets["symbol"].str.lower()
         except requests.exceptions.HTTPError as e:
             logger.error("Network error while updating market data from CoinGecko:")
