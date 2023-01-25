@@ -1,8 +1,8 @@
+import asyncio
 import pandas as pd
 from pathlib import Path
 import pytz
 import requests.exceptions
-import schedule
 from pycoingecko import CoinGeckoAPI
 from pydantic import validate_arguments
 from pydantic.types import constr, Optional
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 date_time_regex = "(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})"
 
+# TODO: Idea: translate exchange symbol names to coingecko symbol names to have one single source of truth (coingecko)
 # translate coingecko symbols to ccxt/binance symbols
 coingecko_symbol_dict = {"miota": "iota"}
 
@@ -76,39 +77,30 @@ class PortfolioAnalytics:
         if not self.order_ids_file.exists():
             self.order_ids = pd.DataFrame(columns=["id", "symbol", "date"])
             self.order_ids.to_csv(self.order_ids_file, index=False)
-        self.update_data()
+        asyncio.run(self.update_data())  # Make sure all data is fetched initially
         self.run_api_updates()
         self.currency_converter = CurrencyConverter()
 
     def run_api_updates(self):
-        if self.running_updates:
-            return
+        def run_updates():
+            while True:
+                asyncio.run(self.update_data())
+                sleep(5)
+
+        updates = Thread(target=run_updates, daemon=True)
+        updates.start()
+
+    async def update_data(self):
         try:
-            schedule.every(5).seconds.do(self.update_data)
-
-            def run_updates():
-                while True:
-                    schedule.run_pending()
-                    sleep(1)
-
-            updates = Thread(target=run_updates, daemon=True)
-            updates.start()
-            self.running_updates = True
-        except Exception as e:
-            logger.error("Exception while runnign API updates!")
-            logger.error(e)
-            self.running_updates = False
-            raise e
-
-    def update_data(self):
-        try:
-            self.update_markets()
-            self.update_order_ids()
-            self.update_trades_df()
-            self.update_index_df()
-            self.update_portfolio_metrics()
-            self.update_historical_prices()
-            self.update_exchange_balance()
+            await asyncio.gather(
+                self.update_markets(),
+                self.update_order_ids(),
+                self.update_trades_df(),
+                self.update_index_df(),
+                self.update_portfolio_metrics(),
+                self.update_historical_prices(),
+                self.update_exchange_balance(),
+            )
         except (
             requests.exceptions.RequestException,
             ConnectionError,
@@ -159,32 +151,38 @@ class PortfolioAnalytics:
             self.last_history_update_day = 0
             self.last_history_update_month = 0
         if index_changed:
-            self.update_index_df()
+            asyncio.run(self.update_index_df())
 
     def coin_available_on_exchange(self, coin: str):
         if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
             return True
-        return f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
+        return (
+            f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
+        )
 
     def available_index_coins(self):
         return [
-            coin for coin in self.config.trading_bot_config.cherry_pick_symbols if self.coin_available_on_exchange(coin)
+            coin
+            for coin in self.config.trading_bot_config.cherry_pick_symbols
+            if self.coin_available_on_exchange(coin)
         ]
 
     def available_quote_currency(self, convert_to_accounting_currency=True, force_update=False) -> float:
         if self.exchange_balance is None or force_update:
-            self.update_exchange_balance()
+            asyncio.run(self.update_exchange_balance())
         if convert_to_accounting_currency:
             return self.exchange_balance["converted"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
         else:
             return self.exchange_balance["amount"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
 
-    def update_exchange_balance(self):
+    async def update_exchange_balance(self):
         balance = {
             "amount": {},
             "converted": {},
         }  # amount: amount of coin, converted: amount in accounting currency
-        balances = self.exchanges.active.fetch_total_balance()
+        balances = self.exchanges.active.fetch_total_balance(
+            {"limit": 250} if self.config.trading_bot_config.exchange == ExchangeEnum.coinbase else None
+        )
         symbols = np.fromiter([key for key in balances.keys() if balances[key] > 0.0], dtype="U10")
         amounts = np.fromiter([balances.get(symbol, 0.0) for symbol in symbols], dtype=float)
         balance["amount"] = {symbol.upper(): amount for symbol, amount in zip(symbols, amounts)}
@@ -303,7 +301,7 @@ class PortfolioAnalytics:
         base_symbol = self.config.trading_bot_config.base_symbol.upper()
         return self.convert(base_currency_amount, base_currency, base_symbol)
 
-    def update_trades_df(self):
+    async def update_trades_df(self):
         if self.last_trades_update < time() - 60:
             trades_df = pd.read_csv(self.trades_file, dtype=self.csv_dtypes, parse_dates=["date"])
             trades_df.date = pd.to_datetime(trades_df.date, utc=True)
@@ -331,7 +329,10 @@ class PortfolioAnalytics:
                     missing_ids["date"].values,
                 ):
 
-                    if date.astype(np.int64) > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value:
+                    if (
+                        date.astype(np.int64)
+                        > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value
+                    ):
                         logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
                         # skip orders, that are new, as they are still pending to be added regularly
                         continue
@@ -350,7 +351,9 @@ class PortfolioAnalytics:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(
                                 trades_df=trades_df,
-                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S"),
+                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
                                 id=str(id),
                                 buy_symbol=order["symbol"].split("/")[0],
                                 sell_symbol=order["symbol"].split("/")[1],
@@ -453,7 +456,7 @@ class PortfolioAnalytics:
         self.order_ids = pd.concat([self.order_ids, id_df], ignore_index=True)
         self.update_order_ids_file()
 
-    def update_order_ids(self):
+    async def update_order_ids(self):
         self.order_ids = pd.read_csv(self.order_ids_file, index_col=False, parse_dates=["date"])
         self.order_ids.date = pd.to_datetime(self.order_ids.date, utc=True)
         if len(self.order_ids) > 0:
@@ -464,7 +467,7 @@ class PortfolioAnalytics:
         self.order_ids.sort_values("date", inplace=True)
         self.order_ids.to_csv(self.order_ids_file, index=False)
 
-    def update_markets(self, force=False):
+    async def update_markets(self, force=False):
         if not force:
             # do not update, if last update 2 seconds ago
             if self.last_market_update >= time() - 2:
@@ -495,7 +498,7 @@ class PortfolioAnalytics:
         self.top_non_stablecoins = markets.loc[~markets.symbol.str.upper().isin(STABLE_COINS)]
         self.last_market_update = time()
 
-    def update_index_df(self):
+    async def update_index_df(self):
         # update index portfolio value
         other = pd.DataFrame(index=self.config.trading_bot_config.cherry_pick_symbols)
         index_df = (
@@ -565,8 +568,8 @@ class PortfolioAnalytics:
             self.trades_df = pd.concat([self.trades_df, trade_dict_df], ignore_index=True)
             self.update_trades_file()
 
-    def index_balance(self) -> Tuple:
-        self.update_markets()
+    async def index_balance(self) -> Tuple:
+        await self.update_markets()
         if self.index_df is None:
             return None, None, None, None
         index = self.index_df.sort_values(by="allocation", ascending=False)
@@ -656,7 +659,7 @@ class PortfolioAnalytics:
         else:
             return fig
 
-    def update_historical_prices(self):
+    async def update_historical_prices(self):
         if self.last_market_update == 0:
             return
         to_timestamp = time()
@@ -908,7 +911,7 @@ class PortfolioAnalytics:
         else:
             return fig
 
-    def update_portfolio_metrics(self):
+    async def update_portfolio_metrics(self):
         top_gainers = self.index_df.nlargest(3, "performance")
         worst_gainers = self.index_df.nsmallest(3, "performance")
         # TODO could make these properties with @property decorator

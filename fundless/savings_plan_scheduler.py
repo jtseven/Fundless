@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 from config import Config, IntervalEnum
 from messages import TelegramBot
@@ -30,9 +31,10 @@ class SavingsPlanScheduler:
                     return
             logger.info(f"Executing savings plan now ({date.today().strftime('%d.%m.%y')})...")
             if self.config.trading_bot_config.savings_plan_automatic_execution:
-                self.message_bot.send("Executing savings plan!")
-                if self.message_bot.order_planning(automatic=True):
-                    self.message_bot.execute_order()
+                with asyncio.Runner() as runner:
+                    runner.run(self.message_bot.send("Executing savings plan!"))
+                    if runner.run(self.message_bot.order_planning(automatic=True)):
+                        runner.run(self.message_bot.execute_order())
             else:
                 self.message_bot.ask_savings_plan_execution()
         finally:

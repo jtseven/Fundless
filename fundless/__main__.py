@@ -1,3 +1,5 @@
+import asyncio
+
 import coloredlogs
 import logging
 import threading
@@ -38,24 +40,33 @@ if __name__ == "__main__":
     config = Config.from_yaml_files(config_yaml=config_yaml, secrets_yaml=secrets_yaml)
 
     # initialize exchanges with api credentials from secrets file
+    logger.info("Initializing exchanges...")
     exchanges = Exchanges(config)
 
     # the analytics module for portfolio performance analysis
+    logger.info("Initializing analytics module...")
     if config.trading_bot_config.test_mode:
         analytics = PortfolioAnalytics(trades_csv_test, order_ids_csv_test, config, exchanges)
     else:
         analytics = PortfolioAnalytics(trades_csv, order_ids_csv, config, exchanges)
 
     # the bot interacting with exchanges
+    logger.info("Initializing trading bot...")
     trading_bot = TradingBot(config, analytics, exchanges)
 
     # telegram bot interacting with the user
     if telegram_bot:
+        logger.info("Initializing telegram bot...")
         message_bot = TelegramBot(config, trading_bot)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        task = loop.create_task(message_bot.run_polling())
+        threading.Thread(target=loop.run_forever, daemon=True).start()
     else:
         message_bot = None
 
     if message_bot is not None:
+        logger.info("Initializing savings plan scheduler...")
         scheduler = SavingsPlanScheduler(config, message_bot)
         savings_plan = threading.Thread(target=scheduler.run, daemon=True)
         savings_plan.start()
@@ -65,6 +76,7 @@ if __name__ == "__main__":
 
     # dashboard as web application
     if config.dashboard_config.dashboard:
+        logger.info("Initializing dashboard...")
         dashboard = Dashboard(config, analytics)
         webapp = threading.Thread(target=dashboard.run_dashboard, daemon=True)
         webapp.start()

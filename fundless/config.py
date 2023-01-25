@@ -25,6 +25,13 @@ class ExchangeEnum(str, MultiValueEnum):
     binance = "binance", "Binance"
     kraken = "kraken", "Kraken"
     coinbasepro = "coinbasepro", "Coinbase Pro", "coinbase_pro"
+    coinbase = (
+        "coinbase",
+        "Coinbase",
+        "coinbaseadvanced",
+        "Coinbase Advanced",
+        "coinbase_advanced",
+    )
 
 
 class LoginProviderEnum(str, MultiValueEnum):
@@ -242,6 +249,7 @@ class SecretsStore(BaseConfig):
     binance: ExchangeToken
     kraken: ExchangeToken
     coinbasepro: ExchangeToken
+    coinbase: ExchangeToken
     telegram: TelegramToken
     dashboard_user: str
     dashboard_password: str
@@ -288,6 +296,11 @@ class SecretsStore(BaseConfig):
                 secret=dictionary["exchanges"]["mainnet"]["coinbasepro"]["secret"],
                 passphrase=dictionary["exchanges"]["mainnet"]["coinbasepro"]["passphrase"],
             ),
+            coinbase=ExchangeToken(
+                exchange=ExchangeEnum.coinbase,
+                api_key=dictionary["exchanges"]["mainnet"]["coinbase"]["api_key"],
+                secret=dictionary["exchanges"]["mainnet"]["coinbase"]["secret"],
+            ),
             telegram=TelegramToken(
                 token=dictionary["telegram"]["token"],
                 chat_id=dictionary["telegram"]["chat_id"],
@@ -301,7 +314,7 @@ class SecretsStore(BaseConfig):
         if test_mode:
             return [self.binance_test, self.kraken_test]
         else:
-            return [self.binance, self.kraken, self.coinbasepro]
+            return [self.binance, self.kraken, self.coinbasepro, self.coinbase]
 
 
 class Config(BaseModel):

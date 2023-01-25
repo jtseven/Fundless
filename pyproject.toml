@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "fundless"
+version = "0.1.0"
+description = "A project to build your own crypto index fund and auto-invest into it"
+authors = ["Joschka Theissen <joschka.theissen@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+ccxt = "2.6.76"
+pandas = "1.5.2"
+numpy = "1.24.1"
+pycoingecko = "3.1.0"
+pathlib = "1.0.1"
+pyyaml = "6.0"
+schedule = "1.1.0"
+python-telegram-bot = {extras = ["job-queue"], version = "^20.0"}
+pydantic = "1.10.2"
+aenum = "3.1.11"
+redo = "2.0.4"
+plotly = "5.12.0"
+dash = "2.6.2"
+kaleido = "0.2.1"
+flask-login = "0.6.2"
+flask = "2.1.1"
+dash-bootstrap-components = "1.0.3"
+requests = "2.28.1"
+python-dotenv = "0.21.0"
+authlib = "1.1.0"
+six = "1.16.0"
+werkzeug = "2.2.2"
+gevent = "22.10.1"
+dash-extensions = "0.0.71"
+currencyconverter = "0.17.5"
+coloredlogs = "15.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

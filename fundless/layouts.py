@@ -3,7 +3,7 @@ from dash import html
 import dash_bootstrap_components as dbc
 from dash_extensions import DeferScript
 from functools import reduce
-from itertools import groupby, chain
+from itertools import groupby
 from operator import add
 from typing import List
 import numpy as np
@@ -386,10 +386,14 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
     header_spans = [[len(list(group)) for _, group in groupby(level_values)] for level_values in header_values]
 
     # The positions of header changes for each level as an integer
-    header_breaks = [[sum(level_spans[:i]) for i in range(1, len(level_spans) + 1)] for level_spans in header_spans]
+    header_breaks = [
+        [sum(level_spans[:i]) for i in range(1, len(level_spans) + 1)] for level_spans in header_spans
+    ]
 
     # Include breaks from higher levels
-    header_breaks = [sorted(set(reduce(add, header_breaks[:level])).union({0})) for level in range(1, n_levels + 1)]
+    header_breaks = [
+        sorted(set(reduce(add, header_breaks[:level])).union({0})) for level in range(1, n_levels + 1)
+    ]
 
     # Go from header break positions back to cell spans
     header_spans = [
@@ -533,7 +537,9 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     accounting_currency = analytics.config.trading_bot_config.base_currency.value
     exchange = analytics.exchanges.active.name
     if len(available_coins) == len(index_coins):
-        info_available = f"All {len(index_coins)} selected coins available to buy with {quote_currency} on {exchange}."
+        info_available = (
+            f"All {len(index_coins)} selected coins available to buy with {quote_currency} on {exchange}."
+        )
         color_available = "success"
     elif len(available_coins) / len(index_coins) > 0.5:
         info_available = (
@@ -554,7 +560,9 @@ def savings_plan_info(analytics: PortfolioAnalytics, force_update=False):
     else:
         color_balance = "warning"
     if quote_currency == accounting_currency:
-        text_balance = f"{accounting_currency} {available_balance:.2f} available on {analytics.exchanges.active.name}"
+        text_balance = (
+            f"{accounting_currency} {available_balance:.2f} available on {analytics.exchanges.active.name}"
+        )
     else:
         text_balance = f"{accounting_currency} {available_balance:.2f} available in {quote_currency} on {analytics.exchanges.active.name}"
 
@@ -624,7 +632,11 @@ def create_coin_buttons(analytics: PortfolioAnalytics):
             ),
             id={"type": "btn-coin-select", "index": i},
             value=sym,
-            color="success" if (in_index and available) else "danger" if (in_index and not available) else "primary",
+            color="success"
+            if (in_index and available)
+            else "danger"
+            if (in_index and not available)
+            else "primary",
             active=in_index,
             disabled=((not analytics.coin_available_on_exchange(sym)) and not in_index),
             outline=True,
@@ -685,7 +697,8 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                                     }
                                     for sym in analytics.markets.symbol.values
                                     if not (
-                                        sym in top_9 or sym in analytics.config.trading_bot_config.cherry_pick_symbols
+                                        sym in top_9
+                                        or sym in analytics.config.trading_bot_config.cherry_pick_symbols
                                     )
                                     and sym.upper() not in STABLE_COINS
                                     and analytics.coin_available_on_exchange(sym)
@@ -735,8 +748,12 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                         ),
                         create_selection(
                             id="exchange_select",
-                            labels=[exchange.values[1] for exchange in analytics.exchanges.authorized_exchanges.keys()],
-                            values=[exchange.value for exchange in analytics.exchanges.authorized_exchanges.keys()],
+                            labels=[
+                                exchange.values[1] for exchange in analytics.exchanges.authorized_exchanges.keys()
+                            ],
+                            values=[
+                                exchange.value for exchange in analytics.exchanges.authorized_exchanges.keys()
+                            ],
                             value=analytics.config.trading_bot_config.exchange.value,
                         ),
                         html.Hr(),

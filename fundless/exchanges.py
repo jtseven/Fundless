@@ -18,7 +18,9 @@ class Exchanges:
                 logger.warning(f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}")
 
         if self.trading_config.exchange not in self.authorized_exchanges.keys():
-            raise RuntimeWarning(f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}")
+            raise RuntimeWarning(
+                f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}"
+            )
         else:
             self.active = self.authorized_exchanges[self.trading_config.exchange]
 
@@ -53,6 +55,13 @@ class Exchanges:
                 exchange.apiKey = self.secrets.coinbasepro["api_key"]
                 exchange.secret = self.secrets.coinbasepro["secret"]
                 exchange.password = self.secrets.coinbasepro["passphrase"]
+        elif exchange_name == ExchangeEnum.coinbase:
+            exchange = ccxt.coinbase()
+            if self.trading_config.test_mode:
+                return False
+            else:
+                exchange.apiKey = self.secrets.coinbase["api_key"]
+                exchange.secret = self.secrets.coinbase["secret"]
         else:
             raise ValueError("Invalid Exchange given!")
 

@@ -3,13 +3,12 @@ import numpy as np
 from typing import List, Tuple, Union
 from datetime import datetime
 from redo import retrying
-import logging
 
-from config import Config, SecretsStore, ExchangeEnum, WeightingEnum, OrderTypeEnum
+from config import Config, SecretsStore, ExchangeEnum, OrderTypeEnum
 from analytics import PortfolioAnalytics
 from utils import print_crypto_amount
 import logging
-from constants import USD_SYMBOLS, FIAT_SYMBOLS
+from constants import FIAT_SYMBOLS
 from exchanges import Exchanges
 
 
@@ -49,7 +48,9 @@ class TradingBot:
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module
         try:
-            data = self.exchanges.active.fetch_total_balance()
+            data = self.exchanges.active.fetch_total_balance(
+                {"limit": 250} if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase else None
+            )
 
             # if self.exchanges.active.has['fetchTickers']:
             #     markets = self.exchanges.active.fetch_tickers()
@@ -96,10 +97,10 @@ class TradingBot:
 
         return symbols, amounts, values, allocations
 
-    def allocation_error(self, base_currency_volume: float = None) -> dict:
+    async def allocation_error(self, base_currency_volume: float = None) -> dict:
         allocation_error = {}
 
-        symbols, amounts, values, allocations = self.analytics.index_balance()
+        symbols, amounts, values, allocations = await self.analytics.index_balance()
         allocations = allocations
         symbols, index_weights = self.analytics.fetch_index_weights(symbols)
         allocation_error["symbols"] = symbols
@@ -118,9 +119,9 @@ class TradingBot:
 
         return allocation_error
 
-    def rebalancing_weights(self, base_currency_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
+    async def rebalancing_weights(self, base_currency_volume: float = None) -> Tuple[np.ndarray, np.ndarray]:
         volume = base_currency_volume or self.bot_config.trading_bot_config.savings_plan_cost
-        allocation_error = self.allocation_error()
+        allocation_error = await self.allocation_error()
         index_weights = allocation_error["index_weights"]
         absolute_error = allocation_error["absolute"]
         volumes = volume * index_weights - absolute_error
@@ -196,7 +197,9 @@ class TradingBot:
                 problems["description"] = f"{symbol.upper()}: {reason}"
                 problems["symbols"][symbol] = reason
                 problems["skip_coins"].append(symbol)
-        balance = self.exchanges.active.fetch_balance()
+        balance = self.exchanges.active.fetch_balance(
+            {"limit": 250} if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase else None
+        )
         if balance["free"][self.bot_config.trading_bot_config.base_symbol.upper()] is not None:
             balance = balance["free"][self.bot_config.trading_bot_config.base_symbol.upper()]
         else:
@@ -231,7 +234,9 @@ class TradingBot:
                     problems["adjusted_volume"] = corrected_volume
                 else:
                     balance_string = f"{print_crypto_amount(balance-base_symbol_index_balance)} {self.bot_config.trading_bot_config.base_symbol.upper()}"
-                    balance_base_curr = self.analytics.base_symbol_to_base_currency(balance - base_symbol_index_balance)
+                    balance_base_curr = self.analytics.base_symbol_to_base_currency(
+                        balance - base_symbol_index_balance
+                    )
                     volume_base_curr = self.analytics.base_symbol_to_base_currency(base_symbol_volume)
                     volume_string = f"{print_crypto_amount(base_symbol_volume)} {self.bot_config.trading_bot_config.base_symbol.upper()}"
                     problems["description"] = (
@@ -291,7 +296,9 @@ class TradingBot:
             min_cost = self.exchanges.active.markets[ticker]["limits"]["cost"]["min"]
 
             if min_amount is not None and amount < min_amount:
-                logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
+                logger.warning(
+                    f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!"
+                )
                 volume_fail.append(symbol)
                 reason.append("Order amount too low")
                 if fail_fast:
@@ -337,10 +344,11 @@ class TradingBot:
         placed_symbols = []
 
         # Start buying
-        # before = self.exchanges.active.fetch_total_balance()
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
-                logger.info(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
+                logger.info(
+                    f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with"
+                )
                 placed_symbols.append(symbol.upper())
                 placed_ids.append(
                     float(-weight * volume)
@@ -350,11 +358,17 @@ class TradingBot:
             price = self.exchanges.active.fetch_ticker(ticker).get("last")
             limit_price = 0.998 * price
             amount = weight * volume / price
+            cost = weight * volume
             try:
                 if order_type == OrderTypeEnum.limit:
                     order = self.exchanges.active.create_limit_buy_order(ticker, amount, price=limit_price)
                 elif order_type == OrderTypeEnum.market:
-                    order = self.exchanges.active.create_market_buy_order(ticker, amount)
+                    if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase:
+                        # Coinbase requires to give the cost to the amount parameter
+                        self.exchanges.active.options["createMarketBuyOrderRequiresPrice"] = False
+                        order = self.exchanges.active.create_market_buy_order(ticker, cost)
+                    else:
+                        order = self.exchanges.active.create_market_buy_order(ticker, amount)
                 else:
                     raise ValueError(f"Invalid order type: {order_type}")
             except ccxt.InvalidOrder as e:
@@ -377,7 +391,9 @@ class TradingBot:
                 try:
                     logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 except TypeError:
-                    logger.warning("Order amount or price was not included in order report returned from exchange!")
+                    logger.warning(
+                        "Order amount or price was not included in order report returned from exchange!"
+                    )
                 placed_symbols.append(ticker)
                 placed_ids.append(str(order["id"]))
 
@@ -385,10 +401,9 @@ class TradingBot:
         report["symbols"] = placed_symbols
         report["invalid_symbols"] = invalid
         # # Report state of portfolio before and after buy orders
-        # after = self.exchanges.active.fetch_total_balance()
         return report
 
-    def savings_plan_order_planner(self, rebalance: bool = None) -> dict:
+    async def savings_plan_order_planner(self, rebalance: bool = None) -> dict:
         if rebalance is None:
             rebalance = self.bot_config.trading_bot_config.savings_plan_rebalance_on_automatic_execution
         order_dict = {"symbols": [], "weights": [], "messages": [], "executable": True}
@@ -404,7 +419,7 @@ class TradingBot:
             )
 
         if rebalance:
-            symbols, weights = self.rebalancing_weights()
+            symbols, weights = await self.rebalancing_weights()
         else:
             symbols, weights = self.analytics.fetch_index_weights()
 
