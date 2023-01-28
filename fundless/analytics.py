@@ -1,4 +1,6 @@
 import asyncio
+import math
+
 import pandas as pd
 from pathlib import Path
 import pytz
@@ -22,7 +24,6 @@ from config import Config, WeightingEnum, ExchangeEnum
 from utils import print_crypto_amount
 from constants import FIAT_SYMBOLS, COIN_REBRANDING, COIN_SYNONYMS, STABLE_COINS
 from exchanges import Exchanges
-
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +264,8 @@ class PortfolioAnalytics:
     def convert(self, amount: float, from_symbol: str, to_symbol: str):
         from_symbol = from_symbol.upper()
         to_symbol = to_symbol.upper()
+        if math.isnan(amount):
+            return 0
         if from_symbol == to_symbol:
             # nothing to convert
             return amount
@@ -1008,9 +1011,14 @@ class PortfolioAnalytics:
         export["tax"] = 0
 
         def get_fee(row: pd.Series):
-            if row["fee"] == 0:
+            if row["fee"] == 0 or math.isnan(row["fee"]):
                 return 0
-            if row["fee_symbol"] == "EUR":
+            if (
+                row["fee_symbol"] == "EUR"
+                or len(str(row["fee_symbol"])) == 0
+                or isinstance(row["fee_symbol"], float)
+            ):
+                # assuming that the fee is in euros if no other fee symbol is given!
                 return row["fee"]
             return self.convert(row["fee"], row["fee_symbol"], "EUR")
 

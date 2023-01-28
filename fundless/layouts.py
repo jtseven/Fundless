@@ -999,6 +999,9 @@ def create_trades_page(analytics: PortfolioAnalytics):
                 [
                     dbc.Col(
                         [
+                            dcc.Download(
+                                id="download-dataframe-csv",
+                            ),
                             dbc.DropdownMenu(
                                 label="Export to CSV",
                                 children=[
@@ -1008,7 +1011,6 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                 ],
                                 className="d-block w-100",
                             ),
-                            dcc.Download(id="download-dataframe-csv"),
                         ],
                         class_name="d-flex",
                         md=4,

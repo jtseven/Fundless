@@ -368,13 +368,13 @@ class Dashboard:
 
         @self.app.callback(
             Output("download-dataframe-csv", "data"),
-            Input("btn_csv_all", "n_clicks"),
+            [Input("btn_csv_all", "n_clicks")],
             prevent_initial_call=True,
         )
         def export_csv_all(n_clicks):
             if n_clicks < 1:
                 return
-            return dcc.send_data_frame(
+            data = dcc.send_data_frame(
                 self.analytics.trades_csv_export().to_csv,
                 "fundless_export.csv",
                 sep=";",
@@ -382,10 +382,11 @@ class Dashboard:
                 float_format="%.12f",
                 date_format="%Y-%m-%dT%H:%M:%SZ",
             )
+            return data
 
         @self.app.callback(
             Output("download-dataframe-csv", "data"),
-            Input("btn_csv_3", "n_clicks"),
+            [Input("btn_csv_3", "n_clicks")],
             prevent_initial_call=True,
         )
         def export_csv_3(n_clicks):
@@ -403,7 +404,7 @@ class Dashboard:
 
         @self.app.callback(
             Output("download-dataframe-csv", "data"),
-            Input("btn_csv_month", "n_clicks"),
+            [Input("btn_csv_month", "n_clicks")],
             prevent_initial_call=True,
         )
         def export_csv_month(n_clicks):
