@@ -365,7 +365,7 @@ class TradingBot:
                 elif order_type == OrderTypeEnum.market:
                     if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase:
                         # Coinbase requires to give the cost to the amount parameter
-                        self.exchanges.active.options["createMarketBuyOrderRequiresPrice"] = False
+                        # (amount of quote currency instead of amount of currency to buy)
                         order = self.exchanges.active.create_market_buy_order(ticker, cost)
                     else:
                         order = self.exchanges.active.create_market_buy_order(ticker, amount)
@@ -521,7 +521,7 @@ class TradingBot:
                     else:
                         try:
                             fee = order["fee"]["cost"]
-                            fee_symbol = order["fee"]["currency"]
+                            fee_symbol = order["fee"]["currency"] or "EUR"
                         except KeyError:
                             logger.warning(f"No fee for order {id}")
                             fee = 0

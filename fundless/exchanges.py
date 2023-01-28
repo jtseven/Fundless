@@ -57,6 +57,7 @@ class Exchanges:
                 exchange.password = self.secrets.coinbasepro["passphrase"]
         elif exchange_name == ExchangeEnum.coinbase:
             exchange = ccxt.coinbase()
+            exchange.options["createMarketBuyOrderRequiresPrice"] = False
             if self.trading_config.test_mode:
                 return False
             else:
