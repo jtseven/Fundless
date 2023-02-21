@@ -366,7 +366,9 @@ class TradingBot:
                     if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase:
                         # Coinbase requires to give the cost to the amount parameter
                         # (amount of quote currency instead of amount of currency to buy)
-                        order = self.exchanges.active.create_market_buy_order(ticker, cost)
+                        # Coinbase only accepts two decimal points precision for the amount parameter
+                        cost = round(cost, 2)
+                        order = self.exchanges.active.create_market_buy_order(ticker, amount=cost)
                     else:
                         order = self.exchanges.active.create_market_buy_order(ticker, amount)
                 else:
