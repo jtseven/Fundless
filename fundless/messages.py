@@ -536,13 +536,14 @@ class TelegramBot:
                     state_update._effective_chat = chat
                     await context.update_queue.put(state_update)
         except Exception as e:
+            logger.error(f"Uncaught error when checking order status!")
+            logger.error(e)
+            raise e
+        finally:
             self.application.bot_data["next_state"] = ConversationHandler.END
             state_update = StateChangeUpdate()
             state_update._effective_user = user
             state_update._effective_chat = chat
-            logger.error(f"Uncaught error when checking order status!")
-            logger.error(e)
-            raise e
 
     async def _change_conversation_state(self, _: StateChangeUpdate, __: CallbackContext):
         next_state = self.application.bot_data.get("next_state", 42)
