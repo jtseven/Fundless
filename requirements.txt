@@ -114,9 +114,9 @@ authlib==1.1.0 ; python_version >= "3.11" and python_version < "4.0" \
 cachelib==0.10.2 ; python_version >= "3.11" and python_version < "4" \
     --hash=sha256:42d49f2fad9310dd946d7be73d46776bcd4d5fde4f49ad210cfdd447fbdfc346 \
     --hash=sha256:593faeee62a7c037d50fc835617a01b887503f972fb52b188ae7e50e9cb69740
-ccxt==2.8.16 ; python_version >= "3.11" and python_version < "4.0" \
-    --hash=sha256:5b22a0b3f3f5b002714a942cdc75a07503956b945bcc06a0d8f65a4960483b22 \
-    --hash=sha256:66ff35db732a2799dfd2755eebf7199d1343c81cccd6d77d364957a414078097
+ccxt==2.8.24 ; python_version >= "3.11" and python_version < "4.0" \
+    --hash=sha256:0264f245e22fb79ce29418ae309ef83faeba07c423abdab627b98889c2921cfd \
+    --hash=sha256:1fcdf229ec36b3614f58e9cca451300095ca174c24b5bfb9798a68b55a52a217
 certifi==2022.12.7 ; python_version >= "3.11" and python_version < "4.0" \
     --hash=sha256:35824b4c3a97115964b408844d64aa14db1cc518f6562e8d7261699d1350a9e3 \
     --hash=sha256:4ad3232f5e926d6718ec31cfc1fcadfde020920e278684144551c91769c7bc18
@@ -857,9 +857,9 @@ tzlocal==4.2 ; python_version >= "3.11" and python_version < "4.0" \
 urllib3==1.26.14 ; python_version >= "3.11" and python_version < "4" \
     --hash=sha256:076907bf8fd355cde77728471316625a4d2f7e713c125f51953bb5b3eecf4f72 \
     --hash=sha256:75edcdc2f7d85b137124a6c3c9fc3933cdeaa12ecb9a6a959f22797a0feca7e1
-werkzeug==2.2.2 ; python_version >= "3.11" and python_version < "4.0" \
-    --hash=sha256:7ea2d48322cc7c0f8b3a215ed73eabd7b5d75d0b50e31ab006286ccff9e00b8f \
-    --hash=sha256:f979ab81f58d7318e064e99c4506445d60135ac5cd2e177a2de0089bfd4c9bd5
+werkzeug==2.2.3 ; python_version >= "3.11" and python_version < "4.0" \
+    --hash=sha256:2e1ccc9417d4da358b9de6f174e3ac094391ea1d4fbef2d667865d819dfd0afe \
+    --hash=sha256:56433961bc1f12533306c624f3be5e744389ac61d722175d543e1751285da612
 yarl==1.8.2 ; python_version >= "3.11" and python_version < "4.0" \
     --hash=sha256:009a028127e0a1755c38b03244c0bea9d5565630db9c4cf9572496e947137a87 \
     --hash=sha256:0414fd91ce0b763d4eadb4456795b307a71524dbacd015c657bb2a39db2eab89 \
