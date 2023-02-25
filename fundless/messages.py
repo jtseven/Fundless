@@ -406,9 +406,11 @@ class TelegramBot:
                 await send(chat_id=self.chat_id, text="Done! I placed your orders")
                 await send(
                     chat_id=self.chat_id,
-                    text="I will check if your orders went threw in a few seconds and get back to you :)",
+                    text="I will check if your orders went through in a few seconds and get back to you :)",
                 )
-            self.application.job_queue.run_once(self.check_orders, when=10, data=(order_ids, placed_symbols, 1))
+            self.application.job_queue.run_once(
+                self.check_orders, when=10, chat_id=self.chat_id, data=(order_ids, placed_symbols, 1)
+            )
             return CHECKING
 
     async def execute_order(self):
@@ -528,6 +530,7 @@ class TelegramBot:
                     context.job_queue.run_once(
                         self.check_orders,
                         when=wait_time,
+                        chat_id=self.chat_id,
                         data=(order_ids, symbols, n_retry + 1),
                     )
                     self.application.bot_data["next_state"] = CHECKING
