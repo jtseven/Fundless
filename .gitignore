@@ -5,6 +5,9 @@ trades.csv
 trades_backup.csv
 order_ids.csv
 
+### Ruff
+.ruff_cache
+
 ### Data CSV Files
 trades_backup*
 ids_test.csv
