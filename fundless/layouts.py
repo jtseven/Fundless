@@ -8,10 +8,10 @@ from operator import add
 from typing import List
 import numpy as np
 
-from analytics import PortfolioAnalytics
-from config import WeightingEnum, IntervalEnum
-from utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
-from constants import STABLE_COINS
+from fundless.analytics import PortfolioAnalytics
+from fundless.config import WeightingEnum, IntervalEnum
+from fundless.utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
+from fundless.constants import STABLE_COINS
 
 ################################################################################################################
 #                                                  Layouts                                                     #

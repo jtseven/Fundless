@@ -23,11 +23,11 @@ from datetime import datetime, timedelta
 import pytz
 
 # local imports
-from config import Config
-from analytics import PortfolioAnalytics
-import layouts
-from login import LoginProvider
-from constants import Auth0EnvNames, STABLE_COINS
+from fundless.config import Config
+from fundless.analytics import PortfolioAnalytics
+import fundless.layouts
+from fundless.login import LoginProvider
+from fundless.constants import Auth0EnvNames, STABLE_COINS
 
 logger = logging.getLogger(__name__)
 

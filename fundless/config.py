@@ -2,11 +2,10 @@ from pathlib import Path
 import sys
 import yaml
 from typing import List, Union, Dict, Optional
-from pydantic import BaseModel
-from pydantic.types import confloat, conint, constr
-from pydantic import validator, root_validator
+from pydantic import field_validator, Field, StringConstraints, ConfigDict, BaseModel, model_validator
 from aenum import MultiValueEnum
 import logging
+from typing_extensions import Annotated
 
 if sys.version_info >= (3, 8):
     from typing import TypedDict
@@ -85,11 +84,14 @@ class TelegramToken(TypedDict):
 
 
 class BaseConfig(BaseModel):
-    class Config:
-        json_encoders = {
+    # TODO[pydantic]: The following keys were removed: `json_encoders`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(
+        json_encoders={
             MultiValueEnum: lambda v: v.value,
-        }
-        validate_assignment = True
+        },
+        validate_assignment=True,
+    )
 
     def print_markdown(self):
         config_dict = self.dict()
@@ -139,47 +141,52 @@ class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
     test_mode: Optional[bool] = False
     base_currency: BaseCurrencyEnum
-    base_symbol: constr(strip_whitespace=True, to_lower=True, regex="^(busd|usdc|usdt|usd|eur|btc)$")
-    savings_plan_cost: confloat(gt=0, le=10000)
-    savings_plan_interval: Union[IntervalEnum, List[conint(ge=1, le=28)]]
-    x_days: Optional[conint(ge=2, le=30)]
-    savings_plan_execution_time: constr(regex="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
+    base_symbol: Annotated[
+        str, StringConstraints(strip_whitespace=True, to_lower=True, pattern="^(busd|usdc|usdt|usd|eur|btc)$")
+    ]
+    savings_plan_cost: Annotated[float, Field(gt=0, le=10000)]
+    savings_plan_interval: Union[IntervalEnum, List[Annotated[int, Field(ge=1, le=28)]]]
+    x_days: Optional[Annotated[int, Field(ge=2, le=30)]] = None
+    savings_plan_execution_time: Annotated[str, StringConstraints(pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")]
     savings_plan_automatic_execution: Optional[bool] = False
     savings_plan_rebalance_on_automatic_execution: Optional[bool] = True
     portfolio_mode: PortfolioModeEnum
     portfolio_weighting: WeightingEnum
-    cherry_pick_symbols: Optional[List[constr(to_lower=True)]]
-    custom_weights: Optional[Dict[constr(to_lower=True), float]]
-    index_top_n: Optional[conint(gt=0, le=100)]
-    index_exclude_symbols: Optional[List[constr(to_lower=True)]]
+    cherry_pick_symbols: list[Annotated[str, StringConstraints(to_lower=True)]] | None = None
+    custom_weights: Optional[Dict[Annotated[str, StringConstraints(to_lower=True)], float]] = None
+    index_top_n: Optional[Annotated[int, Field(gt=0, le=100)]] = None
+    index_exclude_symbols: Optional[List[Annotated[str, StringConstraints(to_lower=True)]]] = None
     # base_fiat_symbols: List[str]  # TODO define fiat symbols here instead of in trading.py
     # usd_symbols = ['usd', 'usdt', 'busd', 'usdc', 'dai']
     # eur_symbols = ['eur', 'eurt']
 
-    @validator("base_currency")
+    @field_validator("base_currency")
+    @classmethod
     def check_if_currency_supported(cls, v):
         if v in (BaseCurrencyEnum.btc, BaseCurrencyEnum.eth):
             raise NotImplementedError("Only USD and EUR base currencies are supported by now")
         return v
 
-    @validator("portfolio_mode")
+    @field_validator("portfolio_mode")
+    @classmethod
     def check_if_portfolio_supported(cls, v):
         if v in (PortfolioModeEnum.index,):
             raise NotImplementedError("Only cherry-picked portfolio is supported by now")
         return v
 
-    @root_validator
-    def check_custom_weights(cls, values):
-        if values.get("portfolio_weighting") != WeightingEnum.custom:
-            return values
-        custom_weights = values.get("custom_weights", None)
-        if custom_weights is None:
-            return values
-        elif values.get("portfolio_mode") == PortfolioModeEnum.cherry_pick:
-            for symbol, weight in custom_weights.items():
-                if symbol not in values.get("cherry_pick_symbols"):
+    @model_validator(mode="after")
+    def check_custom_weights(self):
+        if self.portfolio_weighting != WeightingEnum.custom:
+            return self
+        if self.custom_weights is None:
+            return self
+        elif self.portfolio_mode == PortfolioModeEnum.cherry_pick:
+            if self.cherry_pick_symbols is None:
+                raise ValueError("Cherry pick symbols must be defined if portfolio mode is cherry pick!")
+            for symbol, weight in self.custom_weights.items():
+                if symbol not in self.cherry_pick_symbols:
                     raise ValueError(f"{symbol} defined in custom weights, but not in cherry picked symbols")
-        return values
+        return self
 
     @classmethod
     def from_config_yaml(cls, file_path):
@@ -243,7 +250,7 @@ class TelegramBotConfig(BaseConfig):
         return cls(verbose_messages=dictionary.get("verbose_messages", False))
 
 
-class SecretsStore(BaseConfig):
+class SecretsStore(BaseModel):
     binance_test: ExchangeToken
     kraken_test: ExchangeToken
     binance: ExchangeToken

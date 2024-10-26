@@ -1,40 +1,36 @@
-[tool.poetry]
+[project]
 name = "fundless"
 version = "0.1.0"
-description = "A project to build your own crypto index fund and auto-invest into it"
-authors = ["Joschka Theissen <joschka.theissen@gmail.com>"]
+description = "Add your description here"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.11"
-ccxt = "^2.8.24"
-pandas = "^1.5.3"
-numpy = "1.24.1"
-pycoingecko = "3.1.0"
-pathlib = "1.0.1"
-pyyaml = "6.0"
-schedule = "1.1.0"
-python-telegram-bot = {extras = ["job-queue"], version = "^20.0"}
-pydantic = "1.10.2"
-aenum = "3.1.11"
-redo = "2.0.4"
-plotly = "5.13.0"
-dash = "2.8.0"
-kaleido = "0.2.1"
-flask-login = "0.6.2"
-flask = "2.2.2"
-dash-bootstrap-components = "1.3.0"
-requests = "2.28.1"
-python-dotenv = "0.21.0"
-authlib = "1.1.0"
-six = "1.16.0"
-werkzeug = "^2.2.3"
-gevent = "22.10.1"
-dash-extensions = "0.1.11"
-currencyconverter = "0.17.5"
-coloredlogs = "15.0.1"
-
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aenum>=3.1.15",
+    "ccxt>=4.4.23",
+    "dash>=2.18.1",
+    "flask>=3.0.3",
+    "flask-login>=0.6.3",
+    "pandas>=2.2.3",
+    "pathlib>=1.0.1",
+    "plotly>=5.24.1",
+    "pycoingecko>=3.1.0",
+    "python-telegram-bot[job-queue]>=21.6",
+    "pyyaml>=6.0.2",
+    "redo>=3.0.0",
+    "schedule>=1.2.2",
+    "dash-bootstrap-components>=1.6.0",
+    "python-dotenv>=1.0.1",
+    "authlib>=1.3.2",
+    "dash-extensions>=1.0.18",
+    "currencyconverter>=0.17.33",
+    "pydantic>=2.9.2",
+    "coloredlogs>=15.0.1",
+    "gevent>=24.10.3",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+fundless = "fundless.__main__:main"

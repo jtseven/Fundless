@@ -1,6 +1,6 @@
 import time
 import requests.exceptions
-from utils import print_crypto_amount
+from fundless.utils import print_crypto_amount
 import ccxt
 import telegram.error
 from telegram.ext import (
@@ -24,8 +24,8 @@ from telegram import (
 from telegram.constants import ChatAction
 import logging
 from typing import Awaitable, Callable, Any
-from trading import TradingBot
-from config import Config
+from fundless.trading import TradingBot
+from fundless.config import Config
 import sys
 from redo import retriable
 from random import randint
@@ -124,10 +124,11 @@ class TelegramBot:
             self.application.add_handler(handle)
         self.application.add_error_handler(self._error)
 
-    async def run_polling(self):
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.updater.start_polling()
+    async def run_polling(self) -> None:
+        # await self.application.initialize()
+        # await self.application.start()
+        # await self.application.updater.start_polling()
+        self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
     @staticmethod
     async def _error(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -209,9 +210,7 @@ class TelegramBot:
                     continue
                 msg += f" {symbol + ':': <6} {allocation:6.2f}% {value:10,.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
             msg += "-------------------------------\n"
-            msg += (
-                f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-            )
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
             msg += "```"
             await context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode="MarkdownV2")
 
@@ -244,9 +243,7 @@ class TelegramBot:
             for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
                 msg += f"  {symbol.upper() + ':': <6} {allocation:4.1f}% {value:3,.0f} {self.config.trading_bot_config.base_currency.values[1]}  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
-            msg += (
-                f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
-            )
+            msg += f"  Overall Balance: {values.sum():,.2f} {self.config.trading_bot_config.base_currency.values[1]}"
             msg += "```"
             await context.bot.send_message(chat_id=self.chat_id, text=msg, parse_mode="MarkdownV2")
 
@@ -422,9 +419,7 @@ class TelegramBot:
                 chat_id=self.chat_id,
                 text="Ohhh, there was a Problem with the exchange! Sorry :(",
             )
-            await self.application.bot.send_message(
-                chat_id=self.chat_id, text="This is, what the exchange returned:"
-            )
+            await self.application.bot.send_message(chat_id=self.chat_id, text="This is, what the exchange returned:")
             await self.application.bot.send_message(chat_id=self.chat_id, text=str(e))
             await self.application.bot.send_message(
                 chat_id=self.chat_id, text="Try to solve it and try again next time"
@@ -508,9 +503,7 @@ class TelegramBot:
                 msg += "```"
                 await context.bot.send_message(self.chat_id, text=msg, parse_mode="MarkdownV2")
                 if n_retry > 10:
-                    logger.warning(
-                        "Not all orders where filled, check manually and add filled orders to trades.csv!"
-                    )
+                    logger.warning("Not all orders where filled, check manually and add filled orders to trades.csv!")
                     await context.bot.send_message(
                         self.chat_id,
                         text="We have waited long enough! Pls solve the orders that are" "still open manually..",
@@ -600,5 +593,5 @@ class TelegramBot:
             reply_markup=markup,
         )
 
-    async def send(self, text: str):
+    async def send(self, text: str) -> None:
         await self.application.bot.send_message(chat_id=self.chat_id, text=text)

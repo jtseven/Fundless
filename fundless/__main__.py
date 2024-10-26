@@ -4,13 +4,13 @@ import coloredlogs
 import logging
 import threading
 
-from trading import TradingBot
-from messages import TelegramBot
-from analytics import PortfolioAnalytics
-from config import Config
-from dashboard_app import Dashboard
-from exchanges import Exchanges
-from savings_plan_scheduler import SavingsPlanScheduler
+from fundless.trading import TradingBot
+from fundless.messages import TelegramBot
+from fundless.analytics import PortfolioAnalytics
+from fundless.config import Config
+from fundless.dashboard_app import Dashboard
+from fundless.exchanges import Exchanges
+from fundless.savings_plan_scheduler import SavingsPlanScheduler
 
 """
 
@@ -29,7 +29,7 @@ order_ids_csv = "fundless/data/order_ids.csv"
 order_ids_csv_test = "fundless/data/ids_test.csv"
 
 
-if __name__ == "__main__":
+def main():
     logging_format = "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
     coloredlogs.install(level="INFO", fmt=logging_format)
     logger = logging.getLogger()

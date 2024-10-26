@@ -17,8 +17,8 @@ from six.moves.urllib.parse import urlencode
 from werkzeug.exceptions import HTTPException
 import logging
 
-from config import DashboardConfig, LoginProviderEnum, SecretsStore
-from constants import Auth0EnvNames
+from fundless.config import DashboardConfig, LoginProviderEnum, SecretsStore
+from fundless.constants import Auth0EnvNames
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +123,7 @@ class LoginProvider:
 
     def login_page(self):
         if self.provider == LoginProviderEnum.auth0:
-            return self.auth0.authorize_redirect(
-                redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE
-            )
+            return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
         elif self.provider == LoginProviderEnum.custom:
             email = request.form.get("email")
             password = request.form.get("password")

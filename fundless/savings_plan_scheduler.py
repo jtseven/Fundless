@@ -1,7 +1,7 @@
 import asyncio
 from datetime import date
-from config import Config, IntervalEnum
-from messages import TelegramBot
+from fundless.config import Config, IntervalEnum
+from fundless.messages import TelegramBot
 from typing import List
 import logging
 import schedule

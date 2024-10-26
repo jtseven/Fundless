@@ -4,12 +4,12 @@ from typing import List, Tuple, Union
 from datetime import datetime
 from redo import retrying
 
-from config import Config, SecretsStore, ExchangeEnum, OrderTypeEnum
-from analytics import PortfolioAnalytics
-from utils import print_crypto_amount
+from fundless.config import Config, SecretsStore, ExchangeEnum, OrderTypeEnum
+from fundless.analytics import PortfolioAnalytics
+from fundless.utils import print_crypto_amount
 import logging
-from constants import FIAT_SYMBOLS
-from exchanges import Exchanges
+from fundless.constants import FIAT_SYMBOLS
+from fundless.exchanges import Exchanges
 
 
 logger = logging.getLogger(__name__)
@@ -228,15 +228,13 @@ class TradingBot:
                 insufficient = True
                 if available > 0.98 * base_symbol_volume:
                     corrected_volume = available
-                    problems[
-                        "description"
-                    ] = f"Available {self.bot_config.trading_bot_config.base_symbol.upper()} is slightly lower than your order volume, lowering the volume by that amount!"
+                    problems["description"] = (
+                        f"Available {self.bot_config.trading_bot_config.base_symbol.upper()} is slightly lower than your order volume, lowering the volume by that amount!"
+                    )
                     problems["adjusted_volume"] = corrected_volume
                 else:
                     balance_string = f"{print_crypto_amount(balance-base_symbol_index_balance)} {self.bot_config.trading_bot_config.base_symbol.upper()}"
-                    balance_base_curr = self.analytics.base_symbol_to_base_currency(
-                        balance - base_symbol_index_balance
-                    )
+                    balance_base_curr = self.analytics.base_symbol_to_base_currency(balance - base_symbol_index_balance)
                     volume_base_curr = self.analytics.base_symbol_to_base_currency(base_symbol_volume)
                     volume_string = f"{print_crypto_amount(base_symbol_volume)} {self.bot_config.trading_bot_config.base_symbol.upper()}"
                     problems["description"] = (
@@ -296,9 +294,7 @@ class TradingBot:
             min_cost = self.exchanges.active.markets[ticker]["limits"]["cost"]["min"]
 
             if min_amount is not None and amount < min_amount:
-                logger.warning(
-                    f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!"
-                )
+                logger.warning(f"The amount of {amount} {ticker} at a price of {price} is too low to place an order!")
                 volume_fail.append(symbol)
                 reason.append("Order amount too low")
                 if fail_fast:
@@ -346,9 +342,7 @@ class TradingBot:
         # Start buying
         for symbol, weight in zip(symbols, weights):
             if symbol.lower() == self.bot_config.trading_bot_config.base_symbol.lower():
-                logger.info(
-                    f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with"
-                )
+                logger.info(f"Skipping order for {symbol.upper()} as it equals the base symbol you are buying with")
                 placed_symbols.append(symbol.upper())
                 placed_ids.append(
                     float(-weight * volume)
@@ -393,9 +387,7 @@ class TradingBot:
                 try:
                     logger.info(f"Placed order for {order['amount']:5f} {ticker} at {order['price']:.2f} $")
                 except TypeError:
-                    logger.warning(
-                        "Order amount or price was not included in order report returned from exchange!"
-                    )
+                    logger.warning("Order amount or price was not included in order report returned from exchange!")
                 placed_symbols.append(ticker)
                 placed_ids.append(str(order["id"]))
 

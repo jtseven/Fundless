@@ -6,10 +6,10 @@ from pathlib import Path
 import pytz
 import requests.exceptions
 from pycoingecko import CoinGeckoAPI
-from pydantic import validate_arguments
-from pydantic.types import constr, Optional
+from pydantic import StringConstraints, validate_arguments
+from pydantic.types import constr
 import plotly.express as px
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Optional
 import numpy as np
 from time import time, sleep
 from redo import retrying
@@ -20,10 +20,11 @@ import logging
 from currency_converter import CurrencyConverter
 import ccxt
 
-from config import Config, WeightingEnum, ExchangeEnum
-from utils import print_crypto_amount
-from constants import FIAT_SYMBOLS, COIN_REBRANDING, COIN_SYNONYMS, STABLE_COINS
-from exchanges import Exchanges
+from fundless.config import Config, WeightingEnum, ExchangeEnum
+from fundless.utils import print_crypto_amount
+from fundless.constants import FIAT_SYMBOLS, COIN_REBRANDING, COIN_SYNONYMS, STABLE_COINS
+from fundless.exchanges import Exchanges
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 
@@ -157,15 +158,11 @@ class PortfolioAnalytics:
     def coin_available_on_exchange(self, coin: str):
         if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
             return True
-        return (
-            f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
-        )
+        return f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
 
     def available_index_coins(self):
         return [
-            coin
-            for coin in self.config.trading_bot_config.cherry_pick_symbols
-            if self.coin_available_on_exchange(coin)
+            coin for coin in self.config.trading_bot_config.cherry_pick_symbols if self.coin_available_on_exchange(coin)
         ]
 
     def available_quote_currency(self, convert_to_accounting_currency=True, force_update=False) -> float:
@@ -334,10 +331,7 @@ class PortfolioAnalytics:
                     missing_ids["date"].values,
                 ):
 
-                    if (
-                        date.astype(np.int64)
-                        > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value
-                    ):
+                    if date.astype(np.int64) > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value:
                         logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
                         # skip orders, that are new, as they are still pending to be added regularly
                         continue
@@ -356,9 +350,7 @@ class PortfolioAnalytics:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(
                                 trades_df=trades_df,
-                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime(
-                                    "%Y-%m-%d %H:%M:%S"
-                                ),
+                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S"),
                                 id=str(id),
                                 buy_symbol=order["symbol"].split("/")[0],
                                 sell_symbol=order["symbol"].split("/")[1],
@@ -426,9 +418,9 @@ class PortfolioAnalytics:
             # add column for used exchange, if it's not there yet
             if "exchange" in trades_df.columns:
                 if trades_df["exchange"].isnull().values.any():
-                    trades_df.loc[
-                        trades_df["exchange"].isnull(), "exchange"
-                    ] = self.config.trading_bot_config.exchange.value
+                    trades_df.loc[trades_df["exchange"].isnull(), "exchange"] = (
+                        self.config.trading_bot_config.exchange.value
+                    )
                     update_file = True
             else:
                 trades_df["exchange"] = self.config.trading_bot_config.exchange.value
@@ -494,9 +486,7 @@ class PortfolioAnalytics:
                     )
                 )
                 more_markets = pd.DataFrame.from_records(
-                    get_markets(
-                        vs_currency=self.config.trading_bot_config.base_currency.value, per_page=250, page=2
-                    )
+                    get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=250, page=2)
                 )
                 markets = pd.concat([markets, more_markets], ignore_index=True)
                 markets["symbol"] = markets["symbol"].str.lower()
@@ -531,7 +521,7 @@ class PortfolioAnalytics:
     @validate_arguments
     def add_trade(
         self,
-        date: Union[constr(regex=date_time_regex), datetime],
+        date: Union[Annotated[str, StringConstraints(pattern=date_time_regex)], datetime],
         id: str,
         buy_symbol: str,
         sell_symbol: str,
@@ -962,9 +952,11 @@ class PortfolioAnalytics:
         if self.config.trading_bot_config.portfolio_weighting == WeightingEnum.equal:
             weights = np.array(
                 [
-                    1 / len(self.config.trading_bot_config.cherry_pick_symbols)
-                    if sym in self.config.trading_bot_config.cherry_pick_symbols
-                    else 0.0
+                    (
+                        1 / len(self.config.trading_bot_config.cherry_pick_symbols)
+                        if sym in self.config.trading_bot_config.cherry_pick_symbols
+                        else 0.0
+                    )
                     for sym in symbols
                 ]
             )
@@ -976,9 +968,11 @@ class PortfolioAnalytics:
         else:
             weights = np.asarray(
                 [
-                    self.markets.loc[self.markets.symbol == sym, "market_cap"].item()
-                    if sym in self.config.trading_bot_config.cherry_pick_symbols
-                    else 0.0
+                    (
+                        self.markets.loc[self.markets.symbol == sym, "market_cap"].item()
+                        if sym in self.config.trading_bot_config.cherry_pick_symbols
+                        else 0.0
+                    )
                     for sym in symbols
                 ]
             )
@@ -1013,11 +1007,7 @@ class PortfolioAnalytics:
         def get_fee(row: pd.Series):
             if row["fee"] == 0 or math.isnan(row["fee"]):
                 return 0
-            if (
-                row["fee_symbol"] == "EUR"
-                or len(str(row["fee_symbol"])) == 0
-                or isinstance(row["fee_symbol"], float)
-            ):
+            if row["fee_symbol"] == "EUR" or len(str(row["fee_symbol"])) == 0 or isinstance(row["fee_symbol"], float):
                 # assuming that the fee is in euros if no other fee symbol is given!
                 return row["fee"]
             return self.convert(row["fee"], row["fee_symbol"], "EUR")
