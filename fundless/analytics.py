@@ -7,7 +7,6 @@ import pytz
 import requests.exceptions
 from pycoingecko import CoinGeckoAPI
 from pydantic import StringConstraints, validate_arguments
-from pydantic.types import constr
 import plotly.express as px
 from typing import Tuple, Union, List, Optional
 import numpy as np
@@ -22,7 +21,12 @@ import ccxt
 
 from fundless.config import Config, WeightingEnum, ExchangeEnum
 from fundless.utils import print_crypto_amount
-from fundless.constants import FIAT_SYMBOLS, COIN_REBRANDING, COIN_SYNONYMS, STABLE_COINS
+from fundless.constants import (
+    FIAT_SYMBOLS,
+    COIN_REBRANDING,
+    COIN_SYNONYMS,
+    STABLE_COINS,
+)
 from fundless.exchanges import Exchanges
 from typing_extensions import Annotated
 
@@ -158,20 +162,29 @@ class PortfolioAnalytics:
     def coin_available_on_exchange(self, coin: str):
         if coin.upper() == self.config.trading_bot_config.base_symbol.upper():
             return True
-        return f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}" in self.exchanges.active.symbols
+        return (
+            f"{coin.upper()}/{self.config.trading_bot_config.base_symbol.upper()}"
+            in self.exchanges.active.symbols
+        )
 
     def available_index_coins(self):
         return [
-            coin for coin in self.config.trading_bot_config.cherry_pick_symbols if self.coin_available_on_exchange(coin)
+            coin
+            for coin in self.config.trading_bot_config.cherry_pick_symbols
+            if self.coin_available_on_exchange(coin)
         ]
 
     def available_quote_currency(self, convert_to_accounting_currency=True, force_update=False) -> float:
         if self.exchange_balance is None or force_update:
             asyncio.run(self.update_exchange_balance())
         if convert_to_accounting_currency:
-            return self.exchange_balance["converted"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
+            return self.exchange_balance["converted"].get(
+                self.config.trading_bot_config.base_symbol.upper(), 0.0
+            )
         else:
-            return self.exchange_balance["amount"].get(self.config.trading_bot_config.base_symbol.upper(), 0.0)
+            return self.exchange_balance["amount"].get(
+                self.config.trading_bot_config.base_symbol.upper(), 0.0
+            )
 
     async def update_exchange_balance(self):
         balance = {
@@ -228,13 +241,15 @@ class PortfolioAnalytics:
         symbol = symbol.lower()
         try:
             coin_name = self.markets.loc[self.markets["symbol"] == symbol, ["name"]].values[0][0]
-        except IndexError as e:
+        except IndexError:
             logger.warning(f"No coin name found in Coingecko market data for {symbol.upper()}!")
             alternatives = self.get_alternative_crypto_symbols(symbol)
             if len(alternatives) > 0:
                 for alt in alternatives:
                     try:
-                        coin_name = self.markets.loc[self.markets["symbol"] == alt.lower(), ["name"]].values[0][0]
+                        coin_name = self.markets.loc[self.markets["symbol"] == alt.lower(), ["name"]].values[
+                            0
+                        ][0]
                     except IndexError:
                         continue
                     else:
@@ -290,7 +305,9 @@ class PortfolioAnalytics:
                 jitter=0,
                 retry_exceptions=(requests.exceptions.HTTPError,),
             ) as get_price:
-                price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][vs_currency.lower()]
+                price = get_price(crypto_id, vs_currencies=vs_currency.lower())[crypto_id][
+                    vs_currency.lower()
+                ]
         return price
 
     def base_symbol_to_base_currency(self, base_symbol_amount: float):
@@ -330,8 +347,10 @@ class PortfolioAnalytics:
                     missing_ids["symbol"].values,
                     missing_ids["date"].values,
                 ):
-
-                    if date.astype(np.int64) > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value:
+                    if (
+                        date.astype(np.int64)
+                        > (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(minutes=10)).value
+                    ):
                         logger.info(f"Skipping order {id}, as it will be added by the savings plan bot.")
                         # skip orders, that are new, as they are still pending to be added regularly
                         continue
@@ -350,7 +369,9 @@ class PortfolioAnalytics:
                             logger.info(f"Order {id} closed, adding to trades.csv")
                             trades_df = self.add_trade(
                                 trades_df=trades_df,
-                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime("%Y-%m-%d %H:%M:%S"),
+                                date=datetime.fromtimestamp(order["timestamp"] / 1000.0).strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
                                 id=str(id),
                                 buy_symbol=order["symbol"].split("/")[0],
                                 sell_symbol=order["symbol"].split("/")[1],
@@ -486,7 +507,11 @@ class PortfolioAnalytics:
                     )
                 )
                 more_markets = pd.DataFrame.from_records(
-                    get_markets(vs_currency=self.config.trading_bot_config.base_currency.value, per_page=250, page=2)
+                    get_markets(
+                        vs_currency=self.config.trading_bot_config.base_currency.value,
+                        per_page=250,
+                        page=2,
+                    )
                 )
                 markets = pd.concat([markets, more_markets], ignore_index=True)
                 markets["symbol"] = markets["symbol"].str.lower()
@@ -611,7 +636,7 @@ class PortfolioAnalytics:
         df["Currently in Index"] = self.index_df["symbol"].map(
             lambda sym: "yes" if sym.lower() in self.config.trading_bot_config.cherry_pick_symbols else "no"
         )
-        df[f"Available"] = self.index_df["symbol"].map(
+        df["Available"] = self.index_df["symbol"].map(
             lambda sym: "yes" if self.coin_available_on_exchange(sym) else "no"
         )
         df["Amount"] = self.index_df["amount"].map(print_crypto_amount)
@@ -1007,7 +1032,11 @@ class PortfolioAnalytics:
         def get_fee(row: pd.Series):
             if row["fee"] == 0 or math.isnan(row["fee"]):
                 return 0
-            if row["fee_symbol"] == "EUR" or len(str(row["fee_symbol"])) == 0 or isinstance(row["fee_symbol"], float):
+            if (
+                row["fee_symbol"] == "EUR"
+                or len(str(row["fee_symbol"])) == 0
+                or isinstance(row["fee_symbol"], float)
+            ):
                 # assuming that the fee is in euros if no other fee symbol is given!
                 return row["fee"]
             return self.convert(row["fee"], row["fee_symbol"], "EUR")

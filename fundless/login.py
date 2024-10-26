@@ -123,12 +123,17 @@ class LoginProvider:
 
     def login_page(self):
         if self.provider == LoginProviderEnum.auth0:
-            return self.auth0.authorize_redirect(redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE)
+            return self.auth0.authorize_redirect(
+                redirect_uri=self.AUTH0_CALLBACK_URL, audience=self.AUTH0_AUDIENCE
+            )
         elif self.provider == LoginProviderEnum.custom:
             email = request.form.get("email")
             password = request.form.get("password")
 
-            if email == self.secrets_store.dashboard_user and password == self.secrets_store.dashboard_password:
+            if (
+                email == self.secrets_store.dashboard_user
+                and password == self.secrets_store.dashboard_password
+            ):
                 user = User(email)
                 login_user(user, remember=True)
                 return redirect("/app")

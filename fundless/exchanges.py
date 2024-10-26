@@ -18,7 +18,9 @@ class Exchanges:
                 logger.warning(f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}")
 
         if self.trading_config.exchange not in self.authorized_exchanges.keys():
-            raise RuntimeWarning(f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}")
+            raise RuntimeWarning(
+                f"No valid API tokens for selected exchange {self.trading_config.exchange.values[1]}"
+            )
         else:
             self.active = self.authorized_exchanges[self.trading_config.exchange]
 

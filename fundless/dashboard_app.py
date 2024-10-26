@@ -25,8 +25,8 @@ import pytz
 # local imports
 from fundless.config import Config
 from fundless.analytics import PortfolioAnalytics
-import fundless.layouts
 from fundless.login import LoginProvider
+from fundless import layouts
 from fundless.constants import Auth0EnvNames, STABLE_COINS
 
 logger = logging.getLogger(__name__)
@@ -217,7 +217,9 @@ class Dashboard:
         def update_charts_slow(_, chart_range, active_tab):
             try:
                 timestamp = analytics.get_timestamp(chart_range)
-                self.performance_chart = self.analytics.performance_chart(from_timestamp=timestamp, title=False)
+                self.performance_chart = self.analytics.performance_chart(
+                    from_timestamp=timestamp, title=False
+                )
                 self.history_chart = analytics.value_history_chart(from_timestamp=timestamp, title=False)
                 if active_tab == "history_tab":
                     chart = self.history_chart
@@ -236,7 +238,9 @@ class Dashboard:
         def set_base_currency(value):
             if self.config.trading_bot_config.base_currency.value.lower() != value.lower():
                 logger.debug("Updating config!")
-                self.config.trading_bot_config.base_currency = value  # this also changes the config in analytics
+                self.config.trading_bot_config.base_currency = (
+                    value  # this also changes the config in analytics
+                )
                 self.analytics.update_config(base_currency_changed=True)
                 self.performance_chart = {}
                 self.history_chart = {}
@@ -265,7 +269,9 @@ class Dashboard:
             self.config.trading_bot_config.exchange = exchange
             self.analytics.exchanges.active = self.analytics.exchanges.authorized_exchanges[exchange]
             logger.info(f"Changed exchange to {self.analytics.exchanges.active.name}")
-            return layouts.savings_plan_info(analytics, force_update=True), layouts.create_coin_buttons(analytics)
+            return layouts.savings_plan_info(analytics, force_update=True), layouts.create_coin_buttons(
+                analytics
+            )
 
         @self.app.callback(Input("volume", "value"), Output("savings_plan_info", "children"))
         def set_volume(vol):

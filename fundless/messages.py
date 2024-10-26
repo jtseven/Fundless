@@ -26,7 +26,6 @@ import logging
 from typing import Awaitable, Callable, Any
 from fundless.trading import TradingBot
 from fundless.config import Config
-import sys
 from redo import retriable
 from random import randint
 
@@ -87,7 +86,9 @@ class TelegramBot:
         self.savings_plan_conversation = ConversationHandler(
             entry_points=[CommandHandler("savings_plan", self._rebalancing_question)],
             states={
-                REBALANCING_DECISION: [MessageHandler(filters.Regex("^(Yes|No)$"), self._rebalancing_decision)],
+                REBALANCING_DECISION: [
+                    MessageHandler(filters.Regex("^(Yes|No)$"), self._rebalancing_decision)
+                ],
                 PLANNING: [MessageHandler(filters.Regex("^(Yes|No)$"), self._order_planning_conversation)],
                 EXECUTING: [
                     MessageHandler(
@@ -157,8 +158,12 @@ class TelegramBot:
             pl = "Loss"
         msg = "```\n"
         msg += "----- Performance Report: -----\n"
-        msg += f"\tInvested amount:\t{invested:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
-        msg += f"\tPortfolio value:\t{balance:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
+        msg += (
+            f"\tInvested amount:\t{invested:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
+        )
+        msg += (
+            f"\tPortfolio value:\t{balance:7.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
+        )
         msg += f"\tPerformance:\t\t\t\t\t{performance:.2%}\n"
         msg += f"\t{pl}:\t\t\t\t\t\t\t\t\t\t{balance-invested:.2f} {self.config.trading_bot_config.base_currency.values[1]}\n"
         msg += "-------------------------------"
@@ -201,7 +206,9 @@ class TelegramBot:
                 chat_id=self.chat_id,
                 text="I had network problems while computing your balance!",
             )
-            await context.bot.send_message(chat_id=self.chat_id, text="The coingecko API limit might be reached.")
+            await context.bot.send_message(
+                chat_id=self.chat_id, text="The coingecko API limit might be reached."
+            )
         else:
             msg = "```\n"
             msg += f"--- Your current balance on {self.trading_bot.exchanges.active.name}: ---\n"
@@ -239,7 +246,7 @@ class TelegramBot:
             tracking_error = allocations - (index_weights * 100)
             msg = "```\n"
             msg += "Your current index portfolio:\n"
-            msg += f"- Coin  Alloc  Value AllocErr -\n"
+            msg += "- Coin  Alloc  Value AllocErr -\n"
             for symbol, allocation, value, error in zip(symbols, allocations, values, tracking_error):
                 msg += f"  {symbol.upper() + ':': <6} {allocation:4.1f}% {value:3,.0f} {self.config.trading_bot_config.base_currency.values[1]}  {error:4.1f}pp\n"
             msg += "-------------------------------\n"
@@ -251,7 +258,7 @@ class TelegramBot:
     async def ask_savings_plan_execution(self):
         reply_keyboard = [[KeyboardButton(r"/savings_plan"), KeyboardButton(r"/cancel")]]
         markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=True)
-        msg = f"Should I execute your savings plan?"
+        msg = "Should I execute your savings plan?"
         self.application.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
         msg = "If yes, enter /savings_plan"
         self.application.bot.send_message(chat_id=self.chat_id, text=msg, reply_markup=markup)
@@ -326,7 +333,9 @@ class TelegramBot:
             f"Buying with {print_crypto_amount(cost)}"
             + f" {self.trading_bot.analytics.get_coin_name(self.trading_bot.bot_config.trading_bot_config.base_symbol)}"
         )
-        await update.message.reply_text("I will first check, if rebalancing of your portfolio is recommended...")
+        await update.message.reply_text(
+            "I will first check, if rebalancing of your portfolio is recommended..."
+        )
 
         allocation_error = await self.trading_bot.allocation_error()
         rel_to_volume = allocation_error["rel_to_order_volume"]
@@ -406,7 +415,10 @@ class TelegramBot:
                     text="I will check if your orders went through in a few seconds and get back to you :)",
                 )
             self.application.job_queue.run_once(
-                self.check_orders, when=10, chat_id=self.chat_id, data=(order_ids, placed_symbols, 1)
+                self.check_orders,
+                when=10,
+                chat_id=self.chat_id,
+                data=(order_ids, placed_symbols, 1),
             )
             return CHECKING
 
@@ -419,7 +431,9 @@ class TelegramBot:
                 chat_id=self.chat_id,
                 text="Ohhh, there was a Problem with the exchange! Sorry :(",
             )
-            await self.application.bot.send_message(chat_id=self.chat_id, text="This is, what the exchange returned:")
+            await self.application.bot.send_message(
+                chat_id=self.chat_id, text="This is, what the exchange returned:"
+            )
             await self.application.bot.send_message(chat_id=self.chat_id, text=str(e))
             await self.application.bot.send_message(
                 chat_id=self.chat_id, text="Try to solve it and try again next time"
@@ -441,7 +455,9 @@ class TelegramBot:
 
     @authorized_only
     async def _executing_answer(self, update: Update, _: CallbackContext):
-        await update.message.reply_text("Your order is being executed on the exchange, just relax for a while")
+        await update.message.reply_text(
+            "Your order is being executed on the exchange, just relax for a while"
+        )
         await update.message.reply_text("I will get back to you shortly!")
         return CHECKING
 
@@ -503,10 +519,13 @@ class TelegramBot:
                 msg += "```"
                 await context.bot.send_message(self.chat_id, text=msg, parse_mode="MarkdownV2")
                 if n_retry > 10:
-                    logger.warning("Not all orders where filled, check manually and add filled orders to trades.csv!")
+                    logger.warning(
+                        "Not all orders where filled, check manually and add filled orders to trades.csv!"
+                    )
                     await context.bot.send_message(
                         self.chat_id,
-                        text="We have waited long enough! Pls solve the orders that are" "still open manually..",
+                        text="We have waited long enough! Pls solve the orders that are"
+                        "still open manually..",
                     )
                     self.application.bot_data["next_state"] = ConversationHandler.END
                     state_update = StateChangeUpdate()
@@ -532,7 +551,7 @@ class TelegramBot:
                     state_update._effective_chat = chat
                     await context.update_queue.put(state_update)
         except Exception as e:
-            logger.error(f"Uncaught error when checking order status!")
+            logger.error("Uncaught error when checking order status!")
             logger.error(e)
             raise e
         finally:

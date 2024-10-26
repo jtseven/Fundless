@@ -2,7 +2,14 @@ from pathlib import Path
 import sys
 import yaml
 from typing import List, Union, Dict, Optional
-from pydantic import field_validator, Field, StringConstraints, ConfigDict, BaseModel, model_validator
+from pydantic import (
+    field_validator,
+    Field,
+    StringConstraints,
+    ConfigDict,
+    BaseModel,
+    model_validator,
+)
 from aenum import MultiValueEnum
 import logging
 from typing_extensions import Annotated
@@ -142,12 +149,19 @@ class TradingBotConfig(BaseConfig):
     test_mode: Optional[bool] = False
     base_currency: BaseCurrencyEnum
     base_symbol: Annotated[
-        str, StringConstraints(strip_whitespace=True, to_lower=True, pattern="^(busd|usdc|usdt|usd|eur|btc)$")
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            to_lower=True,
+            pattern="^(busd|usdc|usdt|usd|eur|btc)$",
+        ),
     ]
     savings_plan_cost: Annotated[float, Field(gt=0, le=10000)]
     savings_plan_interval: Union[IntervalEnum, List[Annotated[int, Field(ge=1, le=28)]]]
     x_days: Optional[Annotated[int, Field(ge=2, le=30)]] = None
-    savings_plan_execution_time: Annotated[str, StringConstraints(pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")]
+    savings_plan_execution_time: Annotated[
+        str, StringConstraints(pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
+    ]
     savings_plan_automatic_execution: Optional[bool] = False
     savings_plan_rebalance_on_automatic_execution: Optional[bool] = True
     portfolio_mode: PortfolioModeEnum
@@ -204,7 +218,6 @@ class TradingBotConfig(BaseConfig):
 
     @classmethod
     def from_dict(cls, dictionary):
-
         self = cls(
             exchange=dictionary["exchange"]["selected"],
             test_mode=dictionary.get("test_mode", None),

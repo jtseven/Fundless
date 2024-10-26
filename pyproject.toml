@@ -32,5 +32,14 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.4.10",
+]
+
 [project.scripts]
 fundless = "fundless.__main__:main"
+
+[tool.ruff]
+line-length = 110
+indent-width = 4

@@ -483,6 +483,11 @@ dependencies = [
     { name = "schedule" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aenum", specifier = ">=3.1.15" },
@@ -507,6 +512,9 @@ requires-dist = [
     { name = "redo", specifier = ">=3.0.0" },
     { name = "schedule", specifier = ">=1.2.2" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.4.10" }]
 
 [[package]]
 name = "gevent"
