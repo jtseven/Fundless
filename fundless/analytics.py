@@ -1,34 +1,33 @@
 import asyncio
+import logging
 import math
-
-import pandas as pd
+from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Lock, Thread
+from time import sleep, time
+from typing import List, Optional, Tuple, Union
+
+import ccxt
+import numpy as np
+import pandas as pd
+import plotly.express as px
 import pytz
 import requests.exceptions
+from currency_converter import CurrencyConverter
 from pycoingecko import CoinGeckoAPI
 from pydantic import StringConstraints, validate_arguments
-import plotly.express as px
-from typing import Tuple, Union, List, Optional
-import numpy as np
-from time import time, sleep
 from redo import retrying
-from threading import Lock
-from datetime import datetime, timedelta
-from threading import Thread
-import logging
-from currency_converter import CurrencyConverter
-import ccxt
+from typing_extensions import Annotated
 
-from fundless.config import Config, WeightingEnum, ExchangeEnum
-from fundless.utils import print_crypto_amount
+from fundless.config import Config, ExchangeEnum, WeightingEnum
 from fundless.constants import (
-    FIAT_SYMBOLS,
     COIN_REBRANDING,
     COIN_SYNONYMS,
+    FIAT_SYMBOLS,
     STABLE_COINS,
 )
 from fundless.exchanges import Exchanges
-from typing_extensions import Annotated
+from fundless.utils import print_crypto_amount
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +384,7 @@ class PortfolioAnalytics:
                             update_file = True
 
             # compute total cost if missing
-            trades_df["fee"].fillna(0.0, inplace=True)
+            trades_df["fee"] = trades_df["fee"].fillna(0.0)
             if any(trades_df["cost_total"].isna()):
                 trades_df["cost_total"] = trades_df["cost"] + trades_df["fee"]
 

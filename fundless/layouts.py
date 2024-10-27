@@ -1,17 +1,17 @@
-from dash import dcc
-from dash import html
-import dash_bootstrap_components as dbc
-from dash_extensions import DeferScript
 from functools import reduce
 from itertools import groupby
 from operator import add
 from typing import List
+
+import dash_bootstrap_components as dbc
 import numpy as np
+from dash import dcc, html
+from dash_extensions import DeferScript
 
 from fundless.analytics import PortfolioAnalytics
-from fundless.config import WeightingEnum, IntervalEnum
-from fundless.utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
+from fundless.config import IntervalEnum, WeightingEnum
 from fundless.constants import STABLE_COINS
+from fundless.utils import convert_html_to_dash, pretty_print_date, print_crypto_amount
 
 ################################################################################################################
 #                                                  Layouts                                                     #

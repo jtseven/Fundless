@@ -1,33 +1,34 @@
-import dash
-from dash import dcc
-from dash import html
-import dash_bootstrap_components as dbc
-import flask
-from dash_extensions.enrich import (
-    NoOutputTransform,
-    DashProxy,
-    Input,
-    Output,
-    State,
-    MultiplexerTransform,
-    MATCH,
-    ALL,
-    ClientsideFunction,
-)
-from dash_extensions import DeferScript
-from gevent.pywsgi import WSGIServer
-from flask import render_template, redirect
 import logging
 import traceback
 from datetime import datetime, timedelta
+
+import dash
+import dash_bootstrap_components as dbc
+import flask
 import pytz
+from dash import dcc, html
+from dash_extensions import DeferScript
+from dash_extensions.enrich import (
+    ALL,
+    MATCH,
+    ClientsideFunction,
+    DashProxy,
+    Input,
+    MultiplexerTransform,
+    NoOutputTransform,
+    Output,
+    State,
+)
+from flask import redirect, render_template
+from gevent.pywsgi import WSGIServer
+
+from fundless import layouts
+from fundless.analytics import PortfolioAnalytics
 
 # local imports
 from fundless.config import Config
-from fundless.analytics import PortfolioAnalytics
+from fundless.constants import STABLE_COINS, Auth0EnvNames
 from fundless.login import LoginProvider
-from fundless import layouts
-from fundless.constants import Auth0EnvNames, STABLE_COINS
 
 logger = logging.getLogger(__name__)
 

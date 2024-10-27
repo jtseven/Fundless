@@ -1,23 +1,24 @@
-from pathlib import Path
+import logging
 import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Union
+
 import yaml
-from typing import List, Union, Dict, Optional
+from aenum import MultiValueEnum
 from pydantic import (
-    field_validator,
+    BaseModel,
+    ConfigDict,
     Field,
     StringConstraints,
-    ConfigDict,
-    BaseModel,
+    field_validator,
     model_validator,
 )
-from aenum import MultiValueEnum
-import logging
 from typing_extensions import Annotated
 
 if sys.version_info >= (3, 8):
-    from typing import TypedDict
+    pass
 else:
-    from typing_extensions import TypedDict
+    pass
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,6 @@ logger = logging.getLogger(__name__)
 class ExchangeEnum(str, MultiValueEnum):
     binance = "binance", "Binance"
     kraken = "kraken", "Kraken"
-    coinbasepro = "coinbasepro", "Coinbase Pro", "coinbase_pro"
     coinbase = (
         "coinbase",
         "Coinbase",
@@ -78,14 +78,14 @@ class PortfolioModeEnum(str, MultiValueEnum):
     index = "index", "Index"
 
 
-class ExchangeToken(TypedDict, total=False):
+class ExchangeToken(BaseModel):
     exchange: ExchangeEnum
     api_key: str
     secret: str
-    passphrase: Optional[str]
+    passphrase: Optional[str] = None
 
 
-class TelegramToken(TypedDict):
+class TelegramToken(BaseModel):
     token: str
     chat_id: int
 
@@ -146,7 +146,7 @@ class DashboardConfig(BaseConfig):
 
 class TradingBotConfig(BaseConfig):
     exchange: ExchangeEnum
-    test_mode: Optional[bool] = False
+    test_mode: bool = False
     base_currency: BaseCurrencyEnum
     base_symbol: Annotated[
         str,
@@ -268,7 +268,6 @@ class SecretsStore(BaseModel):
     kraken_test: ExchangeToken
     binance: ExchangeToken
     kraken: ExchangeToken
-    coinbasepro: ExchangeToken
     coinbase: ExchangeToken
     telegram: TelegramToken
     dashboard_user: str
@@ -310,12 +309,6 @@ class SecretsStore(BaseModel):
                 api_key=dictionary["exchanges"]["mainnet"]["kraken"]["api_key"],
                 secret=dictionary["exchanges"]["mainnet"]["kraken"]["secret"],
             ),
-            coinbasepro=ExchangeToken(
-                exchange=ExchangeEnum.coinbasepro,
-                api_key=dictionary["exchanges"]["mainnet"]["coinbasepro"]["api_key"],
-                secret=dictionary["exchanges"]["mainnet"]["coinbasepro"]["secret"],
-                passphrase=dictionary["exchanges"]["mainnet"]["coinbasepro"]["passphrase"],
-            ),
             coinbase=ExchangeToken(
                 exchange=ExchangeEnum.coinbase,
                 api_key=dictionary["exchanges"]["mainnet"]["coinbase"]["api_key"],
@@ -330,11 +323,11 @@ class SecretsStore(BaseModel):
         )
         return self
 
-    def get_exchange_tokens(self, test_mode: bool) -> [ExchangeToken]:
+    def get_exchange_tokens(self, test_mode: bool) -> list[ExchangeToken]:
         if test_mode:
             return [self.binance_test, self.kraken_test]
         else:
-            return [self.binance, self.kraken, self.coinbasepro, self.coinbase]
+            return [self.binance, self.kraken, self.coinbase]
 
 
 class Config(BaseModel):

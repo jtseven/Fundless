@@ -1,21 +1,22 @@
+import logging
+import secrets
+from functools import wraps
+from os import environ as env
+
+from authlib.integrations.flask_client import OAuth
 from authlib.oauth2.rfc6749 import OAuth2Token
+from dotenv import find_dotenv, load_dotenv
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_login import (
-    login_user,
     LoginManager,
     UserMixin,
-    logout_user,
     current_user,
     login_required,
+    login_user,
+    logout_user,
 )
-import secrets
-from os import environ as env
-from dotenv import load_dotenv, find_dotenv
-from functools import wraps
-from flask import session, redirect, Flask, render_template, url_for, request, jsonify
-from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.parse import urlencode
 from werkzeug.exceptions import HTTPException
-import logging
 
 from fundless.config import DashboardConfig, LoginProviderEnum, SecretsStore
 from fundless.constants import Auth0EnvNames

@@ -1,13 +1,14 @@
 import asyncio
+import logging
+import time
 from datetime import date
+from threading import Lock
+from typing import List
+
+import schedule
+
 from fundless.config import Config, IntervalEnum
 from fundless.messages import TelegramBot
-from typing import List
-import logging
-import schedule
-import time
-from threading import Lock
-
 
 logger = logging.getLogger(__name__)
 

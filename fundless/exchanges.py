@@ -1,6 +1,8 @@
-import ccxt
-from fundless.config import ExchangeEnum, Config
 import logging
+
+import ccxt
+
+from fundless.config import Config, ExchangeEnum, SecretsStore
 
 logger = logging.getLogger(__name__)
 
@@ -8,14 +10,15 @@ logger = logging.getLogger(__name__)
 class Exchanges:
     authorized_exchanges: dict = {}
     active: ccxt.Exchange
+    secrets: SecretsStore
 
     def __init__(self, config: Config):
         self.secrets = config.secrets
         self.trading_config = config.trading_bot_config
 
         for exchange_token in self.secrets.get_exchange_tokens(test_mode=self.trading_config.test_mode):
-            if not self.init_exchange(exchange_name=exchange_token["exchange"]):
-                logger.warning(f"No valid API tokens for exchange {exchange_token['exchange'].values[1]}")
+            if not self.init_exchange(exchange_name=exchange_token.exchange):
+                logger.warning(f"No valid API tokens for exchange {exchange_token.exchange.values[1]}")
 
         if self.trading_config.exchange not in self.authorized_exchanges.keys():
             raise RuntimeWarning(
@@ -34,35 +37,27 @@ class Exchanges:
         if exchange_name == ExchangeEnum.binance:
             exchange = ccxt.binance()
             if self.trading_config.test_mode:
-                exchange.apiKey = self.secrets.binance_test["api_key"]
-                exchange.secret = self.secrets.binance_test["secret"]
+                exchange.apiKey = self.secrets.binance_test.api_key
+                exchange.secret = self.secrets.binance_test.secret
             else:
-                exchange.apiKey = self.secrets.binance["api_key"]
-                exchange.secret = self.secrets.binance["secret"]
+                exchange.apiKey = self.secrets.binance.api_key
+                exchange.secret = self.secrets.binance.secret
         elif exchange_name == ExchangeEnum.kraken:
             exchange = ccxt.kraken()
             if self.trading_config.test_mode:
-                exchange.apiKey = self.secrets.kraken_test["api_key"]
-                exchange.secret = self.secrets.kraken_test["secret"]
+                exchange.apiKey = self.secrets.kraken_test.api_key
+                exchange.secret = self.secrets.kraken_test.secret
             else:
-                exchange.apiKey = self.secrets.kraken["api_key"]
-                exchange.secret = self.secrets.kraken["secret"]
-        elif exchange_name == ExchangeEnum.coinbasepro:
-            exchange = ccxt.coinbasepro()
-            if self.trading_config.test_mode:
-                return False  # Coinbase Pro does not have a test mode
-            else:
-                exchange.apiKey = self.secrets.coinbasepro["api_key"]
-                exchange.secret = self.secrets.coinbasepro["secret"]
-                exchange.password = self.secrets.coinbasepro["passphrase"]
+                exchange.apiKey = self.secrets.kraken.api_key
+                exchange.secret = self.secrets.kraken.secret
         elif exchange_name == ExchangeEnum.coinbase:
             exchange = ccxt.coinbase()
             exchange.options["createMarketBuyOrderRequiresPrice"] = False
             if self.trading_config.test_mode:
                 return False
             else:
-                exchange.apiKey = self.secrets.coinbase["api_key"]
-                exchange.secret = self.secrets.coinbase["secret"]
+                exchange.apiKey = self.secrets.coinbase.api_key
+                exchange.secret = self.secrets.coinbase.secret
         else:
             raise ValueError("Invalid Exchange given!")
 

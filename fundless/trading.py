@@ -1,16 +1,16 @@
+import logging
+from datetime import datetime
+from typing import List, Tuple, Union
+
 import ccxt
 import numpy as np
-from typing import List, Tuple, Union
-from datetime import datetime
 from redo import retrying
 
-from fundless.config import Config, SecretsStore, ExchangeEnum, OrderTypeEnum
 from fundless.analytics import PortfolioAnalytics
-from fundless.utils import print_crypto_amount
-import logging
+from fundless.config import Config, ExchangeEnum, OrderTypeEnum, SecretsStore
 from fundless.constants import FIAT_SYMBOLS
 from fundless.exchanges import Exchanges
-
+from fundless.utils import print_crypto_amount
 
 logger = logging.getLogger(__name__)
 

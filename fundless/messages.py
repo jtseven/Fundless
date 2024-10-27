@@ -1,33 +1,35 @@
+import logging
 import time
-import requests.exceptions
-from fundless.utils import print_crypto_amount
+from random import randint
+from typing import Any, Awaitable, Callable
+
 import ccxt
+import requests.exceptions
 import telegram.error
-from telegram.ext import (
-    CommandHandler,
-    MessageHandler,
-    ConversationHandler,
-    filters,
-    CallbackContext,
-    TypeHandler,
-    Application,
-    ContextTypes,
-)
+from redo import retriable
 from telegram import (
-    Update,
+    Chat,
+    KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
-    KeyboardButton,
+    Update,
     User,
-    Chat,
 )
 from telegram.constants import ChatAction
-import logging
-from typing import Awaitable, Callable, Any
-from fundless.trading import TradingBot
+from telegram.ext import (
+    Application,
+    CallbackContext,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
+
 from fundless.config import Config
-from redo import retriable
-from random import randint
+from fundless.trading import TradingBot
+from fundless.utils import print_crypto_amount
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,7 @@ class TelegramBot:
             [KeyboardButton(r"/performance"), KeyboardButton(r"/allocation")],
             [KeyboardButton(r"/cancel")],
         ]
-        self.chat_id = self.secrets["chat_id"]
+        self.chat_id = self.secrets.chat_id
         self.trading_bot = trading_bot
         self.config = config
         self.rebalance = config.trading_bot_config.savings_plan_rebalance_on_automatic_execution
@@ -119,7 +121,7 @@ class TelegramBot:
             MessageHandler(filters.COMMAND, self._unknown_command),
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._hodl_answer),
         ]
-        self.application = Application.builder().token(self.secrets["token"]).build()
+        self.application = Application.builder().token(self.secrets.token).build()
 
         for handle in self.handles:
             self.application.add_handler(handle)
