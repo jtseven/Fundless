@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.9.2",
     "coloredlogs>=15.0.1",
     "gevent>=24.10.3",
+    "sqlmodel>=0.0.22",
 ]
 
 [build-system]
@@ -37,9 +38,16 @@ dev-dependencies = [
     "ruff>=0.4.10",
 ]
 
+[tool.uv.sources]
+pydantic = { git = "https://github.com/pydantic/pydantic.git" }
+
 [project.scripts]
 fundless = "fundless.__main__:main"
 
 [tool.ruff]
 line-length = 110
 indent-width = 4
+
+[tool.ruff.lint]
+# On top of the default `select` (`E4`, E7`, `E9`, and `F`), enable flake8-bugbear (`B`) and flake8-quotes (`Q`).
+extend-select = ["I"]

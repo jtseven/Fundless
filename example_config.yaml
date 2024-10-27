@@ -14,7 +14,7 @@ trading_bot:
     options:
       - binance
       - kraken
-      - coinbasepro
+      - coinbase
     selected: binance
   base_currency:
     options:
