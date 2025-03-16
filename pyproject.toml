@@ -34,12 +34,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = [
-    "ruff>=0.4.10",
-]
+dev-dependencies = ["ruff>=0.4.10"]
 
-[tool.uv.sources]
-pydantic = { git = "https://github.com/pydantic/pydantic.git" }
 
 [project.scripts]
 fundless = "fundless.__main__:main"
