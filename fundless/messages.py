@@ -128,10 +128,12 @@ class TelegramBot:
         self.application.add_error_handler(self._error)
 
     async def run_polling(self) -> None:
-        # await self.application.initialize()
-        # await self.application.start()
-        # await self.application.updater.start_polling()
-        self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+        # The regular run_polling method cannot be used in a non-main thread
+        # because it tries to set signal handlers
+        await self.application.initialize()
+        await self.application.start()
+        await self.application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        # self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
     @staticmethod
     async def _error(update: Update, context: ContextTypes.DEFAULT_TYPE):

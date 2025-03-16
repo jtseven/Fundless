@@ -275,6 +275,7 @@ class SecretsStore(BaseModel):
 
     @classmethod
     def from_secrets_yaml(cls, file_path):
+        # Legacy method - kept for backward compatibility
         file = Path(file_path)
         with open(file) as f:
             try:
@@ -287,7 +288,67 @@ class SecretsStore(BaseModel):
         return self
 
     @classmethod
+    def from_env(cls):
+        """Load secrets from environment variables."""
+        import os
+        from dotenv import load_dotenv
+
+        # Load environment variables from .env file
+        load_dotenv()
+
+        self = cls(
+            binance_test=ExchangeToken(
+                exchange=ExchangeEnum.binance,
+                api_key=os.getenv("BINANCE_TEST_API_KEY", ""),
+                secret=os.getenv("BINANCE_TEST_SECRET", ""),
+            ),
+            kraken_test=ExchangeToken(
+                exchange=ExchangeEnum.kraken,
+                api_key=os.getenv("KRAKEN_TEST_API_KEY", ""),
+                secret=os.getenv("KRAKEN_TEST_SECRET", ""),
+            ),
+            binance=ExchangeToken(
+                exchange=ExchangeEnum.binance,
+                api_key=os.getenv("BINANCE_API_KEY", ""),
+                secret=os.getenv("BINANCE_SECRET", ""),
+            ),
+            kraken=ExchangeToken(
+                exchange=ExchangeEnum.kraken,
+                api_key=os.getenv("KRAKEN_API_KEY", ""),
+                secret=os.getenv("KRAKEN_SECRET", ""),
+            ),
+            coinbase=ExchangeToken(
+                exchange=ExchangeEnum.coinbase,
+                api_key=os.getenv("COINBASE_API_KEY", ""),
+                secret=os.getenv("COINBASE_SECRET", ""),
+            ),
+            telegram=TelegramToken(
+                token=os.getenv("TELEGRAM_TOKEN", ""),
+                chat_id=int(os.getenv("TELEGRAM_CHAT_ID", "0")),
+            ),
+            dashboard_user=os.getenv("DASHBOARD_USER", ""),
+            dashboard_password=os.getenv("DASHBOARD_PASSWORD", ""),
+        )
+        return self
+
+    @classmethod
     def from_dict(cls, dictionary):
+        # Legacy method - kept for backward compatibility
+        # For Coinbase, we need to ensure the PEM format is preserved with proper line breaks
+        coinbase_secret = dictionary["exchanges"]["mainnet"]["coinbase"]["secret"]
+        if isinstance(coinbase_secret, str) and "-----BEGIN" in coinbase_secret:
+            # Convert folded YAML string back to proper PEM format with line breaks
+            lines = []
+            for line in coinbase_secret.split():
+                if "-----" in line:
+                    lines.append(line)
+                else:
+                    # Add line breaks every 64 characters for the base64 content
+                    while line:
+                        lines.append(line[:64])
+                        line = line[64:]
+            coinbase_secret = "\n".join(lines)
+            
         self = cls(
             binance_test=ExchangeToken(
                 exchange=ExchangeEnum.binance,
@@ -312,7 +373,7 @@ class SecretsStore(BaseModel):
             coinbase=ExchangeToken(
                 exchange=ExchangeEnum.coinbase,
                 api_key=dictionary["exchanges"]["mainnet"]["coinbase"]["api_key"],
-                secret=dictionary["exchanges"]["mainnet"]["coinbase"]["secret"],
+                secret=coinbase_secret,
             ),
             telegram=TelegramToken(
                 token=dictionary["telegram"]["token"],
@@ -338,10 +399,22 @@ class Config(BaseModel):
 
     @classmethod
     def from_yaml_files(cls, config_yaml="config.yaml", secrets_yaml="secrets.yaml"):
+        # Legacy method - kept for backward compatibility
         self = cls(
             trading_bot_config=TradingBotConfig.from_config_yaml(file_path=config_yaml),
             telegram_bot_config=TelegramBotConfig.from_config_yaml(file_path=config_yaml),
             dashboard_config=DashboardConfig.from_config_yaml(file_path=config_yaml),
             secrets=SecretsStore.from_secrets_yaml(file_path=secrets_yaml),
+        )
+        return self
+        
+    @classmethod
+    def from_yaml_and_env(cls, config_yaml="config.yaml"):
+        """Load configuration from YAML file and environment variables for secrets."""
+        self = cls(
+            trading_bot_config=TradingBotConfig.from_config_yaml(file_path=config_yaml),
+            telegram_bot_config=TelegramBotConfig.from_config_yaml(file_path=config_yaml),
+            dashboard_config=DashboardConfig.from_config_yaml(file_path=config_yaml),
+            secrets=SecretsStore.from_env(),
         )
         return self

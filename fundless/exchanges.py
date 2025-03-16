@@ -51,27 +51,45 @@ class Exchanges:
                 exchange.apiKey = self.secrets.kraken.api_key
                 exchange.secret = self.secrets.kraken.secret
         elif exchange_name == ExchangeEnum.coinbase:
-            exchange = ccxt.coinbase()
-            exchange.options["createMarketBuyOrderRequiresPrice"] = False
-            if self.trading_config.test_mode:
+            try:
+                # Initialize Coinbase with proper configuration
+                coinbase_config = {
+                    'apiKey': self.secrets.coinbase.api_key,
+                    'secret': self.secrets.coinbase.secret,
+                    # 'options': {
+                    #     'createMarketBuyOrderRequiresPrice': False
+                    # }
+                }
+                exchange = ccxt.coinbase(coinbase_config)
+                
+                # Skip test mode for Coinbase since it's not supported
+                if self.trading_config.test_mode:
+                    logger.warning("Coinbase does not support test mode")
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to initialize Coinbase: {str(e)}")
                 return False
-            else:
-                exchange.apiKey = self.secrets.coinbase.api_key
-                exchange.secret = self.secrets.coinbase.secret
         else:
             raise ValueError("Invalid Exchange given!")
 
-        if "test" in exchange.urls.keys():
+        # Check if sandbox/test mode is supported
+        if hasattr(exchange, 'urls') and exchange.urls is not None and "test" in exchange.urls:
             exchange.set_sandbox_mode(self.trading_config.test_mode)
         elif self.trading_config.test_mode:
             # Test mode is enabled, but current exchange does not support it
+            logger.warning(f"Test mode is enabled, but {exchange_name} does not support it")
             return False
-        if not exchange.check_required_credentials():
+                
+        if not exchange.check_required_credentials(error=False):
+            logger.error(f"Missing credentials for {exchange_name}")
             return False
+            
         try:
             exchange.load_markets()
-        except ccxt.AuthenticationError:
+        except ccxt.AuthenticationError as e:
+            logger.error(f"Authentication error for {exchange_name}: {str(e)}")
             return False
+            
         self.authorized_exchanges[exchange_name] = exchange
         return True
 
