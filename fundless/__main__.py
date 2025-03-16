@@ -1,17 +1,3 @@
-import asyncio
-
-import coloredlogs
-import logging
-import threading
-
-from trading import TradingBot
-from messages import TelegramBot
-from analytics import PortfolioAnalytics
-from config import Config
-from dashboard_app import Dashboard
-from exchanges import Exchanges
-from savings_plan_scheduler import SavingsPlanScheduler
-
 """
 
 FundLess is a crypto trading bot that is aiming at a marketcap weighted crypto portfolio - similar to an 'ETF Sparplan'
@@ -19,6 +5,21 @@ To be inline with german tax legislation it is not rebalancing on a monthly basi
 orders and will possibly be able to rebalance after the one year waiting period required for tax free trades.
 
 """
+
+import asyncio
+import logging
+import threading
+
+import coloredlogs
+
+from fundless.analytics import PortfolioAnalytics
+from fundless.config import Config
+from fundless.dashboard_app import Dashboard
+from fundless.exchanges import Exchanges
+from fundless.messages import TelegramBot
+from fundless.savings_plan_scheduler import SavingsPlanScheduler
+from fundless.trading import TradingBot
+
 telegram_bot = True
 
 secrets_yaml = "secrets.yaml"
@@ -29,17 +30,17 @@ order_ids_csv = "fundless/data/order_ids.csv"
 order_ids_csv_test = "fundless/data/ids_test.csv"
 
 
-if __name__ == "__main__":
+def main():
     logging_format = "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
     coloredlogs.install(level="INFO", fmt=logging_format)
     logger = logging.getLogger()
 
     logger.info("Hi, I will just buy and HODL!")
 
-    # parse all settings from yaml files
-    config = Config.from_yaml_files(config_yaml=config_yaml, secrets_yaml=secrets_yaml)
+    # parse settings from yaml files and environment variables
+    config = Config.from_yaml_and_env(config_yaml=config_yaml)
 
-    # initialize exchanges with api credentials from secrets file
+    # initialize exchanges with api credentials from environment variables
     logger.info("Initializing exchanges...")
     exchanges = Exchanges(config)
 
@@ -58,9 +59,15 @@ if __name__ == "__main__":
     if telegram_bot:
         logger.info("Initializing telegram bot...")
         message_bot = TelegramBot(config, trading_bot)
+        
+        # Create a separate event loop for the Telegram bot but don't run signals in a separate thread
+        async def start_telegram_bot():
+            await message_bot.run_polling()
+            
+        # Run the bot in a background task
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        task = loop.create_task(message_bot.run_polling())
+        loop.create_task(start_telegram_bot())
         threading.Thread(target=loop.run_forever, daemon=True).start()
     else:
         message_bot = None

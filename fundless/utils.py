@@ -1,12 +1,12 @@
-from pathlib import Path
-import yaml
-import math
 import ast
-from dash import dcc
-from dash import html
-import dash_bootstrap_components as dbc
-from xml.etree import ElementTree
 import logging
+import math
+from pathlib import Path
+from xml.etree import ElementTree
+
+import dash_bootstrap_components as dbc
+import yaml
+from dash import dcc, html
 
 logger = logging.getLogger(__name__)
 

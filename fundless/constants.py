@@ -1,6 +1,5 @@
-from typing import Final
 import secrets
-
+from typing import Final
 
 FIAT_SYMBOLS: Final = ["EUR", "USD", "GBP"]
 USD_COINS: Final = ["USDT", "TUSD", "USDC", "BUSD", "DAI", "UST", "MIM", "FRAX"]
@@ -8,7 +7,7 @@ USD_SYMBOLS: Final = ["USD"] + USD_COINS
 EUR_COINS: Final = ["EURT"]
 STABLE_COINS: Final = USD_COINS + EUR_COINS
 
-EXCHANGE_REGEX: Final = "^(kraken|binance|coinbasepro)$"
+EXCHANGE_REGEX: Final = "^(kraken|binance|coinbase)$"
 
 # key: old symbol
 # value: new symbol

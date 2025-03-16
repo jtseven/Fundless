@@ -1,22 +1,22 @@
+import logging
+from datetime import datetime
+from typing import List, Tuple, Union
+
 import ccxt
 import numpy as np
-from typing import List, Tuple, Union
-from datetime import datetime
 from redo import retrying
 
-from config import Config, SecretsStore, ExchangeEnum, OrderTypeEnum
-from analytics import PortfolioAnalytics
-from utils import print_crypto_amount
-import logging
-from constants import FIAT_SYMBOLS
-from exchanges import Exchanges
-
+from fundless.analytics import PortfolioAnalytics
+from fundless.config import Config, ExchangeEnum, OrderTypeEnum, SecretsStore
+from fundless.constants import FIAT_SYMBOLS
+from fundless.exchanges import Exchanges
+from fundless.utils import print_crypto_amount
 
 logger = logging.getLogger(__name__)
 
 
 def print_order_allocation(symbols: np.ndarray, weights: np.ndarray):
-    logger.info(f" ------ Order Allocation: ------ ")
+    logger.info(" ------ Order Allocation: ------ ")
     for symbol, weight in zip(symbols, weights):
         ticker = f"{symbol.upper()}"
         logger.info(f"\t- {ticker}:\t{(weight*100):5.2f} %")
@@ -42,14 +42,18 @@ class TradingBot:
             and symbol != self.bot_config.trading_bot_config.base_symbol
         ]
         if len(not_available) > 0:
-            logger.warning(f"Some of your cherry picked coins are not available on {self.exchanges.active.name}:")
+            logger.warning(
+                f"Some of your cherry picked coins are not available on {self.exchanges.active.name}:"
+            )
             logger.warning(not_available)
 
     def balance(self) -> Tuple:
         # TODO fix for different base symbol and base currency and use analytics module
         try:
             data = self.exchanges.active.fetch_total_balance(
-                {"limit": 250} if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase else None
+                {"limit": 250}
+                if self.bot_config.trading_bot_config.exchange == ExchangeEnum.coinbase
+                else None
             )
 
             # if self.exchanges.active.has['fetchTickers']:
@@ -59,7 +63,7 @@ class TradingBot:
             #     # # TODO pull market data in an alternative way
             #     # raise NotImplementedError("Exchange does not support fetching tickers!")
         except Exception as e:
-            logger.error(f"Error while getting balance from exchange:")
+            logger.error("Error while getting balance from exchange:")
             logger.error(e)
             raise e
         symbols = np.fromiter([key for key in data.keys() if data[key] > 0.0], dtype="U10")
@@ -84,7 +88,10 @@ class TradingBot:
         #     ) for symbol in symbols])
         base_currency = self.bot_config.trading_bot_config.base_currency
         values = np.asarray(
-            [self.analytics.convert(amount, symbol, base_currency) for amount, symbol in zip(amounts, symbols)]
+            [
+                self.analytics.convert(amount, symbol, base_currency)
+                for amount, symbol in zip(amounts, symbols)
+            ]
         )
         # TODO: Take exchange prices if possible
 
@@ -228,9 +235,9 @@ class TradingBot:
                 insufficient = True
                 if available > 0.98 * base_symbol_volume:
                     corrected_volume = available
-                    problems[
-                        "description"
-                    ] = f"Available {self.bot_config.trading_bot_config.base_symbol.upper()} is slightly lower than your order volume, lowering the volume by that amount!"
+                    problems["description"] = (
+                        f"Available {self.bot_config.trading_bot_config.base_symbol.upper()} is slightly lower than your order volume, lowering the volume by that amount!"
+                    )
                     problems["adjusted_volume"] = corrected_volume
                 else:
                     balance_string = f"{print_crypto_amount(balance-base_symbol_index_balance)} {self.bot_config.trading_bot_config.base_symbol.upper()}"
@@ -459,7 +466,8 @@ class TradingBot:
         vol_problems = [
             symbol.upper()
             for symbol in symbols
-            if symbol not in symbols_filtered and symbol in self.bot_config.trading_bot_config.cherry_pick_symbols
+            if symbol not in symbols_filtered
+            and symbol in self.bot_config.trading_bot_config.cherry_pick_symbols
         ]
         if len(vol_problems) > 0:
             order_dict["messages"].append("The order volume is too low, to buy the following coins:")
@@ -485,7 +493,9 @@ class TradingBot:
                 logger.info("Checking dummy order")
                 order_report[symbol]["status"] = "closed"
                 price = 1
-                cost = -1 * id  # the imagined cost of this order is stored in place of the id of regular orders
+                cost = (
+                    -1 * id
+                )  # the imagined cost of this order is stored in place of the id of regular orders
                 amount = cost
                 date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 buy_symbol = symbol.upper()
@@ -551,7 +561,7 @@ class TradingBot:
                     exchange=self.bot_config.trading_bot_config.exchange,
                 )
             except Exception as e:
-                logger.error(f"Error while logging trade to trades.csv:")
+                logger.error("Error while logging trade to trades.csv:")
                 logger.error(e)
                 raise e
         order_report["closed"] = closed_orders

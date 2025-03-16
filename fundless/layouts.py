@@ -1,17 +1,17 @@
-from dash import dcc
-from dash import html
-import dash_bootstrap_components as dbc
-from dash_extensions import DeferScript
 from functools import reduce
 from itertools import groupby
 from operator import add
 from typing import List
-import numpy as np
 
-from analytics import PortfolioAnalytics
-from config import WeightingEnum, IntervalEnum
-from utils import pretty_print_date, print_crypto_amount, convert_html_to_dash
-from constants import STABLE_COINS
+import dash_bootstrap_components as dbc
+import numpy as np
+from dash import dcc, html
+from dash_extensions import DeferScript
+
+from fundless.analytics import PortfolioAnalytics
+from fundless.config import IntervalEnum, WeightingEnum
+from fundless.constants import STABLE_COINS
+from fundless.utils import convert_html_to_dash, pretty_print_date, print_crypto_amount
 
 ################################################################################################################
 #                                                  Layouts                                                     #
@@ -145,7 +145,6 @@ def create_logout_layout():
 
 # Sidebar
 def create_page_with_sidebar():
-
     with open("fundless/templates/sidebar.html", "r") as html_code:
         sidebar = convert_html_to_dash(html_code.read())
 
@@ -258,7 +257,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                                         f"{analytics.invested:,.2f} {symbol}",
                                         id="invested",
                                     ),
-                                    className=f"card-text",
+                                    className="card-text",
                                 ),
                                 dbc.Tooltip(
                                     "Your invested amount",
@@ -286,13 +285,13 @@ def create_info_cards(analytics: PortfolioAnalytics):
                     f"{perf:.0%}",
                     color=get_color(perf),
                     pill=True,
-                    className=f"info-badge",
+                    className="info-badge",
                 ),
                 dbc.Badge(
                     f"{pl:,.0f} {symbol}",
                     color=get_color(pl),
                     pill=True,
-                    className=f"info-badge",
+                    className="info-badge",
                 ),
             ]
         )
@@ -308,7 +307,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                         dbc.CardBody(
                             [
                                 html.H1(
-                                    html.Span(f"Gainers", id="winners"),
+                                    html.Span("Gainers", id="winners"),
                                     className="small text-secondary",
                                 ),
                                 dbc.Tooltip(
@@ -341,7 +340,7 @@ def create_info_cards(analytics: PortfolioAnalytics):
                         dbc.CardBody(
                             [
                                 html.H1(
-                                    html.Span(f"Losers", id="losers"),
+                                    html.Span("Losers", id="losers"),
                                     className="small text-secondary",
                                 ),
                                 dbc.Tooltip(
@@ -383,7 +382,9 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
     header_values = [list(df.columns.get_level_values(level)) for level in range(n_levels)]
 
     # The sizes of consecutive header groups at each level
-    header_spans = [[len(list(group)) for _, group in groupby(level_values)] for level_values in header_values]
+    header_spans = [
+        [len(list(group)) for _, group in groupby(level_values)] for level_values in header_values
+    ]
 
     # The positions of header changes for each level as an integer
     header_breaks = [
@@ -432,7 +433,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                     [
                         html.Td(
                             children=df.loc[i, col]
-                            if col not in ("Coin", "Currently in Index", f"Available")
+                            if col not in ("Coin", "Currently in Index", "Available")
                             else [
                                 html.Div(
                                     html.Img(src=analytics.get_coin_image(df.loc[i, col])),
@@ -457,7 +458,7 @@ def create_holdings_table(analytics: PortfolioAnalytics, **kwargs):
                             style={"text-align": "left"}
                             if col == "Coin"
                             else {"text-align": "center"}
-                            if col in ["Currently in Index", f"Available"]
+                            if col in ["Currently in Index", "Available"]
                             else {"text-align": "right"},
                         )
                         for col in df.columns
@@ -664,7 +665,6 @@ def create_strategy_page(analytics: PortfolioAnalytics):
         return button_group
 
     def create_savings_plan_info():
-
         info_list = dbc.ListGroup(
             id="savings_plan_info",
             horizontal=False,
@@ -749,7 +749,8 @@ def create_strategy_page(analytics: PortfolioAnalytics):
                         create_selection(
                             id="exchange_select",
                             labels=[
-                                exchange.values[1] for exchange in analytics.exchanges.authorized_exchanges.keys()
+                                exchange.values[1]
+                                for exchange in analytics.exchanges.authorized_exchanges.keys()
                             ],
                             values=[
                                 exchange.value for exchange in analytics.exchanges.authorized_exchanges.keys()
@@ -940,7 +941,9 @@ def create_trades_page(analytics: PortfolioAnalytics):
                                             src=analytics.get_coin_image(sym),
                                             className="crypto-icon-small",
                                         )
-                                        for sym in orders.sort_values("cost", ascending=False).buy_symbol.unique()
+                                        for sym in orders.sort_values(
+                                            "cost", ascending=False
+                                        ).buy_symbol.unique()
                                     ],
                                     className="coin-symbol-group",
                                 ),
